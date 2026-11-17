@@ -182,20 +182,25 @@ jobs:
             } > release-notes.md
           fi
 
-          {
-            echo
-            echo "---"
-            echo
-            echo "### Install"
-            echo
-            echo "1. Download \`AllFun-$VERSION-release.apk\` below."
-            echo "2. Confirm the SHA-256 against \`AllFun-$VERSION-release.apk.sha256\`."
-            echo "3. Open the file and let Android install it over the existing AllFun app."
-            echo
-            echo "Existing installations of AllFun (signed with the same release key) update"
-            echo "in place, and library data is preserved. From inside the app, use"
-            echo "**Settings → About → App Updates**."
-          } >> release-notes.md
+          # Curated notes may already explain how to install; do not repeat that section.
+          if grep -qiE '^#{1,3} .*install' release-notes.md; then
+            echo "Notes already contain an install section; skipping the generated one."
+          else
+            {
+              echo
+              echo "---"
+              echo
+              echo "### Install"
+              echo
+              echo "1. Download \`AllFun-$VERSION-release.apk\` below."
+              echo "2. Confirm the SHA-256 against \`AllFun-$VERSION-release.apk.sha256\`."
+              echo "3. Open the file and let Android install it over the existing AllFun app."
+              echo
+              echo "Existing installations of AllFun (signed with the same release key) update"
+              echo "in place, and library data is preserved. From inside the app, use"
+              echo "**Settings → About → App Updates**."
+            } >> release-notes.md
+          fi
 
       - name: Create draft release
         env:

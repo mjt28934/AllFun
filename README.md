@@ -249,7 +249,9 @@ bytes, matching size and SHA-256), verified it, opened the system's "Do you want
 this app?" dialog, and installed it. Afterwards the package reports `1.0.0` / `10000`, the
 same title and `2/3` progress are on Home, the settings DataStore file is byte-identical,
 and App Updates shows the installer's own `INSTALL_SUCCEEDED: Session installed` message.
-That 0.9.0 build was only a verification vehicle; it is not published.
+The installed `base.apk` hashes to the same SHA-256 as the GitHub asset
+(`8a4b89eb…88a03`), so the running app is byte-for-byte the published file, not a local
+rebuild. That 0.9.0 build was only a verification vehicle; it is not published.
 
 ## Accessibility
 
