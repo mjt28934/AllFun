@@ -44,7 +44,14 @@ class ApkInstaller(private val context: Context) {
     }
 }
 
-/** Records how the system installer finished so the app can report it honestly. */
+/**
+ * Records how the system installer finished so the app can report it honestly.
+ *
+ * A `PackageInstaller` session that needs the user's confirmation first emits
+ * `STATUS_PENDING_USER_ACTION` with the installer's own activity in `EXTRA_INTENT`. That
+ * activity has to be started by the app, which is the documented flow and the reason this
+ * receiver exists rather than fire-and-forget status handling.
+ */
 class InstallResultReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -52,6 +59,17 @@ class InstallResultReceiver : BroadcastReceiver() {
             PackageInstaller.EXTRA_STATUS,
             PackageInstaller.STATUS_FAILURE
         )
+
+        if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+            val confirmation = intent.confirmationIntent()
+            if (confirmation != null) {
+                confirmation.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                runCatching { context.startActivity(confirmation) }
+            }
+            // The final result arrives as a second broadcast; do not record this as a failure.
+            return
+        }
+
         val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE).orEmpty()
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
@@ -60,6 +78,14 @@ class InstallResultReceiver : BroadcastReceiver() {
             .putLong(KEY_AT, System.currentTimeMillis())
             .apply()
     }
+
+    private fun Intent.confirmationIntent(): Intent? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            getParcelableExtra(Intent.EXTRA_INTENT)
+        }
 
     companion object {
         const val ACTION_INSTALL_STATUS = "app.allfun.install.STATUS"

@@ -1,7 +1,10 @@
 package app.allfun.ui.update
 
 import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -46,6 +49,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,10 +59,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.content.ContextCompat
 import app.allfun.data.AppContainer
 import app.allfun.data.update.UpdateSource
 import app.allfun.ui.components.rememberViewModel
 import app.allfun.ui.settings.SettingsViewModel
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -75,6 +81,7 @@ fun UpdatesScreen(container: AppContainer, onBack: () -> Unit) {
     val vm = rememberViewModel { UpdatesViewModel(container) }
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     var showAllNotes by remember { mutableStateOf(false) }
@@ -88,14 +95,23 @@ fun UpdatesScreen(container: AppContainer, onBack: () -> Unit) {
     val notificationPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        notificationsAllowed = granted
-        if (granted) {
-            vm.setNotify(true)
-        } else {
-            // Keep the preference off so the UI does not promise a notification that
-            // cannot be shown.
-            vm.setNotify(false)
+        notificationsAllowed = vm.notificationsAllowed()
+        vm.setNotify(granted)
+        if (!granted) {
+            scope.launch {
+                snackbar.showSnackbar(
+                    "Android did not grant notification permission, so update alerts stay off."
+                )
+            }
         }
+    }
+
+    // Returning from the app's notification settings re-reads whether alerts can appear.
+    val notificationSettings = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        notificationsAllowed = vm.notificationsAllowed()
+        vm.setNotify(vm.notificationsAllowed())
     }
 
     // Returning from the system's "install unknown apps" screen re-checks the setting.
@@ -431,19 +447,36 @@ fun UpdatesScreen(container: AppContainer, onBack: () -> Unit) {
                     HorizontalDivider(Modifier.padding(vertical = 8.dp))
                     SwitchRow(
                         title = "Notify me when an update is found",
-                        subtitle = if (notificationsAllowed) {
-                            "One low-priority notification per published version."
-                        } else {
-                            "Notifications are turned off for AllFun in Android settings."
+                        subtitle = when {
+                            notificationsAllowed ->
+                                "One low-priority notification per published version."
+                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                ) != PackageManager.PERMISSION_GRANTED ->
+                                "Android has not granted notification permission yet."
+                            else ->
+                                "Notifications for AllFun are turned off in Android settings."
                         },
-                        checked = state.notify,
+                        checked = state.notify && notificationsAllowed,
                         onChange = { enabled ->
-                            if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                !notificationsAllowed
+                            if (!enabled) {
+                                vm.setNotify(false)
+                            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                ) != PackageManager.PERMISSION_GRANTED
                             ) {
                                 notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else if (!notificationsAllowed) {
+                                notificationSettings.launch(
+                                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                )
                             } else {
-                                vm.setNotify(enabled)
+                                vm.setNotify(true)
                             }
                         }
                     )

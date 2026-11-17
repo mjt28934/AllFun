@@ -61,7 +61,7 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Backup and restore | 371 KB JSON export → restore reported 5 titles, 927 chapters/episodes, 5 progress entries and settings; a non-backup file is refused with a readable message |
 | Settings maintenance | Storage stats, clear cached files (5.5 MB freed without touching the library), repository connection test (1,710 extensions in 1,194 ms) |
 | Release (R8) runtime | All paths above re-verified on a signed release build |
-| In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` session (see [In-app updates](#in-app-updates)) |
+| In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` confirmation → installed 1.0.0 over a signed 0.9.0 build with the library row, progress (2/3) and settings byte-identical afterwards (see [In-app updates](#in-app-updates)) |
 | Version | `1.0.0` (versionCode 10000) |
 | Min SDK | 26 (Android 8.0) |
 | Target SDK | 35 |
@@ -82,7 +82,8 @@ Screenshots from the emulator run live in `docs/screenshots/`:
 | `detail-series-stremio.png` | season/episode grouping from addon metadata |
 | `extensions-installed.png` | installed extensions with version, developer and status |
 | `extensions-repositories.png` | the real Keiyoushi/LNReader indexes, add and retry |
-| `settings.png` | the ten settings sections, Appearance and Accessibility first |
+| `settings.png` | About on 1.0.0 after an in-app update, with the App Updates row |
+| `updates.png` | App Updates after installing 1.0.0: versions, and the system installer's result |
 | `settings-playback.png` | novel typography and playback settings |
 | `player-subtitles.png` | a direct stream playing with its subtitle track |
 | `reader-novel-plugin.png` | chapter text from an LNReader plugin |
@@ -240,6 +241,15 @@ off Android's install protections. The result comes back through `InstallResultR
 is shown as "Last installation" the next time the screen opens. If "install unknown apps"
 is not granted yet, the screen offers the system setting instead of failing with an opaque
 error.
+
+**Verified end to end.** A signed 0.9.0 build (versionCode 9000, same keystore) was installed
+over the previous build with a test title and 2/3 progress in its database. Inside the app,
+App Updates found 1.0.0 through the real API, downloaded the published asset (10,973,613
+bytes, matching size and SHA-256), verified it, opened the system's "Do you want to update
+this app?" dialog, and installed it. Afterwards the package reports `1.0.0` / `10000`, the
+same title and `2/3` progress are on Home, the settings DataStore file is byte-identical,
+and App Updates shows the installer's own `INSTALL_SUCCEEDED: Session installed` message.
+That 0.9.0 build was only a verification vehicle; it is not published.
 
 ## Accessibility
 
