@@ -1,0 +1,349 @@
+package app.allfun.data.source
+
+import android.content.Context
+import android.net.Uri
+import app.allfun.BuildConfig
+import app.allfun.data.db.EpisodeDao
+import app.allfun.data.db.MediaDao
+import app.allfun.data.db.SourceDao
+import app.allfun.data.db.SourceEntity
+import app.allfun.data.extension.ExtensionManager
+import app.allfun.data.extension.NovelPluginHost
+import app.allfun.data.model.SourceType
+import app.allfun.data.net.Http
+import app.allfun.data.net.arr
+import app.allfun.data.net.obj
+import app.allfun.data.net.str
+import eu.kanade.tachiyomi.source.CatalogueSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.put
+import java.io.File
+
+/**
+ * Creates live [MediaSource] instances from stored rows and installs new sources.
+ *
+ * Adding a source is deliberately data-driven: a Stremio addon is a URL, a Jellyfin server
+ * is a URL + credentials. Nothing executable is downloaded.
+ */
+class SourceHub(
+    context: Context,
+    private val http: Http,
+    private val mediaDao: MediaDao,
+    private val episodeDao: EpisodeDao,
+    private val sourceDao: SourceDao,
+    private val extensions: ExtensionManager,
+    private val novelHost: NovelPluginHost
+) {
+    private val appContext = context.applicationContext
+
+    fun builtIns(): List<SourceEntity> = listOf(
+        SourceEntity(
+            id = SourceIds.LOCAL_NOVEL,
+            type = SourceType.NOVEL,
+            name = "Imported books",
+            configJson = """{"kind":"local-novel"}""",
+            builtIn = true
+        ),
+        SourceEntity(
+            id = SourceIds.LOCAL_VIDEO,
+            type = SourceType.VIDEO,
+            name = "Local videos",
+            configJson = """{"kind":"local-video"}""",
+            builtIn = true
+        )
+    )
+
+    suspend fun ensureSeeded() {
+        builtIns().forEach { entity ->
+            if (sourceDao.byId(entity.id) == null) sourceDao.upsert(entity)
+        }
+    }
+
+    fun instance(entity: SourceEntity): MediaSource? {
+        val kind = runCatching {
+            Json.parseToJsonElement(entity.configJson ?: "{}").jsonObject.str("kind")
+        }.getOrNull()
+        return when (kind) {
+            "local-novel" -> LocalNovelSource(mediaDao, episodeDao)
+            "local-video" -> LocalVideoSource(mediaDao, episodeDao)
+            "stremio" -> StremioSource(entity, http)
+            "jellyfin" -> JellyfinSource(entity, http)
+            "lnreader" -> {
+                val config = runCatching {
+                    Json.parseToJsonElement(entity.configJson ?: "{}").jsonObject
+                }.getOrNull() ?: return null
+                val pluginFile = config.str("plugin") ?: return null
+                val pluginId = config.str("pluginId") ?: return null
+                val file = File(File(appContext.filesDir, "lnreader"), pluginFile)
+                if (!file.exists()) return null
+                LnReaderMediaSource(entity, novelHost, file, pluginId)
+            }
+            "komikku" -> {
+                val config = runCatching {
+                    Json.parseToJsonElement(entity.configJson ?: "{}").jsonObject
+                }.getOrNull() ?: return null
+                val apk = config.str("apk") ?: return null
+                val sourceId = config["sourceId"]?.jsonPrimitive?.longOrNull
+                val catalogue = extensions.catalogue(apk, sourceId) ?: return null
+                KomikkuMediaSource(entity, catalogue, mediaDao, episodeDao)
+            }
+            else -> null
+        }
+    }
+
+    /**
+     * Installs a Tachiyomi/Komikku extension APK and registers every manga source it
+     * exposes. The APK stays in private storage; only metadata goes into the database.
+     */
+    suspend fun addExtension(
+        uri: Uri,
+        repoUrl: String? = null,
+        version: String? = null
+    ): Result<List<SourceEntity>> = runCatching {
+        val info = extensions.install(uri).getOrThrow()
+        registerExtension(info, repoUrl, version)
+    }
+
+    /** Installs an already-downloaded APK (used by the repository installer). */
+    suspend fun addExtension(
+        file: File,
+        repoUrl: String? = null,
+        version: String? = null,
+        expectedSigningKey: String? = null
+    ): Result<List<SourceEntity>> = runCatching {
+        val info = extensions.installFile(file, expectedSigningKey).getOrThrow()
+        registerExtension(info, repoUrl, version)
+    }
+
+    private suspend fun registerExtension(
+        info: ExtensionManager.ExtensionInfo,
+        repoUrl: String?,
+        version: String?
+    ): List<SourceEntity> {
+        val loaded = extensions.load(info)
+        val entities = loaded.sources.mapNotNull { source ->
+            val catalogue = source as? CatalogueSource ?: return@mapNotNull null
+            val entity = SourceEntity(
+                id = "komikku:" + catalogue.id,
+                type = SourceType.MANGA,
+                name = catalogue.name,
+                baseUrl = (catalogue as? HttpSource)?.baseUrl,
+                configJson = buildJsonObject {
+                    put("kind", "komikku")
+                    put("apk", info.apk.name)
+                    put("sourceId", catalogue.id)
+                    put("className", info.className)
+                }.toString(),
+                builtIn = false,
+                repoUrl = repoUrl,
+                version = version ?: info.versionName
+            )
+            sourceDao.upsert(entity)
+            entity
+        }
+        if (entities.isEmpty()) error("That extension contains no manga sources")
+        return entities
+    }
+
+    suspend fun sourceFor(sourceId: String): MediaSource? =
+        sourceDao.byId(sourceId)?.let { instance(it) }
+
+    /** Whether the files an extension-backed source needs are still on disk. */
+    fun isAvailable(entity: SourceEntity): Boolean {
+        val config = runCatching {
+            Json.parseToJsonElement(entity.configJson ?: "{}").jsonObject
+        }.getOrNull() ?: return true
+        return when (config.str("kind")) {
+            "lnreader" -> {
+                val plugin = config.str("plugin") ?: return false
+                File(File(appContext.filesDir, "lnreader"), plugin).isFile
+            }
+            "komikku" -> {
+                val apk = config.str("apk") ?: return false
+                extensions.installed().any { it.apk.name == apk }
+            }
+            else -> true
+        }
+    }
+
+    /**
+     * Imports an LNReader plugin (a single `.js` file) and registers it as a novel
+     * source. The script stays in private storage and runs in [NovelPluginHost].
+     */
+    suspend fun addLnReader(uri: Uri): Result<SourceEntity> = runCatching {
+        val source = appContext.contentResolver.openInputStream(uri)?.use { stream ->
+            stream.bufferedReader().readText()
+        } ?: error("Could not read that plugin file")
+        installLnReader(source, repoUrl = null, version = null)
+    }
+
+    /**
+     * Installs LNReader plugin source text that was already fetched (from a repository or
+     * a file picker). The plugin is validated by the sandbox host before anything is
+     * written, so a broken or unsupported script never becomes a source row.
+     */
+    suspend fun installLnReader(
+        source: String,
+        repoUrl: String? = null,
+        version: String? = null
+    ): SourceEntity {
+        if (source.isBlank()) error("That plugin file is empty")
+        val info = novelHost.loadPlugin(source)
+        val pluginId = info.optString("id").takeIf { it.isNotBlank() }
+            ?: error("That plugin has no id")
+        val pluginName = info.optString("name").takeIf { it.isNotBlank() } ?: pluginId
+        val site = info.optString("site").trimEnd('/')
+        val pluginVersion = version?.takeIf { it.isNotBlank() }
+            ?: info.optString("version").takeIf { it.isNotBlank() }
+
+        val directory = File(appContext.filesDir, "lnreader").apply { mkdirs() }
+        val fileName = pluginId.replace(Regex("[^A-Za-z0-9._-]"), "_") + ".js"
+        File(directory, fileName).writeText(source)
+
+        val config = buildJsonObject {
+            put("kind", "lnreader")
+            put("plugin", fileName)
+            put("pluginId", pluginId)
+            put("site", site)
+            put("version", pluginVersion)
+            put("lang", info.optString("lang"))
+        }.toString()
+
+        val entity = SourceEntity(
+            id = "lnreader:$pluginId",
+            type = SourceType.NOVEL,
+            name = pluginName,
+            baseUrl = site.ifBlank { null },
+            configJson = config,
+            builtIn = false,
+            repoUrl = repoUrl,
+            version = pluginVersion
+        )
+        sourceDao.upsert(entity)
+        return entity
+    }
+
+    /** Installs a Stremio addon from its manifest URL (or the addon's base URL). */
+    suspend fun addStremio(rawUrl: String): Result<SourceEntity> = runCatching {
+        val base = normalize(rawUrl)
+        val manifest = http.getJson("$base/manifest.json").jsonObject
+        val name = manifest.str("name") ?: error("That addon has no manifest name")
+        val catalogs = manifest.arr("catalogs") ?: return@runCatching error(
+            "That addon exposes no catalogs"
+        )
+
+        // Keep the whole manifest: catalog `extra` declarations decide which request
+        // shapes the addon accepts (search, skip, genre), and the stream/subtitle
+        // resources decide what the player can do. Flattening loses all of that.
+        val config = buildJsonObject {
+            put("kind", "stremio")
+            put("manifest", manifest)
+            put("catalogs", buildJsonArray {
+                catalogs.forEach { element ->
+                    val cat = element.jsonObject
+                    val type = cat.str("type") ?: return@forEach
+                    val id = cat.str("id") ?: return@forEach
+                    addJsonObject {
+                        put("type", type)
+                        put("id", id)
+                        put("name", cat.str("name") ?: "$type · $id")
+                    }
+                }
+            })
+        }.toString()
+
+        val entity = SourceEntity(
+            id = "stremio:" + Integer.toHexString(base.hashCode()),
+            type = SourceType.VIDEO,
+            name = name,
+            baseUrl = base,
+            configJson = config,
+            builtIn = false
+        )
+        sourceDao.upsert(entity)
+        entity
+    }
+
+    /** Authenticates against Jellyfin and stores the resulting access token. */
+    suspend fun addJellyfin(
+        rawUrl: String,
+        username: String,
+        password: String
+    ): Result<SourceEntity> = runCatching {
+        val base = normalize(rawUrl)
+        val authHeader =
+            """MediaBrowser Client="AllFun", Device="Android", DeviceId="allfun-android", Version="${BuildConfig.VERSION_NAME}""""
+        val body = buildJsonObject {
+            put("Username", username)
+            put("Pw", password)
+        }.toString()
+
+        val response = http.postJson(
+            "$base/Users/AuthenticateByName",
+            body,
+            mapOf("X-Emby-Authorization" to authHeader)
+        ).jsonObject
+
+        val token = response.str("AccessToken") ?: error("Jellyfin rejected those credentials")
+        val userId = response.obj("User")?.str("Id") ?: error("No user returned by Jellyfin")
+        val serverName = runCatching {
+            http.getJson("$base/System/Info/Public").jsonObject.str("ServerName")
+        }.getOrNull()?.takeIf { it.isNotBlank() } ?: "Jellyfin"
+
+        val config = buildJsonObject {
+            put("kind", "jellyfin")
+            put("base", base)
+            put("token", token)
+            put("userId", userId)
+        }.toString()
+
+        val entity = SourceEntity(
+            id = "jellyfin:" + Integer.toHexString(base.hashCode()),
+            type = SourceType.VIDEO,
+            name = serverName,
+            baseUrl = base,
+            configJson = config,
+            builtIn = false
+        )
+        sourceDao.upsert(entity)
+        entity
+    }
+
+    suspend fun remove(sourceId: String) {
+        if (builtIns().any { it.id == sourceId }) return
+        val entity = sourceDao.byId(sourceId) ?: return
+        sourceDao.delete(sourceId)
+        val config = runCatching {
+            Json.parseToJsonElement(entity.configJson ?: "{}").jsonObject
+        }.getOrNull() ?: return
+        if (config.str("kind") == "komikku") {
+            val apk = config.str("apk") ?: return
+            val stillUsed = sourceDao.all().any { it.configJson?.contains("\"apk\":\"$apk\"") == true }
+            if (!stillUsed) extensions.remove(apk)
+        } else if (config.str("kind") == "lnreader") {
+            val plugin = config.str("plugin") ?: return
+            val stillUsed = sourceDao.all().any { it.configJson?.contains("\"plugin\":\"$plugin\"") == true }
+            if (!stillUsed) File(File(appContext.filesDir, "lnreader"), plugin).delete()
+        }
+    }
+
+    private fun normalize(raw: String): String {
+        var value = raw.trim().trimEnd('/')
+        // Stremio install links look like stremio://host/manifest.json or
+        // stremio:https://host/manifest.json; both point at an HTTPS addon.
+        value = value.removePrefix("stremio:").removePrefix("stremio://")
+        if (value.startsWith("//")) value = "https:$value"
+        if (!value.startsWith("http://") && !value.startsWith("https://")) {
+            value = "https://$value"
+        }
+        if (value.endsWith("/manifest.json")) value = value.removeSuffix("/manifest.json")
+        return value
+    }
+}
