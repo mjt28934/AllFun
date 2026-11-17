@@ -188,9 +188,12 @@ The updater is a thin, testable chain rather than a web view pointed at a downlo
 5. `ApkInspector` reads the downloaded archive with `getPackageArchiveInfo`: package name,
    `versionCode` greater than installed, and signer SHA-256 equal to the running app's. A
    `versionName` mismatch with the release tag is also rejected.
-6. `ApkInstaller` opens a `PackageInstaller` session, writes the APK, commits with an
-   intent sender and records the system's answer in SharedPreferences through
-   `InstallResultReceiver`. The user always confirms in Android's own dialog.
+6. `ApkInstaller` opens a `PackageInstaller` session, writes the APK and commits with an
+   intent sender. The session's first answer is `STATUS_PENDING_USER_ACTION`; the receiver
+   starts the installer activity from `EXTRA_INTENT` so Android can show its confirmation
+   dialog, then records the final status in SharedPreferences. Without that hand-off the
+   session waits forever, which is the bug the first published build had. The user always
+   confirms in Android's own dialog.
 7. `UpdateCheckWorker` is a unique periodic job (12 h, `NetworkType.CONNECTED`). It reads
    the user's `autoCheckUpdates` preference, and only posts a notification when
    `notifyUpdates` is on and the tag has not been announced before. `UpdateScheduler.sync`
