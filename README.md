@@ -387,14 +387,15 @@ What `.github/workflows/release.yml` does with that push:
 8. Publishes the release as **latest** and confirms GitHub agrees before finishing.
 9. Attaches the signed APK and checksum to the workflow run for 90 days.
 
-A failure anywhere leaves the release as a draft — nothing is published, and the app's
-`releases/latest` endpoint keeps pointing at the previous version. Fix the cause, move the
-tag (or delete it and tag the fixed commit), and push again; the workflow replaces its own
-draft. A version that has already been published is never overwritten: bump the patch
-number instead.
+A failure before publishing leaves the release as a draft, or creates nothing at all if it
+happens earlier — either way nothing becomes public, and the app's `releases/latest`
+endpoint keeps pointing at the previous version. Fix the cause, move the tag (or delete it
+and tag the fixed commit), and push again; the workflow replaces its own draft. A version
+that has already been published is never overwritten: bump the patch number instead.
 
-Optional curated notes for a release live in `docs/releases/v1.0.1.md`; the `v1.0.0` file
-in this repository is the notes for this release.
+Optional curated notes live in `docs/releases/<tag>.md` (`docs/releases/v1.0.0.md` is
+this release). If that file has no install heading, the workflow appends a short install
+block with the asset names and the in-app path.
 
 ### Signing
 
