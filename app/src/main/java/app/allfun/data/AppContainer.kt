@@ -3,6 +3,7 @@ package app.allfun.data
 import android.content.Context
 import app.allfun.BuildConfig
 import app.allfun.data.backup.BackupManager
+import app.allfun.data.content.ContentRepository
 import app.allfun.data.db.AppDatabase
 import app.allfun.data.extension.ExtensionManager
 import app.allfun.data.extension.ExtensionRepository
@@ -84,6 +85,9 @@ class AppContainer(context: Context) {
 
     val sourceHub: SourceHub
 
+    /** The three-category aggregation layer that all content screens use. */
+    val content: ContentRepository
+
     init {
         // Extensions link against the eu.kanade.tachiyomi.* API implemented by this app,
         // so the host services must exist before any extension class is instantiated.
@@ -98,6 +102,11 @@ class AppContainer(context: Context) {
             sourceDao = database.sourceDao(),
             extensions = extensions,
             novelHost = novelHost
+        )
+        content = ContentRepository(
+            sourceHub = sourceHub,
+            sourceDao = database.sourceDao(),
+            settings = settings
         )
     }
 

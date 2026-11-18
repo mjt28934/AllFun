@@ -29,6 +29,12 @@
 -keep class kotlinx.serialization.** { *; }
 -keep class okhttp3.** { *; }
 -keep class okio.** { *; }
+# OkHttp 5 decompresses zstd responses through a JNI bridge. The compressor class is
+# resolved from native code, so R8 sees no Kotlin reference and strips it; a server that
+# answers with Content-Encoding: zstd then aborts the process with ClassNotFoundException.
+-keep class com.squareup.zstd.** { *; }
+-keepclasseswithmembernames class com.squareup.zstd.** { native <methods>; }
+-dontwarn com.squareup.zstd.**
 -keep class org.jsoup.** { *; }
 -keep class org.intellij.lang.annotations.** { *; }
 -keep class org.jetbrains.annotations.** { *; }

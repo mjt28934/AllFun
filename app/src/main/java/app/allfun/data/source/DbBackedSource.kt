@@ -45,11 +45,14 @@ abstract class DbBackedSource(
             title = row.title,
             kind = row.kind,
             author = row.author,
+            artist = row.artist,
             description = row.description,
             coverUrl = row.coverUrl,
+            backdropUrl = row.backdropUrl,
             status = row.status,
             year = row.year,
             genres = row.genreList,
+            cast = row.castList,
             totalUnits = row.totalUnits,
             unitLabel = row.unitLabel
         )

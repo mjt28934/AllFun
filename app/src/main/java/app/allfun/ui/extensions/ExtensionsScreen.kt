@@ -88,12 +88,12 @@ import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 
 private const val TAB_INSTALLED = 0
-private const val TAB_UPDATES = 1
-private const val TAB_DISCOVER = 2
+private const val TAB_DISCOVER = 1
+private const val TAB_UPDATES = 2
 private const val TAB_REPOSITORIES = 3
 private const val TAB_DISABLED = 4
 
-private val tabTitles = listOf("Installed", "Updates", "Discover", "Repositories", "Disabled")
+private val tabTitles = listOf("Installed", "Discover", "Updates", "Repositories", "Disabled")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

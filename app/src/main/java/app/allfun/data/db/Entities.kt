@@ -18,11 +18,14 @@ data class MediaEntity(
     val sourceKey: String,
     val title: String,
     val author: String? = null,
+    val artist: String? = null,
     val description: String? = null,
     val coverUrl: String? = null,
+    val backdropUrl: String? = null,
     val status: String? = null,
     val year: Int? = null,
     val genres: String = "",
+    val cast: String = "",
     val totalUnits: Int = 0,
     val unitLabel: String = "Chapter",
     val inLibrary: Boolean = false,
@@ -36,6 +39,9 @@ data class MediaEntity(
 ) {
     val genreList: List<String>
         get() = genres.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+
+    val castList: List<String>
+        get() = cast.split(",").map { it.trim() }.filter { it.isNotEmpty() }
 }
 
 @Entity(

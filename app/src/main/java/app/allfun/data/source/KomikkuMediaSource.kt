@@ -48,15 +48,15 @@ class KomikkuMediaSource(
 
     override suspend fun browse(catalog: String?, page: Int): List<MediaStub> {
         val result = if (catalog == "latest") {
-            source.getLatestUpdates(page)
+            source.getLatestUpdates(tachiyomiPage(page))
         } else {
-            source.getPopularManga(page)
+            source.getPopularManga(tachiyomiPage(page))
         }
         return result.mangas.map { it.toStub() }
     }
 
     override suspend fun search(query: String, page: Int): List<MediaStub> {
-        val result = source.getSearchManga(page, query, source.getFilterList())
+        val result = source.getSearchManga(tachiyomiPage(page), query, source.getFilterList())
         return result.mangas.map { it.toStub() }
     }
 
@@ -81,6 +81,7 @@ class KomikkuMediaSource(
             title = detail.title.ifBlank { key },
             kind = MediaKind.MANGA,
             author = detail.author?.takeIf { it.isNotBlank() },
+            artist = detail.artist?.takeIf { it.isNotBlank() },
             description = detail.description?.takeIf { it.isNotBlank() },
             coverUrl = cover,
             status = statusLabel(detail.status),
@@ -186,3 +187,10 @@ class KomikkuMediaSource(
         else -> null
     }
 }
+
+/**
+ * AllFun pages start at 0; Tachiyomi's source API starts at 1. Feeding 0 straight through
+ * made extensions compute offsets like `(0 - 1) * limit` and get an HTTP 400 from the site,
+ * so the conversion belongs here rather than in the aggregator.
+ */
+internal fun tachiyomiPage(page: Int): Int = page.coerceAtLeast(0) + 1

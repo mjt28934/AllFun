@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Code
@@ -78,7 +79,8 @@ private enum class AddDialog { NONE, STREMIO, JELLYFIN }
 fun BrowseScreen(
     container: AppContainer,
     onOpenMedia: (String) -> Unit,
-    onManageExtensions: () -> Unit
+    onManageExtensions: () -> Unit,
+    onBack: () -> Unit
 ) {
     val vm = rememberViewModel { BrowseViewModel(container) }
     val state by vm.state.collectAsStateWithLifecycle()
@@ -128,18 +130,26 @@ fun BrowseScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 20.dp, end = 8.dp, top = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                    .padding(start = 4.dp, end = 8.dp, top = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = "Browse", fontSize = 30.sp, fontWeight = FontWeight.Bold)
-                Row {
-                    IconButton(onClick = onManageExtensions) {
-                        Icon(Icons.Outlined.Extension, contentDescription = "Manage extensions")
-                    }
-                    IconButton(onClick = { showAdd = true }) {
-                        Icon(Icons.Outlined.Add, contentDescription = "Add a source")
-                    }
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(text = "Sources", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Connect a provider, then its titles appear in the three categories.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2
+                    )
+                }
+                IconButton(onClick = onManageExtensions) {
+                    Icon(Icons.Outlined.Extension, contentDescription = "Manage extensions")
+                }
+                IconButton(onClick = { showAdd = true }) {
+                    Icon(Icons.Outlined.Add, contentDescription = "Add a source")
                 }
             }
 

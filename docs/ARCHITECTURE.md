@@ -15,9 +15,9 @@ Consequences:
 ## Tables
 
 ```
-media(id PK, kind, sourceId, sourceKey, title, author, description, coverUrl,
-      status, year, genres, totalUnits, unitLabel, inLibrary, favorite, addedAt,
-      updatedAt, lastOpenedAt, memo)
+media(id PK, kind, sourceId, sourceKey, title, author, artist, description,
+      coverUrl, backdropUrl, status, year, genres, cast, totalUnits, unitLabel,
+      inLibrary, favorite, addedAt, updatedAt, lastOpenedAt, memo)
 
 episodes(mediaId PK, id PK, orderIndex, title, season, number,
          url, payload, durationMs, pageCount, sourceUnitId, memo)
@@ -143,6 +143,53 @@ The intended next step is a JSON extension definition:
 
 A `DeclarativeSource(config)` implementing `MediaSource` would then be registered the same
 way Stremio is. Keeping `MediaSource` as the boundary means readers/players need no change.
+
+## Content aggregation
+
+The app has exactly three content destinations — Movies & Shows, Books & Novels, Manhwa &
+Manga — and a provider never becomes one. `ContentRepository` is the only place that turns
+enabled `sources` rows into what those screens show:
+
+1. **Category assignment by kind, not by extension.** `SourceType.MANGA` feeds Manhwa &
+   Manga, `NOVEL` feeds Books & Novels, and the video kinds (`STREMIO`, `JELLYFIN`,
+   `LOCAL_VIDEO`) feed Movies & Shows. Those are the only places a source can appear.
+2. **Staged feeds.** Sources are fetched in parallel (six at a time) but the repository
+   publishes a `CategoryFeed` snapshot to `feedProgress` after *each* source answers, so the
+   first shelf is on screen in seconds instead of waiting for the slowest provider.
+3. **Budgets.** Each request has a 15 s deadline (`timed`, built on `withTimeoutOrNull`) and
+   each whole feed has a 45 s budget; unified search and source confirmation have 30 s.
+   `withTimeout` is deliberately avoided here: it throws a `CancellationException`, which
+   callers read as "the screen went away" and rethrow — that bug left a category spinning
+   forever when one provider hung. A slow provider is now a normal `ProviderStatus` failure
+   ("No answer within N seconds"), not a cancelled feed.
+4. **Fair scheduling.** `balancedOrder` interleaves sources by provider name. MangaDex ships
+   one source per language (62 rows), so a plain list would fill the parallel window with a
+   single provider and starve every other extension.
+5. **Dedupe without losing providers.** Items are merged by normalised title (case,
+   punctuation, leading articles), keeping the first occurrence's cover and metadata and
+   accumulating every provider that returned it. Detail pages list those providers as
+   alternatives; nothing is guessed about them.
+6. **Failure isolation.** A provider that throws, times out, or returns nothing contributes a
+   `ProviderStatus` entry and no items. The category still renders everything else, and the
+   UI can say which provider failed and why.
+7. **Caching and pagination.** Feeds and searches have short TTLs in memory keyed by
+   category+source+page (and query). "Load more" asks each provider for the next page and
+   merges the same way, so pagination stays round-robin and duplicate-free.
+8. **Unified search.** Every enabled source of the matching kind is searched once; results
+   are grouped back into the three categories, deduped, and each card shows its provider.
+   The screen can filter to one category or one provider, and a single failed provider only
+   removes its own results.
+9. **Preferred source per title.** `SettingsStore.preferredSources` maps
+   `CATEGORY|normalisedTitle` to a source id. Confirmation only marks a source available
+   after an exact title match from its own search, and the preferred source is never applied
+   until it is confirmed.
+10. **Page convention.** `MediaSource` pages are 0-based. The Tachiyomi API is 1-based, so
+    `KomikkuMediaSource` converts with `tachiyomiPage(page) = page.coerceAtLeast(0) + 1`.
+    Mixing the two produced `offset=-20` and HTTP 400 from MangaDex.
+
+The category screens (`ui/category/`) and global search (`ui/search/`) know nothing about
+extensions: they collect a `CategoryFeed` / `SearchResponse` and render shelves, chips and
+provider labels. Adding a new adapter only means teaching `SourceHub` to build it.
 
 ## Backup and restore
 

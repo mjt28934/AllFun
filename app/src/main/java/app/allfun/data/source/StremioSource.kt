@@ -197,10 +197,12 @@ class StremioSource(
             author = meta.str("director") ?: meta.str("writer"),
             description = meta.str("description"),
             coverUrl = meta.str("poster"),
+            backdropUrl = meta.str("background"),
             status = null,
             year = meta.str("year")?.take(4)?.toIntOrNull()
                 ?: meta.str("releaseInfo")?.take(4)?.toIntOrNull(),
             genres = meta.strings("genres"),
+            cast = meta.strings("cast"),
             totalUnits = videos,
             unitLabel = if (isSeries) "Episode" else "Video"
         )

@@ -33,11 +33,15 @@ data class MediaDetails(
     val title: String,
     val kind: MediaKind? = null,
     val author: String? = null,
+    /** Separate creator credited by sources that actually provide one (manga artist). */
+    val artist: String? = null,
     val description: String? = null,
     val coverUrl: String? = null,
+    val backdropUrl: String? = null,
     val status: String? = null,
     val year: Int? = null,
     val genres: List<String> = emptyList(),
+    val cast: List<String> = emptyList(),
     val totalUnits: Int? = null,
     val unitLabel: String? = null,
     /** Source-private metadata (extension memo) needed to fetch chapters later. */

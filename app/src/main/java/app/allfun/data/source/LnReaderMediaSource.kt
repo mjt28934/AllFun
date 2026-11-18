@@ -73,6 +73,7 @@ class LnReaderMediaSource(
             title = novel.optString("name").ifBlank { "Untitled" },
             kind = MediaKind.NOVEL,
             author = novel.optString("author").takeIf { it.isNotBlank() },
+            artist = novel.optString("artist").takeIf { it.isNotBlank() },
             description = novel.optString("summary").takeIf { it.isNotBlank() },
             coverUrl = absolute(novel.optString("cover").takeIf { it.isNotBlank() }),
             status = novel.optString("status").takeIf { it.isNotBlank() },

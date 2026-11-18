@@ -76,7 +76,9 @@ data class Settings(
     val autoCheckUpdates: Boolean = true,
     val notifyUpdates: Boolean = true,
     val homeSections: List<HomeSection> = HomeSection.entries,
-    val repositories: List<RepositoryConfig> = emptyList()
+    val repositories: List<RepositoryConfig> = emptyList(),
+    /** Preferred provider per title: "CATEGORY|normalised title" -> source id. */
+    val preferredSources: Map<String, String> = emptyMap()
 )
 
 class SettingsStore(private val context: Context) {
@@ -99,6 +101,7 @@ class SettingsStore(private val context: Context) {
         val notifyUpdates = booleanPreferencesKey("notify_updates")
         val homeSections = stringPreferencesKey("home_sections")
         val repositories = stringPreferencesKey("repositories")
+        val preferredSources = stringPreferencesKey("preferred_sources")
     }
 
     val settings: Flow<Settings> = context.dataStore.data
@@ -121,7 +124,8 @@ class SettingsStore(private val context: Context) {
                 autoCheckUpdates = prefs[Keys.autoCheckUpdates] ?: true,
                 notifyUpdates = prefs[Keys.notifyUpdates] ?: true,
                 homeSections = parseHomeSections(prefs[Keys.homeSections]),
-                repositories = parseRepositories(prefs[Keys.repositories])
+                repositories = parseRepositories(prefs[Keys.repositories]),
+                preferredSources = parsePreferredSources(prefs[Keys.preferredSources])
             )
         }
 
@@ -199,6 +203,15 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    /** Remembers the provider a user picked for one title. */
+    suspend fun setPreferredSource(key: String, sourceId: String) {
+        context.dataStore.edit { prefs ->
+            val current = parsePreferredSources(prefs[Keys.preferredSources]).toMutableMap()
+            current[key] = sourceId
+            prefs[Keys.preferredSources] = encodePreferredSources(current)
+        }
+    }
+
     /** Writes every preference at once; used when restoring a backup. */
     suspend fun apply(settings: Settings) {
         context.dataStore.edit { prefs ->
@@ -222,6 +235,7 @@ class SettingsStore(private val context: Context) {
             prefs[Keys.repositories] = settings.repositories
                 .distinctBy { repo -> "${repo.kind}:${repo.url}" }
                 .joinToString("\n") { repo -> "${repo.kind.name}|${repo.url}" }
+            prefs[Keys.preferredSources] = encodePreferredSources(settings.preferredSources)
         }
     }
 
@@ -244,6 +258,26 @@ class SettingsStore(private val context: Context) {
             if (url.isBlank()) null else RepositoryConfig(kind, url)
         }.toList()
     }
+
+    private fun parsePreferredSources(raw: String?): Map<String, String> {
+        if (raw.isNullOrBlank()) return emptyMap()
+        return buildMap {
+            raw.lineSequence().forEach { line ->
+                val parts = line.split('|')
+                if (parts.size < 3) return@forEach
+                val key = parts[0].trim()
+                val sourceId = parts[2].trim()
+                if (key.isBlank() || sourceId.isBlank()) return@forEach
+                put(key, sourceId)
+            }
+        }
+    }
+
+    private fun encodePreferredSources(values: Map<String, String>): String =
+        values.entries
+            .filter { it.key.isNotBlank() && it.value.isNotBlank() }
+            .distinctBy { it.key }
+            .joinToString("\n") { entry -> "${entry.key}|${entry.value}" }
 
     private inline fun <reified T : Enum<T>> String?.toEnum(fallback: T): T =
         this?.let { value -> enumValues<T>().firstOrNull { it.name == value } } ?: fallback

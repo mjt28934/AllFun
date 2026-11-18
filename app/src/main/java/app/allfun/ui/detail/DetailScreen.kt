@@ -20,13 +20,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.BookmarkBorder
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.PlayCircle
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,10 +38,14 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +53,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,32 +61,55 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.allfun.data.AppContainer
+import app.allfun.data.content.ContentCategory
+import app.allfun.data.content.SourceOption
+import app.allfun.data.content.category
 import app.allfun.data.db.EpisodeEntity
 import app.allfun.data.db.MediaEntity
 import app.allfun.data.model.MediaKind
 import app.allfun.ui.components.CoverImage
 import app.allfun.ui.components.SectionHeader
+import app.allfun.ui.components.accent
 import app.allfun.ui.components.accentColor
 import app.allfun.ui.components.rememberViewModel
 import app.allfun.ui.countLabel
 import app.allfun.ui.formatDuration
 import app.allfun.ui.formatNumber
 
+/**
+ * One detail layout for every provider. Movies, books and manga share the hero,
+ * actions, source selector, description and unit list; the metadata labels and the
+ * reader/player action change with the category.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailScreen(
     container: AppContainer,
     mediaId: String,
     onBack: () -> Unit,
+    onSwitchSource: (String) -> Unit,
     onOpen: (mediaId: String, episodeId: String?, kind: MediaKind) -> Unit
 ) {
     val vm = rememberViewModel { DetailViewModel(mediaId, container) }
     val media by vm.media.collectAsStateWithLifecycle()
     val episodes by vm.episodes.collectAsStateWithLifecycle()
     val progress by vm.progress.collectAsStateWithLifecycle()
+    val sourceState by vm.sources.collectAsStateWithLifecycle()
+    val switched by vm.switchMediaId.collectAsStateWithLifecycle()
+    val snackbar = remember { SnackbarHostState() }
     var expanded by remember { mutableStateOf(false) }
 
+    LaunchedEffect(Unit) {
+        vm.messages.collect { snackbar.showSnackbar(it) }
+    }
+    LaunchedEffect(switched) {
+        val id = switched ?: return@LaunchedEffect
+        onSwitchSource(id)
+        vm.clearSwitch()
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = {
@@ -98,6 +127,7 @@ fun DetailScreen(
                 actions = {
                     val saved = media?.inLibrary == true
                     val favorite = media?.favorite == true
+                    val category = media?.kind?.category()
                     IconButton(onClick = { vm.toggleFavorite() }) {
                         Icon(
                             imageVector = if (favorite) Icons.Filled.Favorite
@@ -113,8 +143,15 @@ fun DetailScreen(
                     }
                     IconButton(onClick = { vm.toggleLibrary() }) {
                         Icon(
-                            imageVector = if (saved) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
-                            contentDescription = if (saved) "Remove from library" else "Add to library",
+                            imageVector = if (saved) Icons.Filled.Bookmark
+                            else Icons.Outlined.BookmarkBorder,
+                            contentDescription = when {
+                                category == ContentCategory.MOVIES && saved ->
+                                    "Remove from watchlist"
+                                category == ContentCategory.MOVIES -> "Add to watchlist"
+                                saved -> "Remove from library"
+                                else -> "Add to library"
+                            },
                             tint = if (saved) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurface
                         )
@@ -134,6 +171,7 @@ fun DetailScreen(
             return@Scaffold
         }
 
+        val category = item.kind.category()
         val resume = episodes.firstOrNull { it.id == progress?.episodeId }
             ?: episodes.firstOrNull()
         val isCurrent = progress?.episodeId == resume?.id
@@ -144,7 +182,7 @@ fun DetailScreen(
                 .padding(padding),
             contentPadding = PaddingValues(bottom = 32.dp)
         ) {
-            item { DetailHeader(item) }
+            item { DetailHero(item, category) }
 
             item {
                 Row(
@@ -180,7 +218,15 @@ fun DetailScreen(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(Modifier.width(6.dp))
-                        Text(if (item.inLibrary) "Saved" else "Save")
+                        Text(
+                            when {
+                                category == ContentCategory.MOVIES && item.inLibrary ->
+                                    "In watchlist"
+                                category == ContentCategory.MOVIES -> "Watchlist"
+                                item.inLibrary -> "Saved"
+                                else -> "Save"
+                            }
+                        )
                     }
                 }
             }
@@ -204,6 +250,15 @@ fun DetailScreen(
             }
 
             item {
+                SourceSection(
+                    state = sourceState,
+                    category = category,
+                    onUse = vm::useSource,
+                    onRetry = vm::findSources
+                )
+            }
+
+            item {
                 HorizontalDivider(
                     modifier = Modifier.padding(top = 8.dp),
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
@@ -212,7 +267,7 @@ fun DetailScreen(
 
             item {
                 SectionHeader(
-                    title = if (item.kind == MediaKind.SERIES) "Episodes" else "${item.unitLabel}s",
+                    title = unitsTitle(item),
                     actionLabel = "${episodes.size}",
                     onAction = null
                 )
@@ -221,7 +276,8 @@ fun DetailScreen(
             if (episodes.isEmpty()) {
                 item {
                     Text(
-                        text = "No ${item.unitLabel.lowercase()}s yet. Pull a refresh from the source by reopening this page.",
+                        text = "No ${item.unitLabel.lowercase()}s yet. The source did not return " +
+                            "a ${item.unitLabel.lowercase()} list for this title.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -265,25 +321,46 @@ fun DetailScreen(
 }
 
 @Composable
-private fun DetailHeader(media: MediaEntity) {
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    androidx.compose.ui.graphics.Brush.verticalGradient(
-                        listOf(
-                            media.kind.accentColor().copy(alpha = 0.20f),
-                            Color.Transparent
+private fun DetailHero(media: MediaEntity, category: ContentCategory) {
+    val accent = category.accent()
+    val format = formatLabel(media, category)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(238.dp)
+            .background(
+                Brush.verticalGradient(
+                    listOf(accent.copy(alpha = 0.24f), Color.Transparent)
+                )
+            )
+    ) {
+        if (!media.backdropUrl.isNullOrBlank()) {
+            CoverImage(
+                url = media.backdropUrl,
+                title = media.title,
+                modifier = Modifier.fillMaxSize()
+            )
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.Black.copy(alpha = 0.25f),
+                            1f to Color.Black.copy(alpha = 0.86f)
                         )
                     )
-                )
-                .padding(16.dp)
+            )
+        }
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(16.dp),
+            verticalAlignment = Alignment.Bottom
         ) {
             Box(
                 modifier = Modifier
-                    .width(126.dp)
-                    .height(189.dp)
+                    .width(112.dp)
+                    .height(168.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
@@ -303,30 +380,17 @@ private fun DetailHeader(media: MediaEntity) {
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(Modifier.height(4.dp))
-                val meta = listOfNotNull(
-                    media.author,
-                    media.year?.toString(),
-                    media.status
-                ).joinToString(" · ")
-                if (meta.isNotBlank()) {
-                    Text(
-                        text = meta,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(999.dp))
-                            .background(media.kind.accentColor().copy(alpha = 0.18f))
+                            .background(accent.copy(alpha = 0.20f))
                             .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
-                            text = media.kind.label,
+                            text = format,
                             style = MaterialTheme.typography.labelSmall,
-                            color = media.kind.accentColor()
+                            color = accent
                         )
                     }
                     Spacer(Modifier.width(8.dp))
@@ -336,8 +400,39 @@ private fun DetailHeader(media: MediaEntity) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Spacer(Modifier.height(8.dp))
+                val meta = listOfNotNull(
+                    media.year?.toString(),
+                    media.status?.takeIf { it.isNotBlank() }
+                ).joinToString(" · ")
+                if (meta.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = meta,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                val creator = when (category) {
+                    ContentCategory.BOOKS -> media.author?.let { "By $it" }
+                    ContentCategory.MANGA -> listOfNotNull(
+                        media.author?.let { "By $it" },
+                        media.artist?.let { "Art by $it" }
+                    ).joinToString(" · ").takeIf { it.isNotBlank() }
+                    ContentCategory.MOVIES -> media.author?.takeIf { it.isNotBlank() }
+                }
+                if (!creator.isNullOrBlank()) {
+                    Text(
+                        text = creator,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 if (media.genreList.isNotEmpty()) {
+                    Spacer(Modifier.height(4.dp))
                     Text(
                         text = media.genreList.joinToString(" · "),
                         style = MaterialTheme.typography.labelSmall,
@@ -346,6 +441,143 @@ private fun DetailHeader(media: MediaEntity) {
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+                if (category == ContentCategory.MOVIES && media.castList.isNotEmpty()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Cast: " + media.castList.joinToString(", "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SourceSection(
+    state: DetailViewModel.SourceState,
+    category: ContentCategory,
+    onUse: (SourceOption) -> Unit,
+    onRetry: () -> Unit
+) {
+    val confirmed = state.options.count { it.available }
+    SectionHeader(
+        title = "Available sources",
+        subtitle = when {
+            state.loading -> "Checking your other installed sources…"
+            confirmed > 1 -> "$confirmed sources confirmed this title"
+            confirmed == 1 -> "Only one source confirmed this title"
+            state.error != null -> "Source check failed"
+            else -> "No provider confirmed this title right now"
+        }
+    )
+    if (state.loading || state.switching) {
+        LinearProgressIndicator(Modifier.fillMaxWidth())
+    }
+    state.error?.let { error ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = error,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onRetry) { Text("Retry") }
+        }
+    }
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+        state.options.forEach { option ->
+            SourceOptionRow(
+                option = option,
+                category = category,
+                enabled = !state.switching,
+                onUse = { onUse(option) }
+            )
+        }
+        if (state.options.isEmpty() && !state.loading) {
+            OutlinedButton(onClick = onRetry) { Text("Find sources") }
+        }
+    }
+}
+
+@Composable
+private fun SourceOptionRow(
+    option: SourceOption,
+    category: ContentCategory,
+    enabled: Boolean,
+    onUse: () -> Unit
+) {
+    Surface(
+        color = if (option.isPrimary || option.isPreferred) {
+            category.accent().copy(alpha = 0.10f)
+        } else {
+            MaterialTheme.colorScheme.surfaceContainer
+        },
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp)
+            .then(
+                if (option.available && enabled) Modifier.clickable(onClick = onUse)
+                else Modifier
+            )
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = option.sourceName,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (option.isPreferred) {
+                        Spacer(Modifier.width(6.dp))
+                        Icon(
+                            Icons.Outlined.Star,
+                            contentDescription = "Preferred source",
+                            tint = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+                val detail = option.statusLabel
+                    ?: option.message
+                    ?: if (option.available) "Available" else "Unavailable"
+                Text(
+                    text = detail,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (option.available) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            TextButton(
+                onClick = onUse,
+                enabled = option.available && enabled
+            ) {
+                Text(
+                    when {
+                        option.isPrimary -> "Current"
+                        option.available -> "Use"
+                        else -> "Unavailable"
+                    }
+                )
             }
         }
     }
@@ -424,6 +656,26 @@ private fun EpisodeRow(
                 contentDescription = "Continue",
                 tint = kind.accentColor()
             )
+        }
+    }
+}
+
+private fun unitsTitle(media: MediaEntity): String = when (media.kind) {
+    MediaKind.SERIES -> "Episodes"
+    MediaKind.MOVIE -> "Videos"
+    else -> "${media.unitLabel}s"
+}
+
+private fun formatLabel(media: MediaEntity, category: ContentCategory): String {
+    val genres = media.genreList.joinToString(" ").lowercase()
+    return when (category) {
+        ContentCategory.MOVIES -> if (media.kind == MediaKind.SERIES) "Series" else "Movie"
+        ContentCategory.BOOKS -> if (genres.contains("light novel")) "Light novel" else "Novel"
+        ContentCategory.MANGA -> when {
+            genres.contains("manhwa") -> "Manhwa"
+            genres.contains("manhua") -> "Manhua"
+            genres.contains("comic") -> "Comic"
+            else -> "Manga"
         }
     }
 }

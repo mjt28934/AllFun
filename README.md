@@ -7,20 +7,29 @@ Komikku/Mihon and LNReader each pick one medium. AllFun treats "what you're read
 watching" as the unit, not "what app you opened".
 
 ```
-Home      ─┬─ Continue reading / Continue watching (mixed kinds)
+Home      ─┬─ Continue watching / Continue reading (mixed kinds)
            ├─ Recently added
-           └─ Manga / Novels / Movies & Series — only sections with data
+           ├─ Movies & Shows · Books & Novels · Manhwa & Manga cards
+           └─ search across every category at once
+Movies    ─ films, series, catalogues and filters (format, genre, year, source)
+Books     ─ novels, light novels, ebooks, authors, reading history
+Manga     ─ manga, manhwa, manhua, comics, chapters, reading history
 Library   ─ All · Manga · Novels · Movies & TV · Books · Local media
-            search, sort, favourites, grid or list
-Browse    ─ discovery per source, source management, local imports
-Detail    ─ metadata, favourite, chapter/episode list, resume
+Sources   ─ add/manage sources and local imports (reached from Settings and
+            empty states; never a content destination of its own)
+Detail    ─ metadata, source selector, favourite, chapter/episode list, resume
 Reader    ─ vertical / paged / right-to-left manga with zoom;
             EPUB or network novel reader with live typography
 Player    ─ Media3, resume, subtitles, next episode, readable errors
-Extensions─ Installed · Updates · Discover · Repositories · Disabled
-Settings  ─ Appearance · Accessibility · Reading · Playback · Extensions ·
-            Downloads · Storage · Network · Backup · About (App Updates)
+Extensions─ Installed · Discover · Updates · Repositories · Disabled
+Settings  ─ Appearance · Accessibility · Reading · Playback · Sources & add-ons ·
+            Extensions · Downloads · Storage · Network · Backup · About
 ```
+
+There are exactly three content destinations. Extensions, add-ons and providers feed
+them in the background: a Stremio addon can only contribute to Movies & Shows, a novel
+plugin to Books & Novels, a Komikku extension to Manhwa & Manga. None of them ever
+becomes its own tab.
 
 ## Install
 
@@ -50,10 +59,14 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Check | Result |
 |---|---|
 | `:app:assembleDebug` | **BUILD SUCCESSFUL** |
-| `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking, 10,973,617 bytes |
-| `:app:testDebugUnitTest` | **13 tests pass** — semantic version comparison, release JSON parsing, checksum-file parsing |
+| `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking, 11,039,153 bytes |
+| `:app:testDebugUnitTest` | **26 tests pass** — semantic version comparison, release JSON parsing, checksum-file parsing, category/dedupe/format mapping, Tachiyomi page conversion |
 | APK metadata | `app.allfun`, `versionCode 10000`, `versionName 1.0.0`, v2 signature, `CN=AllFun` |
-| Runtime, Android 15 / API 35 (emulator) | Install → empty shelf (nothing seeded) → Home, Library, Browse, Detail, Extensions, Settings; manga (vertical + paged + chapter picker) and novel readers; video playback with a sidecar subtitle, resume and retry |
+| Runtime, Android 15 / API 35 (emulator) | Install → empty shelf (nothing seeded) → Home, Movies & Shows, Books & Novels, Manhwa & Manga, Library, Sources, Detail, Extensions, Settings; manga (vertical + paged + chapter picker) and novel readers; video playback with a sidecar subtitle, resume and retry |
+| Unified content layer | Three categories are built from every enabled source of the matching kind: staged arrival, round-robin shelves, title dedupe with provider merging, per-request timeouts and a feed budget, provider status reporting, pagination, global search grouped by category, and a remembered preferred source per title |
+| Manga category, end to end | Weeb Central (real Keiyoushi extension installed from Discover) → Popular shelf with real covers → One Piece detail (1198 chapters, author, genres) → reader loads real page images → progress on the shelf |
+| Cross-source search | "Lantern" returns 3 grouped results across Movies & Shows, Books & Novels and Manhwa & Manga with provider chips and source filters; "one piece" returns real manga results from the installed extension |
+| Source selector and confirmation | Only sources that returned an exact title match are marked available; a preferred source is remembered per title in DataStore and never auto-selected while unconfirmed |
 | Extension ecosystem | Real Keiyoushi and LNReader indexes; Installed / Updates / Discover / Repositories / Disabled; install, update, update all, enable, disable, uninstall; repository add / validate / remove / retry |
 | Komikku/Mihon extension, end to end | Real APK installed from storage → catalogue → details → chapters → page images in the reader → progress on the shelf |
 | LNReader plugin, end to end | Real plugin file installed → catalogue → details → chapter text rendered in the reader |
@@ -77,7 +90,11 @@ Screenshots from the emulator run live in `docs/screenshots/`:
 | | |
 |---|---|
 | `home.png`, `library.png` | empty first run — no bundled demo content |
-| `browse.png` | source chips: imported books and local videos |
+| `category-books.png` | Books & Novels: reading history from an imported EPUB |
+| `search-global.png` | "Lantern" grouped across Movies & Shows, Books & Novels and Manhwa & Manga |
+| `search-manga.png` | Manga search results with real covers and provider labels |
+| `reader-manga.png` | a real extension's chapter pages in the manga reader |
+| `browse.png` | the Sources screen: add or manage sources and local imports |
 | `browse-stremio.png`, `detail-stremio.png` | a Stremio addon's catalogue and a movie |
 | `detail-series-stremio.png` | season/episode grouping from addon metadata |
 | `extensions-installed.png` | installed extensions with version, developer and status |
@@ -293,8 +310,10 @@ app/src/main/java/app/allfun/
 ├── MainActivity.kt           edge-to-edge Compose host
 ├── data/
 │   ├── AppContainer.kt       manual DI graph (swap for Hilt later)
-│   ├── db/                   Room: media, episodes, progress, sources
+│   ├── db/                   Room: media, episodes, progress, sources (schema v4)
 │   ├── model/                MediaKind, sources DTOs
+│   ├── content/              ContentRepository + ContentModels: the three categories,
+│   │                         aggregation, dedupe, caching, pagination, unified search
 │   ├── source/               MediaSource + local/Jellyfin/Stremio + SourceHub
 │   ├── extension/            ExtensionManager (APKs), ExtensionRepository (indexes),
 │   │                         NovelPluginHost (LNReader JS)
@@ -305,18 +324,20 @@ app/src/main/java/app/allfun/
 │   ├── net/                  OkHttp + kotlinx.serialization helpers, UserError mapping
 │   ├── update/               GitHub Releases API, version compare, download + SHA-256,
 │   │                         APK inspector, PackageInstaller session, notifier, worker
-│   └── settings/             DataStore preferences
+│   └── settings/             DataStore preferences (including preferred sources)
 ├── ui/
-│   ├── AllFunRoot.kt         routes + bottom navigation + fade transitions
-│   ├── home/ library/ browse/ detail/ extensions/ settings/
+│   ├── AllFunRoot.kt         routes + five-tab bottom navigation + fade transitions
+│   ├── home/ category/ search/ detail/ library/ browse/ extensions/ settings/
 │   ├── update/               App Updates screen and its ViewModel
 │   ├── reader/               manga (vertical/paged/zoom) and novel (WebView) readers
 │   ├── player/               Media3 ExoPlayer
 │   └── theme/ components/
 └── (top level)               eu/kanade/tachiyomi/** — the host ABI extension APKs link to
 
-app/src/test/java/app/allfun/data/update/   version and release-parsing unit tests
-app/src/main/assets/lnreader/               offscreen plugin runtime + bundled JS libraries
+app/src/test/java/app/allfun/data/content/   category, dedupe and format unit tests
+app/src/test/java/app/allfun/data/source/    Tachiyomi page-conversion unit tests
+app/src/test/java/app/allfun/data/update/    version and release-parsing unit tests
+app/src/main/assets/lnreader/                offscreen plugin runtime + bundled JS libraries
 ```
 
 **Unified data model.** One `media` table with a `MediaKind`, an `episodes` table used for
@@ -327,8 +348,19 @@ milliseconds for video — the Continue row only needs the ratio.
 **Stable ids.** Media ids are UUIDv3 hashes of `sourceId|sourceKey`, episode ids of
 `mediaId|sourceUnitId`, so re-fetching a source never orphans progress.
 
-**Source writes go one way.** Browse → `LibraryRepository.savePreview()` → a `media` row
-(+episodes) → navigate by id. Detail and readers only read the database.
+**Source writes go one way.** A card from a category or from search →
+`LibraryRepository.savePreview()` → a `media` row (+episodes) → navigate by media id.
+Detail and readers only read the database, so a source disappearing never orphans progress.
+
+**Categories are a view, providers are the storage.** `ContentRepository` turns enabled
+`SourceEntity` rows into the three category feeds. It fetches the matching sources in
+parallel (bounded to six requests, 15 s per request, 45 s per feed), publishes partial
+feeds as answers arrive, merges duplicate titles while keeping every confirmed provider,
+and labels failures per provider instead of failing the category. Search fans out to every
+compatible source and groups the same way, with a 30 s budget so an unreachable provider
+cannot stall the screen. Source confirmation on the detail page uses the same rule: only an
+exact title match marks a provider available, and the preferred provider is stored per
+title in DataStore.
 
 ## Build
 
@@ -475,6 +507,7 @@ verifies, checksums, drafts, verifies the draft, publishes, and confirms the res
 | Download is discarded with a SHA-256 mismatch | The asset did not match its published checksum. Retry; if it repeats, the release itself is wrong — do not bypass the check. |
 | Download progress stays at 0% | The asset host is unreachable or the release asset is missing. The error text names the HTTP status. |
 | Build prints `R8: An error occurred when parsing kotlin metadata` | R8 in AGP 8.7 is older than Kotlin 2.2. It is a warning, not a failure; the build continues. |
+| A source answers with `Content-Encoding: zstd` and the app stops | Fixed in 1.0.0 by keeping `com.squareup.zstd.**` in `proguard-rules.pro`; R8 had stripped the JNI compressor that OkHttp 5 needs. |
 | Local build cannot reach `dl.google.com` | The Aliyun Google mirror in `settings.gradle.kts` is already a fallback after `google()`. |
 
 ## Not built yet
@@ -491,9 +524,10 @@ Honest list, roughly in priority order:
 5. **Declarative sources** — a JSON extension format (`{ "search": "/s?q={query}",
    "selectors": … }`) for sites that need no code, since `MediaSource` is already the
    boundary.
-6. **UI and instrumentation tests** — 13 JVM unit tests cover version comparison and
-   release parsing. Compose/UI tests, Room tests and an on-device instrumentation suite are
-   not written yet; those paths are still verified manually on the emulator.
+6. **UI and instrumentation tests** — 26 JVM unit tests cover version comparison, release
+   parsing, category/dedupe/format mapping and Tachiyomi page conversion. Compose/UI tests,
+   Room tests and an on-device instrumentation suite are not written yet; those paths are
+   still verified manually on the emulator.
 7. **Immersive player** — playback uses Media3's controller; fullscreen/gesture controls and
    background audio are not implemented.
 

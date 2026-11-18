@@ -10,13 +10,15 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CollectionsBookmark
-import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.CollectionsBookmark
-import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -27,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavType
@@ -36,9 +39,11 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import app.allfun.data.AppContainer
+import app.allfun.data.content.ContentCategory
 import app.allfun.data.model.MediaKind
 import app.allfun.data.settings.Settings
 import app.allfun.ui.browse.BrowseScreen
+import app.allfun.ui.category.CategoryScreen
 import app.allfun.ui.detail.DetailScreen
 import app.allfun.ui.extensions.ExtensionsScreen
 import app.allfun.ui.home.HomeScreen
@@ -46,6 +51,7 @@ import app.allfun.ui.library.LibraryScreen
 import app.allfun.ui.player.PlayerScreen
 import app.allfun.ui.reader.MangaReaderScreen
 import app.allfun.ui.reader.NovelReaderScreen
+import app.allfun.ui.search.GlobalSearchScreen
 import app.allfun.ui.settings.SettingsScreen
 import app.allfun.ui.theme.AllFunTheme
 import app.allfun.ui.theme.LocalReduceMotion
@@ -53,16 +59,23 @@ import app.allfun.ui.update.UpdatesScreen
 
 object Routes {
     const val HOME = "home"
+    const val MOVIES = "movies"
+    const val BOOKS = "books"
+    const val MANGA = "manga-library"
     const val LIBRARY = "library"
-    const val BROWSE = "browse"
     const val SETTINGS = "settings"
     const val EXTENSIONS = "extensions"
     const val UPDATES = "updates"
+    const val SOURCES = "sources"
+
+    const val SEARCH = "search?category={category}"
+    fun search(category: ContentCategory? = null) =
+        "search" + (category?.let { "?category=${it.name}" } ?: "")
 
     const val DETAIL = "detail/{mediaId}?from={from}"
     fun detail(mediaId: String) = "detail/$mediaId?from=library"
 
-    const val MANGA = "manga/{mediaId}?episodeId={episodeId}"
+    const val MANGA_READER = "manga/{mediaId}?episodeId={episodeId}"
     fun manga(mediaId: String, episodeId: String?) =
         "manga/$mediaId" + (episodeId?.let { "?episodeId=$it" } ?: "")
 
@@ -82,10 +95,15 @@ private data class Tab(
     val selectedIcon: ImageVector
 )
 
+/**
+ * Bottom navigation is exactly the three entertainment categories plus Home and
+ * Settings. Extensions, individual providers and repositories never appear here.
+ */
 private val tabs = listOf(
     Tab(Routes.HOME, "Home", Icons.Outlined.Home, Icons.Filled.Home),
-    Tab(Routes.LIBRARY, "Library", Icons.Outlined.CollectionsBookmark, Icons.Filled.CollectionsBookmark),
-    Tab(Routes.BROWSE, "Browse", Icons.Outlined.Explore, Icons.Filled.Explore),
+    Tab(Routes.MOVIES, "Movies", Icons.Outlined.Movie, Icons.Filled.Movie),
+    Tab(Routes.BOOKS, "Books", Icons.AutoMirrored.Outlined.MenuBook, Icons.Filled.MenuBook),
+    Tab(Routes.MANGA, "Manga", Icons.Outlined.AutoStories, Icons.Filled.AutoStories),
     Tab(Routes.SETTINGS, "Settings", Icons.Outlined.Settings, Icons.Filled.Settings)
 )
 
@@ -99,8 +117,6 @@ fun AllFunRoot(container: AppContainer) {
         val showBar = tabs.any { it.route == currentRoute }
         val reduceMotion = LocalReduceMotion.current
 
-        // A short cross-fade keeps navigation legible without motion that ignores the
-        // user's reduced-motion preference.
         val enterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
             if (reduceMotion) EnterTransition.None else fadeIn(tween(180))
         }
@@ -132,7 +148,13 @@ fun AllFunRoot(container: AppContainer) {
                                         contentDescription = tab.label
                                     )
                                 },
-                                label = { Text(tab.label) }
+                                label = {
+                                    Text(
+                                        text = tab.label,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             )
                         }
                     }
@@ -155,7 +177,44 @@ fun AllFunRoot(container: AppContainer) {
                         container = container,
                         onOpenMedia = { nav.navigate(Routes.detail(it)) },
                         onOpenLibrary = { nav.navigate(Routes.LIBRARY) },
-                        onBrowse = { nav.navigate(Routes.BROWSE) }
+                        onSearch = { nav.navigate(Routes.search()) },
+                        onOpenCategory = { category ->
+                            nav.navigate(
+                                when (category) {
+                                    ContentCategory.MOVIES -> Routes.MOVIES
+                                    ContentCategory.BOOKS -> Routes.BOOKS
+                                    ContentCategory.MANGA -> Routes.MANGA
+                                }
+                            )
+                        },
+                        onManageSources = { nav.navigate(Routes.SOURCES) }
+                    )
+                }
+
+                composable(Routes.MOVIES) {
+                    CategoryScreen(
+                        container = container,
+                        category = ContentCategory.MOVIES,
+                        onOpenMedia = { nav.navigate(Routes.detail(it)) },
+                        onManageSources = { nav.navigate(Routes.SOURCES) }
+                    )
+                }
+
+                composable(Routes.BOOKS) {
+                    CategoryScreen(
+                        container = container,
+                        category = ContentCategory.BOOKS,
+                        onOpenMedia = { nav.navigate(Routes.detail(it)) },
+                        onManageSources = { nav.navigate(Routes.SOURCES) }
+                    )
+                }
+
+                composable(Routes.MANGA) {
+                    CategoryScreen(
+                        container = container,
+                        category = ContentCategory.MANGA,
+                        onOpenMedia = { nav.navigate(Routes.detail(it)) },
+                        onManageSources = { nav.navigate(Routes.SOURCES) }
                     )
                 }
 
@@ -163,15 +222,37 @@ fun AllFunRoot(container: AppContainer) {
                     LibraryScreen(
                         container = container,
                         onOpenMedia = { nav.navigate(Routes.detail(it)) },
-                        onBrowse = { nav.navigate(Routes.BROWSE) }
+                        onBrowse = { nav.navigate(Routes.SOURCES) }
                     )
                 }
 
-                composable(Routes.BROWSE) {
+                composable(
+                    route = Routes.SEARCH,
+                    arguments = listOf(
+                        navArgument("category") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        }
+                    )
+                ) { entry ->
+                    GlobalSearchScreen(
+                        container = container,
+                        initialCategory = ContentCategory.fromName(
+                            entry.arguments?.getString("category")
+                        ),
+                        onBack = { nav.popBackStack() },
+                        onOpenMedia = { nav.navigate(Routes.detail(it)) },
+                        onManageSources = { nav.navigate(Routes.SOURCES) }
+                    )
+                }
+
+                composable(Routes.SOURCES) {
                     BrowseScreen(
                         container = container,
                         onOpenMedia = { nav.navigate(Routes.detail(it)) },
-                        onManageExtensions = { nav.navigate(Routes.EXTENSIONS) }
+                        onManageExtensions = { nav.navigate(Routes.EXTENSIONS) },
+                        onBack = { nav.popBackStack() }
                     )
                 }
 
@@ -193,6 +274,7 @@ fun AllFunRoot(container: AppContainer) {
                     SettingsScreen(
                         container = container,
                         onManageExtensions = { nav.navigate(Routes.EXTENSIONS) },
+                        onManageSources = { nav.navigate(Routes.SOURCES) },
                         onOpenUpdates = { nav.navigate(Routes.UPDATES) }
                     )
                 }
@@ -213,6 +295,11 @@ fun AllFunRoot(container: AppContainer) {
                         container = container,
                         mediaId = mediaId,
                         onBack = { nav.popBackStack() },
+                        onSwitchSource = { newId ->
+                            nav.navigate(Routes.detail(newId)) {
+                                popUpTo(entry.destination.id) { inclusive = true }
+                            }
+                        },
                         onOpen = { id, episodeId, kind ->
                             when (kind) {
                                 MediaKind.MANGA -> nav.navigate(Routes.manga(id, episodeId))
@@ -224,7 +311,7 @@ fun AllFunRoot(container: AppContainer) {
                 }
 
                 composable(
-                    route = Routes.MANGA,
+                    route = Routes.MANGA_READER,
                     arguments = listOf(
                         navArgument("mediaId") { type = NavType.StringType },
                         navArgument("episodeId") {

@@ -73,6 +73,7 @@ import java.util.Locale
 fun SettingsScreen(
     container: AppContainer,
     onManageExtensions: () -> Unit = {},
+    onManageSources: () -> Unit = {},
     onOpenUpdates: () -> Unit = {}
 ) {
     val vm = rememberViewModel { SettingsViewModel(container) }
@@ -272,7 +273,27 @@ fun SettingsScreen(
                 }
             }
 
-            // 5. Extensions
+            // 5. Sources and extensions
+            item {
+                SettingsSection("Sources & add-ons") {
+                    Text(
+                        text = "Add a Stremio addon, Jellyfin server, manga extension, novel " +
+                            "plugin, EPUB or video folder here. Every connected source feeds " +
+                            "Movies & Shows, Books & Novels or Manhwa & Manga automatically; " +
+                            "no source ever becomes its own tab.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(onClick = onManageSources) {
+                        Icon(Icons.Outlined.Extension, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Add or manage sources")
+                    }
+                }
+            }
+
+            // 6. Extensions
             item {
                 SettingsSection("Extensions") {
                     Text(
