@@ -45,8 +45,8 @@ Verify the checksum, then open the APK. Releases are signed with one fixed certi
 each version installs over the previous one and keeps the library:
 
 ```powershell
-(Get-FileHash .\AllFun-1.0.0-release.apk -Algorithm SHA256).Hash.ToLower()
-Get-Content .\AllFun-1.0.0-release.apk.sha256
+(Get-FileHash .\AllFun-0.5.0-release.apk -Algorithm SHA256).Hash.ToLower()
+Get-Content .\AllFun-0.5.0-release.apk.sha256
 ```
 
 From inside the app, **Settings → About → App Updates** does the same work without a
@@ -61,7 +61,7 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | `:app:assembleDebug` | **BUILD SUCCESSFUL** |
 | `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking, 11,039,153 bytes |
 | `:app:testDebugUnitTest` | **26 tests pass** — semantic version comparison, release JSON parsing, checksum-file parsing, category/dedupe/format mapping, Tachiyomi page conversion |
-| APK metadata | `app.allfun`, `versionCode 10000`, `versionName 1.0.0`, v2 signature, `CN=AllFun` |
+| APK metadata | `app.allfun`, `versionCode 500`, `versionName 0.5.0`, v2 signature, `CN=AllFun` |
 | Runtime, Android 15 / API 35 (emulator) | Install → empty shelf (nothing seeded) → Home, Movies & Shows, Books & Novels, Manhwa & Manga, Library, Sources, Detail, Extensions, Settings; manga (vertical + paged + chapter picker) and novel readers; video playback with a sidecar subtitle, resume and retry |
 | Unified content layer | Three categories are built from every enabled source of the matching kind: staged arrival, round-robin shelves, title dedupe with provider merging, per-request timeouts and a feed budget, provider status reporting, pagination, global search grouped by category, and a remembered preferred source per title |
 | Manga category, end to end | Weeb Central (real Keiyoushi extension installed from Discover) → Popular shelf with real covers → One Piece detail (1198 chapters, author, genres) → reader loads real page images → progress on the shelf |
@@ -74,8 +74,8 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Backup and restore | 371 KB JSON export → restore reported 5 titles, 927 chapters/episodes, 5 progress entries and settings; a non-backup file is refused with a readable message |
 | Settings maintenance | Storage stats, clear cached files (5.5 MB freed without touching the library), repository connection test (1,710 extensions in 1,194 ms) |
 | Release (R8) runtime | All paths above re-verified on a signed release build |
-| In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` confirmation → installed 1.0.0 over a signed 0.9.0 build with the library row, progress (2/3) and settings byte-identical afterwards (see [In-app updates](#in-app-updates)) |
-| Version | `1.0.0` (versionCode 10000) |
+| In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` confirmation → the new version installed over the previous signed build with the library row, progress (2/3) and settings byte-identical afterwards (see [In-app updates](#in-app-updates)) |
+| Version | `0.5.0` (versionCode 500) |
 | Min SDK | 26 (Android 8.0) |
 | Target SDK | 35 |
 
@@ -99,8 +99,8 @@ Screenshots from the emulator run live in `docs/screenshots/`:
 | `detail-series-stremio.png` | season/episode grouping from addon metadata |
 | `extensions-installed.png` | installed extensions with version, developer and status |
 | `extensions-repositories.png` | the real Keiyoushi/LNReader indexes, add and retry |
-| `settings.png` | About on 1.0.0 after an in-app update, with the App Updates row |
-| `updates.png` | App Updates after installing 1.0.0: versions, and the system installer's result |
+| `settings.png` | About after an in-app update, with the App Updates row |
+| `updates.png` | App Updates after installing an update: versions, and the system installer's result |
 | `settings-playback.png` | novel typography and playback settings |
 | `player-subtitles.png` | a direct stream playing with its subtitle track |
 | `reader-novel-plugin.png` | chapter text from an LNReader plugin |
@@ -259,16 +259,16 @@ is shown as "Last installation" the next time the screen opens. If "install unkn
 is not granted yet, the screen offers the system setting instead of failing with an opaque
 error.
 
-**Verified end to end.** A signed 0.9.0 build (versionCode 9000, same keystore) was installed
-over the previous build with a test title and 2/3 progress in its database. Inside the app,
-App Updates found 1.0.0 through the real API, downloaded the published asset (10,973,613
-bytes, matching size and SHA-256), verified it, opened the system's "Do you want to update
-this app?" dialog, and installed it. Afterwards the package reports `1.0.0` / `10000`, the
-same title and `2/3` progress are on Home, the settings DataStore file is byte-identical,
-and App Updates shows the installer's own `INSTALL_SUCCEEDED: Session installed` message.
-The installed `base.apk` hashes to the same SHA-256 as the GitHub asset
-(`8a4b89eb…88a03`), so the running app is byte-for-byte the published file, not a local
-rebuild. That 0.9.0 build was only a verification vehicle; it is not published.
+**Verified end to end.** A signed build with a lower `versionCode` and the same keystore was
+installed over the previous build with a test title and 2/3 progress in its database. Inside
+the app, App Updates found the published release through the real API, downloaded the asset
+(size and SHA-256 matched), verified it, opened the system's "Do you want to update this
+app?" dialog, and installed it. Afterwards the package reports the new version, the same
+title and `2/3` progress are on Home, the settings DataStore file is byte-identical, and App
+Updates shows the installer's own `INSTALL_SUCCEEDED: Session installed` message. The
+installed `base.apk` hashes to the same SHA-256 as the GitHub asset, so the running app is
+byte-for-byte the published file, not a local rebuild. Older verification builds were only
+vehicles; they are not published.
 
 ## Accessibility
 
@@ -386,22 +386,27 @@ Versions are semantic, and the tag is the single source of truth:
 
 | Tag | `versionName` | `versionCode` |
 |---|---|---|
+| `v0.4.0` | `0.4.0` | `400` |
+| `v0.5.0` | `0.5.0` | `500` |
+| `v0.5.1` | `0.5.1` | `501` |
+| `v0.6.0` | `0.6.0` | `600` |
 | `v1.0.0` | `1.0.0` | `10000` |
-| `v1.0.1` | `1.0.1` | `10001` |
-| `v1.1.0` | `1.1.0` | `10100` |
-| `v2.0.0` | `2.0.0` | `20000` |
 
 `versionCode = major * 10000 + minor * 100 + patch`. The release workflow computes both
 from the tag and passes `-PappVersionName` / `-PappVersionCode` to Gradle, so the APK can
-never disagree with its release. Local builds fall back to `1.0.0` / `10000`.
+never disagree with its release. Local builds fall back to `0.5.0` / `500`.
+
+The first published build was numbered 1.0.0; it has been renumbered and re-published as
+0.4.0, and the three-category redesign is 0.5.0. The numbering is now monotonic again
+(0.4.0 → 0.5.0 → …), so installs upgrade in place.
 
 ### Release process
 
 Publishing a version takes one push of a tag; no APK is uploaded by hand.
 
 ```bash
-git tag -a v1.0.1 -m "AllFun 1.0.1"
-git push origin v1.0.1
+git tag -a v0.5.1 -m "AllFun 0.5.1"
+git push origin v0.5.1
 ```
 
 What `.github/workflows/release.yml` does with that push:
@@ -425,7 +430,7 @@ endpoint keeps pointing at the previous version. Fix the cause, move the tag (or
 and tag the fixed commit), and push again; the workflow replaces its own draft. A version
 that has already been published is never overwritten: bump the patch number instead.
 
-Optional curated notes live in `docs/releases/<tag>.md` (`docs/releases/v1.0.0.md` is
+Optional curated notes live in `docs/releases/<tag>.md` (`docs/releases/v0.5.0.md` is
 this release). If that file has no install heading, the workflow appends a short install
 block with the asset names and the in-app path.
 
@@ -499,7 +504,7 @@ verifies, checksums, drafts, verifies the draft, publishes, and confirms the res
 |---|---|
 | Release run fails: `Repository secret KEYSTORE_BASE64 is not set` | One of the four signing secrets is missing. Set them as shown under [Signing](#signing). |
 | Release run fails at **Verify the APK** with `CN=Android Debug` | The signed build did not receive the keystore; check `KEYSTORE_*` and that the workflow's `keystore.properties` step ran. |
-| Tag pushed but no workflow ran | The tag must match `vMAJOR.MINOR.PATCH` exactly (`v1.0.0`, not `1.0.0` or `v1.0`). Tags also have to be pushed explicitly: `git push origin <tag>`. |
+| Tag pushed but no workflow ran | The tag must match `vMAJOR.MINOR.PATCH` exactly (`v0.5.0`, not `0.5.0` or `v0.5`). Tags also have to be pushed explicitly: `git push origin <tag>`. |
 | App says "No stable release has been published yet" | The release is still a draft or marked prerelease, or only commits/tags exist. GitHub's `releases/latest` endpoint returns neither. Publish the release. |
 | Update check fails with a 403 or rate-limit message | GitHub allows 60 unauthenticated API requests per hour per IP. Checks are cached for 12 hours; try again later or from another network. |
 | "Allow Installs" instead of "Install Update" | Android has not granted AllFun the *install unknown apps* app-op. The button opens the system screen; return and install. The confirmation dialog still appears. |
@@ -507,7 +512,7 @@ verifies, checksums, drafts, verifies the draft, publishes, and confirms the res
 | Download is discarded with a SHA-256 mismatch | The asset did not match its published checksum. Retry; if it repeats, the release itself is wrong — do not bypass the check. |
 | Download progress stays at 0% | The asset host is unreachable or the release asset is missing. The error text names the HTTP status. |
 | Build prints `R8: An error occurred when parsing kotlin metadata` | R8 in AGP 8.7 is older than Kotlin 2.2. It is a warning, not a failure; the build continues. |
-| A source answers with `Content-Encoding: zstd` and the app stops | Fixed in 1.0.0 by keeping `com.squareup.zstd.**` in `proguard-rules.pro`; R8 had stripped the JNI compressor that OkHttp 5 needs. |
+| A source answers with `Content-Encoding: zstd` and the app stops | Fixed in 0.5.0 by keeping `com.squareup.zstd.**` in `proguard-rules.pro`; R8 had stripped the JNI compressor that OkHttp 5 needs. |
 | Local build cannot reach `dl.google.com` | The Aliyun Google mirror in `settings.gradle.kts` is already a fallback after `google()`. |
 
 ## Not built yet
