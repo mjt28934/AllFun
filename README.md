@@ -62,7 +62,7 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking, 11,071,921 bytes |
 | `:app:testDebugUnitTest` | **30 tests pass** — semantic version comparison, release JSON parsing, checksum-file parsing, category/dedupe/format mapping, category sorting, Tachiyomi page conversion |
 | APK metadata | `app.allfun`, `versionCode 600`, `versionName 0.6.0`, v2 signature, `CN=AllFun` |
-| Runtime, Android 15 / API 35 (emulator) | Signed 0.6.0 APK installed over 0.5.0 (same signer, library and settings kept) → five destinations, three category cards with live counts, real Weeb Central Popular shelf and category search ("solo" → 15 results), streamed filter facets, recent searches that survive a restart, animated bottom navigation, extension manager (Installed · Discover · Updates · Repositories) with Updates reporting "Everything is up to date", settings; empty and error states; no crash |
+| Runtime, Android 15 / API 35 (emulator) | Signed 0.6.0 APK installed over 0.5.0 (same signer, library and settings kept) → five destinations, three category cards with live counts, real Weeb Central Popular shelf and category search ("solo" → 15 results), streamed filter facets, recent searches and reading progress that survive a restart, animated bottom navigation, extension manager (Installed · Discover · Updates · Repositories) with Updates reporting "Everything is up to date", settings; empty and error states; no crash |
 | Unified content layer | Three categories are built from every enabled source of the matching kind: staged arrival, round-robin shelves, title dedupe with provider merging, per-request timeouts and a feed budget, provider status reporting, pagination, global search grouped by category, and a remembered preferred source per title |
 | Manga category, end to end | Weeb Central (real Keiyoushi extension installed from Discover) → Popular shelf with real covers → One Piece detail (1198 chapters, author, genres) → reader loads real page images → progress on the shelf |
 | Cross-source search | "Lantern" returns 3 grouped results across Movies & Shows, Books & Novels and Manhwa & Manga with provider chips and source filters; "one piece" returns real manga results from the installed extension |
@@ -75,6 +75,7 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Settings maintenance | Storage stats, clear cached files (5.5 MB freed without touching the library), repository connection test (1,710 extensions in 1,194 ms) |
 | Release (R8) runtime | All paths above re-verified on a signed release build |
 | In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` confirmation → 0.5.0 (code 500) installed over a signed 0.4.0 build with the restored library and progress intact afterwards (see [In-app updates](#in-app-updates)) |
+| Published release | [v0.6.0](https://github.com/mjt28934/AllFun/releases/tag/v0.6.0) — `AllFun-0.6.0-release.apk`, 11,071,917 bytes, SHA-256 `be6b862b0e13d2be7246cec173ebd1e473dcfa36815de216874d7bf1b05a583c`; downloaded back, checksum and signer re-checked, then installed over the local build with the library and reading progress intact |
 | Version | `0.6.0` (versionCode 600) |
 | Min SDK | 26 (Android 8.0) |
 | Target SDK | 35 |
