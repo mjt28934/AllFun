@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.Close
@@ -25,7 +26,7 @@ import androidx.compose.material.icons.outlined.CollectionsBookmark
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Sort
+import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.outlined.ViewAgenda
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -54,6 +55,7 @@ import app.allfun.ui.components.EmptyState
 import app.allfun.ui.components.MediaCard
 import app.allfun.ui.components.MediaListRow
 import app.allfun.ui.components.rememberViewModel
+import app.allfun.ui.theme.LocalReduceMotion
 
 @Composable
 fun LibraryScreen(
@@ -63,6 +65,7 @@ fun LibraryScreen(
 ) {
     val vm = rememberViewModel { LibraryViewModel(container) }
     val state by vm.state.collectAsStateWithLifecycle()
+    val reduceMotion = LocalReduceMotion.current
     var sortMenu by remember { mutableStateOf(false) }
 
     Column(
@@ -77,11 +80,19 @@ fun LibraryScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
-                Text(text = "Library", fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                Text(text = "Library", style = MaterialTheme.typography.headlineMedium)
                 Text(
-                    text = "${state.all.size} ${if (state.all.size == 1) "title" else "titles"}",
+                    text = buildString {
+                        append("${state.all.size} ")
+                        append(if (state.all.size == 1) "title" else "titles")
+                        if (state.items.size != state.all.size) {
+                            append(" · ${state.items.size} shown")
+                        }
+                        append(" · ${state.sort.label}")
+                    },
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
                 )
             }
             IconButton(
@@ -103,7 +114,10 @@ fun LibraryScreen(
             }
             Box {
                 IconButton(onClick = { sortMenu = true }) {
-                    Icon(Icons.Outlined.Sort, contentDescription = "Sort library")
+                    Icon(
+                        Icons.AutoMirrored.Outlined.Sort,
+                        contentDescription = "Sort library, ${state.sort.label}"
+                    )
                 }
                 DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
                     LibrarySort.entries.forEach { option ->
@@ -121,6 +135,17 @@ fun LibraryScreen(
                             onClick = {
                                 sortMenu = false
                                 vm.setSort(option)
+                            },
+                            leadingIcon = {
+                                if (option == state.sort) {
+                                    Icon(
+                                        Icons.Outlined.CollectionsBookmark,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                } else {
+                                    Spacer(Modifier.width(24.dp))
+                                }
                             }
                         )
                     }
@@ -144,7 +169,7 @@ fun LibraryScreen(
                 }
             },
             singleLine = true,
-            shape = MaterialTheme.shapes.medium
+            shape = CircleShape
         )
 
         LazyRow(
@@ -211,7 +236,8 @@ fun LibraryScreen(
                             media = row.media,
                             progress = row.fraction,
                             onClick = { onOpenMedia(row.media.id) },
-                            fillWidth = true
+                            fillWidth = true,
+                            modifier = if (reduceMotion) Modifier else Modifier.animateItem()
                         )
                     }
                 }
@@ -222,7 +248,8 @@ fun LibraryScreen(
                             media = row.media,
                             progress = row.fraction,
                             onClick = { onOpenMedia(row.media.id) },
-                            onToggleFavorite = { vm.toggleFavorite(row.media.id) }
+                            onToggleFavorite = { vm.toggleFavorite(row.media.id) },
+                            modifier = if (reduceMotion) Modifier else Modifier.animateItem()
                         )
                     }
                 }

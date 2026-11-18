@@ -123,6 +123,7 @@ class AppContainer(context: Context) {
     fun bootstrap() {
         scope.launch {
             sourceHub.ensureSeeded()
+            runCatching { sourceHub.reconcileInstalledExtensions() }
 
             // 0.3 removed the bundled demo content. Earlier builds seeded a manga and an
             // EPUB into the library; drop both so an upgrade does not keep titles whose

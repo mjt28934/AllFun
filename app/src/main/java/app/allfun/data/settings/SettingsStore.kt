@@ -14,14 +14,18 @@ import kotlinx.coroutines.flow.map
 
 private val Context.dataStore by preferencesDataStore("settings")
 
+/** Enough to be useful without turning the empty search screen into a list. */
+private const val MAX_SEARCH_HISTORY = 8
+
 enum class ReaderMode { VERTICAL, PAGED }
 enum class ThemeMode { SYSTEM, DARK, LIGHT }
 enum class LibraryView { GRID, LIST }
 enum class LibrarySort(val label: String) {
     RECENTLY_UPDATED("Recently updated"),
     RECENTLY_ADDED("Recently added"),
-    TITLE("Title A–Z"),
-    AUTHOR("Author A–Z")
+    RECENTLY_OPENED("Recently opened"),
+    TITLE("Title A-Z"),
+    AUTHOR("Author A-Z")
 }
 enum class MangaFit(val label: String) {
     WIDTH("Fit width"),
@@ -45,6 +49,12 @@ enum class HomeSection(val title: String, val key: String) {
     RECENTLY_ADDED("Recently added", "recently_added"),
     RECENTLY_OPENED("Recently opened", "recently_opened"),
     RECENTLY_UPDATED("Recently updated", "recently_updated"),
+    FAVORITES("Favorites", "favorites"),
+
+    /**
+     * Legacy per-medium shelves. The app no longer renders provider recommendations, but
+     * the keys stay so restoring an older backup never fails.
+     */
     MANGA_FROM_SOURCES("Manga from your sources", "recs_manga"),
     NOVELS_FROM_SOURCES("Novels from your sources", "recs_novels"),
     VIDEO_FROM_SOURCES("Movies & TV from your sources", "recs_video");
@@ -76,6 +86,8 @@ data class Settings(
     val autoCheckUpdates: Boolean = true,
     val notifyUpdates: Boolean = true,
     val homeSections: List<HomeSection> = HomeSection.entries,
+    /** Most recent global-search terms, newest first. */
+    val searchHistory: List<String> = emptyList(),
     val repositories: List<RepositoryConfig> = emptyList(),
     /** Preferred provider per title: "CATEGORY|normalised title" -> source id. */
     val preferredSources: Map<String, String> = emptyMap()
@@ -100,6 +112,7 @@ class SettingsStore(private val context: Context) {
         val autoCheckUpdates = booleanPreferencesKey("auto_check_updates")
         val notifyUpdates = booleanPreferencesKey("notify_updates")
         val homeSections = stringPreferencesKey("home_sections")
+        val searchHistory = stringPreferencesKey("search_history")
         val repositories = stringPreferencesKey("repositories")
         val preferredSources = stringPreferencesKey("preferred_sources")
     }
@@ -124,6 +137,7 @@ class SettingsStore(private val context: Context) {
                 autoCheckUpdates = prefs[Keys.autoCheckUpdates] ?: true,
                 notifyUpdates = prefs[Keys.notifyUpdates] ?: true,
                 homeSections = parseHomeSections(prefs[Keys.homeSections]),
+                searchHistory = parseSearchHistory(prefs[Keys.searchHistory]),
                 repositories = parseRepositories(prefs[Keys.repositories]),
                 preferredSources = parsePreferredSources(prefs[Keys.preferredSources])
             )
@@ -195,6 +209,31 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    /** Records a completed search; newest first, no duplicates, capped at 8 entries. */
+    suspend fun addSearchTerm(term: String) {
+        val clean = term.trim()
+        if (clean.isBlank()) return
+        context.dataStore.edit { prefs ->
+            val existing = parseSearchHistory(prefs[Keys.searchHistory])
+                .filterNot { it.equals(clean, ignoreCase = true) }
+            prefs[Keys.searchHistory] = (listOf(clean) + existing)
+                .take(MAX_SEARCH_HISTORY)
+                .joinToString("\n")
+        }
+    }
+
+    suspend fun removeSearchTerm(term: String) {
+        context.dataStore.edit { prefs ->
+            val existing = parseSearchHistory(prefs[Keys.searchHistory])
+                .filterNot { it.equals(term, ignoreCase = true) }
+            prefs[Keys.searchHistory] = existing.joinToString("\n")
+        }
+    }
+
+    suspend fun clearSearchHistory() {
+        context.dataStore.edit { it.remove(Keys.searchHistory) }
+    }
+
     suspend fun setRepositories(repositories: List<RepositoryConfig>) {
         context.dataStore.edit {
             it[Keys.repositories] = repositories
@@ -246,6 +285,16 @@ class SettingsStore(private val context: Context) {
         if (raw == null) return HomeSection.entries
         if (raw.isBlank()) return emptyList()
         return raw.split(",").mapNotNull { HomeSection.fromKey(it.trim()) }.distinct()
+    }
+
+    private fun parseSearchHistory(raw: String?): List<String> {
+        if (raw.isNullOrBlank()) return emptyList()
+        return raw.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinctBy { it.lowercase() }
+            .take(MAX_SEARCH_HISTORY)
+            .toList()
     }
 
     private fun parseRepositories(raw: String?): List<RepositoryConfig> {

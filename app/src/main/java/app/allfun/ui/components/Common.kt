@@ -1,32 +1,46 @@
 package app.allfun.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Movie
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,8 +48,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,17 +58,19 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.SubcomposeAsyncImage
-import coil.request.ImageRequest
-import androidx.compose.ui.platform.LocalContext
 import app.allfun.data.db.MediaEntity
 import app.allfun.data.model.MediaKind
 import app.allfun.data.model.MediaStub
 import app.allfun.ui.countLabel
 import app.allfun.ui.percentLabel
 import app.allfun.ui.theme.Cyan
+import app.allfun.ui.theme.LocalReduceMotion
+import app.allfun.ui.theme.Motion
 import app.allfun.ui.theme.Rose
 import app.allfun.ui.theme.Violet
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
+import kotlin.math.roundToInt
 
 /** Builds a ViewModel with an explicit factory, no DI framework needed. */
 @Composable
@@ -78,6 +95,10 @@ fun MediaKind.accentColor(): Color = when (this) {
     MediaKind.MOVIE, MediaKind.SERIES -> Rose
 }
 
+/**
+ * Cover with a real cache key and a short cross-fade. The fallback is drawn by the same
+ * composable, so a missing image never leaves a blank hole.
+ */
 @Composable
 fun CoverImage(
     url: String?,
@@ -88,8 +109,13 @@ fun CoverImage(
         FallbackCover(title, modifier)
     } else {
         SubcomposeAsyncImage(
-            model = ImageRequest.Builder(LocalContext.current).data(url).crossfade(true).build(),
-            contentDescription = title,
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(url)
+                .crossfade(180)
+                .memoryCacheKey(url)
+                .diskCacheKey(url)
+                .build(),
+            contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = modifier,
             loading = { FallbackCover(title, Modifier.fillMaxSize()) },
@@ -102,10 +128,10 @@ fun CoverImage(
 fun FallbackCover(title: String, modifier: Modifier = Modifier) {
     val seed = (title.hashCode() and 0x7fffffff)
     val palettes = listOf(
-        listOf(Color(0xFF2B2350), Color(0xFF7C5CFF)),
-        listOf(Color(0xFF083A42), Color(0xFF22D3EE)),
-        listOf(Color(0xFF3A0E24), Color(0xFFF472B6)),
-        listOf(Color(0xFF3B2A12), Color(0xFFF59E0B))
+        listOf(Color(0xFF241D45), Color(0xFF4C3A96)),
+        listOf(Color(0xFF0B3238), Color(0xFF17606B)),
+        listOf(Color(0xFF39122A), Color(0xFF8A2B55)),
+        listOf(Color(0xFF33240F), Color(0xFF8A5A18))
     )
     val palette = palettes[seed % palettes.size]
     Box(
@@ -116,9 +142,41 @@ fun FallbackCover(title: String, modifier: Modifier = Modifier) {
             text = title.take(2).uppercase(),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
-            color = Color.White.copy(alpha = 0.85f)
+            color = Color.White.copy(alpha = 0.78f)
         )
     }
+}
+
+/** Progress bar whose value glides to the stored position instead of snapping. */
+@Composable
+fun AnimatedProgress(
+    progress: Float,
+    modifier: Modifier = Modifier,
+    color: Color = Cyan,
+    trackColor: Color = Color.White.copy(alpha = 0.22f),
+    height: Int = 4
+) {
+    val reduceMotion = LocalReduceMotion.current
+    val target = progress.coerceIn(0f, 1f)
+    val animated by animateFloatAsState(
+        targetValue = target,
+        animationSpec = if (reduceMotion) androidx.compose.animation.core.snap()
+        else androidx.compose.animation.core.tween(520, easing = Motion.EaseOut),
+        label = "progress"
+    )
+    LinearProgressIndicator(
+        progress = { animated },
+        color = color,
+        trackColor = trackColor,
+        drawStopIndicator = {},
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height.dp)
+            .clip(RoundedCornerShape(50))
+            .semantics {
+                stateDescription = "${(target * 100).roundToInt()}% complete"
+            }
+    )
 }
 
 @Composable
@@ -127,19 +185,29 @@ fun MediaCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     progress: Float? = null,
-    width: Int = 140,
+    width: Int = 136,
     fillWidth: Boolean = false,
     metaOverride: String? = null,
     showType: Boolean = true
 ) {
+    val interaction = remember { MutableInteractionSource() }
     val meta = metaOverride ?: media.author
         ?: buildString {
             if (media.totalUnits > 0) append(countLabel(media.totalUnits, media.unitLabel))
         }
+    val percent = percentLabel(progress)
+
     Column(
         modifier = modifier
             .then(if (fillWidth) Modifier.fillMaxWidth() else Modifier.width(width.dp))
-            .clickable(onClickLabel = "Open ${media.title}", onClick = onClick)
+            .pressScale(interaction)
+            .focusOutline(MaterialTheme.shapes.medium)
+            .clickable(
+                interactionSource = interaction,
+                indication = ripple(),
+                onClickLabel = "Open ${media.title}",
+                onClick = onClick
+            )
     ) {
         Box(
             modifier = Modifier
@@ -153,13 +221,15 @@ fun MediaCard(
                 title = media.title,
                 modifier = Modifier.fillMaxSize()
             )
+            // A short scrim keeps the format badge readable without hiding the artwork.
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
+                    .height(52.dp)
                     .background(
                         Brush.verticalGradient(
-                            0.45f to Color.Transparent,
-                            1f to Color.Black.copy(alpha = 0.82f)
+                            0f to Color.Black.copy(alpha = 0.42f),
+                            1f to Color.Transparent
                         )
                     )
             )
@@ -168,9 +238,9 @@ fun MediaCard(
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(8.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color.Black.copy(alpha = 0.62f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.Black.copy(alpha = 0.46f))
+                        .padding(horizontal = 7.dp, vertical = 3.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -179,7 +249,7 @@ fun MediaCard(
                         tint = media.kind.accentColor(),
                         modifier = Modifier.size(11.dp)
                     )
-                    Spacer(Modifier.width(3.dp))
+                    Spacer(Modifier.width(4.dp))
                     Text(
                         text = media.kind.label,
                         style = MaterialTheme.typography.labelSmall,
@@ -194,42 +264,45 @@ fun MediaCard(
                     tint = Rose,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .size(16.dp)
+                        .padding(9.dp)
+                        .size(15.dp)
                 )
             }
-            Text(
-                text = media.title,
-                style = MaterialTheme.typography.titleSmall,
-                color = Color.White,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(8.dp)
-            )
             if (progress != null && progress > 0f) {
-                LinearProgressIndicator(
-                    progress = { progress.coerceIn(0f, 1f) },
-                    color = Cyan,
-                    trackColor = Color.White.copy(alpha = 0.25f),
+                Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .height(3.dp)
-                )
+                        .background(Color.Black.copy(alpha = 0.32f))
+                ) {
+                    AnimatedProgress(
+                        progress = progress,
+                        modifier = Modifier.fillMaxWidth(),
+                        height = 4
+                    )
+                }
             }
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
         Text(
-            text = meta.orEmpty(),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
+            text = media.title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
-        val percent = percentLabel(progress)
+        if (!meta.isNullOrBlank()) {
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = meta,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
         if (percent.isNotBlank()) {
+            Spacer(Modifier.height(2.dp))
             Text(
                 text = percent,
                 style = MaterialTheme.typography.labelSmall,
@@ -240,7 +313,7 @@ fun MediaCard(
     }
 }
 
-/** A source result that is not in the database yet (Browse / Home shelves). */
+/** A source result that is not in the database yet (Browse / discovery shelves). */
 @Composable
 fun DiscoveryCard(
     stub: MediaStub,
@@ -249,10 +322,18 @@ fun DiscoveryCard(
     modifier: Modifier = Modifier,
     width: Int = 132
 ) {
+    val interaction = remember { MutableInteractionSource() }
     Column(
         modifier = modifier
             .width(width.dp)
-            .clickable(onClickLabel = "Open ${stub.title}", onClick = onClick)
+            .pressScale(interaction)
+            .focusOutline()
+            .clickable(
+                interactionSource = interaction,
+                indication = ripple(),
+                onClickLabel = "Open ${stub.title}",
+                onClick = onClick
+            )
     ) {
         Box(
             modifier = Modifier
@@ -267,10 +348,10 @@ fun DiscoveryCard(
                 modifier = Modifier.fillMaxSize()
             )
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
         Text(
             text = stub.title,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.titleSmall,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
@@ -283,19 +364,13 @@ fun DiscoveryCard(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        Text(
-            text = sourceName,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.secondary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        StatusPill(text = sourceName, tint = MaterialTheme.colorScheme.secondary)
     }
 }
 
 /**
- * List-mode library row. Keeps the cover, title, metadata and progress readable at
- * large font scales; the whole row is one 56dp+ touch target.
+ * List-mode library row. Keeps cover, title, metadata and progress readable at large
+ * font scales; the whole row is one 56dp+ touch target.
  */
 @Composable
 fun MediaListRow(
@@ -305,17 +380,32 @@ fun MediaListRow(
     modifier: Modifier = Modifier,
     onToggleFavorite: (() -> Unit)? = null
 ) {
+    val interaction = remember { MutableInteractionSource() }
+    val reduceMotion = LocalReduceMotion.current
+    val favoriteColor by animateColorAsState(
+        targetValue = if (media.favorite) Rose else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = if (reduceMotion) androidx.compose.animation.core.snap()
+        else androidx.compose.animation.core.tween(Motion.FAST),
+        label = "favoriteColor"
+    )
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClickLabel = "Open ${media.title}", onClick = onClick)
+            .focusOutline(MaterialTheme.shapes.small)
+            .clickable(
+                interactionSource = interaction,
+                indication = ripple(),
+                onClickLabel = "Open ${media.title}",
+                onClick = onClick
+            )
+            .heightIn(min = 92.dp)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .width(56.dp)
-                .height(84.dp)
+                .width(58.dp)
+                .height(87.dp)
                 .clip(MaterialTheme.shapes.small)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
@@ -354,15 +444,11 @@ fun MediaListRow(
                 overflow = TextOverflow.Ellipsis
             )
             if (progress != null && progress > 0f) {
-                Spacer(Modifier.height(6.dp))
-                LinearProgressIndicator(
-                    progress = { progress.coerceIn(0f, 1f) },
-                    color = Cyan,
+                Spacer(Modifier.height(7.dp))
+                AnimatedProgress(
+                    progress = progress,
                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(3.dp)
-                        .clip(RoundedCornerShape(2.dp))
+                    height = 4
                 )
                 Spacer(Modifier.height(3.dp))
                 Text(
@@ -382,7 +468,7 @@ fun MediaListRow(
                     } else {
                         "Add ${media.title} to favorites"
                     },
-                    tint = if (media.favorite) Rose else MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = favoriteColor
                 )
             }
         }
@@ -399,34 +485,61 @@ fun SectionHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(18.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(MaterialTheme.colorScheme.primary)
             )
-            if (subtitle != null) {
+            Spacer(Modifier.width(10.dp))
+            Column {
                 Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
                 )
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
         if (actionLabel != null && onAction != null) {
-            Text(
-                text = actionLabel,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
+            Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .heightIn(min = 48.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .clickable(onClickLabel = actionLabel, onClick = onAction)
-                    .padding(horizontal = 10.dp, vertical = 8.dp)
-            )
+                    .padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = actionLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1
+                )
+                Icon(
+                    Icons.Outlined.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
     }
 }
@@ -438,27 +551,37 @@ fun EmptyState(
     message: String,
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    secondaryActionLabel: String? = null,
+    onSecondaryAction: (() -> Unit)? = null
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 32.dp, vertical = 48.dp),
+            .padding(horizontal = 32.dp, vertical = 44.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-            modifier = Modifier.size(48.dp)
-        )
-        Spacer(Modifier.height(14.dp))
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(28.dp)
+            )
+        }
+        Spacer(Modifier.height(16.dp))
         Text(
             text = title,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleLarge,
             textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
         Text(
             text = message,
             style = MaterialTheme.typography.bodyMedium,
@@ -466,9 +589,21 @@ fun EmptyState(
             textAlign = TextAlign.Center
         )
         if (actionLabel != null && onAction != null) {
-            Spacer(Modifier.height(16.dp))
-            androidx.compose.material3.Button(onClick = onAction) {
+            Spacer(Modifier.height(20.dp))
+            Button(
+                onClick = onAction,
+                modifier = Modifier.heightIn(min = 48.dp)
+            ) {
                 Text(actionLabel)
+            }
+        }
+        if (secondaryActionLabel != null && onSecondaryAction != null) {
+            Spacer(Modifier.height(4.dp))
+            TextButton(
+                onClick = onSecondaryAction,
+                modifier = Modifier.heightIn(min = 48.dp)
+            ) {
+                Text(secondaryActionLabel)
             }
         }
     }
@@ -482,8 +617,8 @@ fun ThumbRow(
     progressFor: (MediaEntity) -> Float? = { null },
     onOpen: (MediaEntity) -> Unit
 ) {
-    androidx.compose.foundation.lazy.LazyRow(
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(items.size) { index ->

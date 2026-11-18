@@ -126,6 +126,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     private fun LibrarySort.comparator(): Comparator<LibraryRow> = when (this) {
         LibrarySort.RECENTLY_UPDATED -> compareByDescending { it.media.updatedAt }
         LibrarySort.RECENTLY_ADDED -> compareByDescending { it.media.addedAt }
+        LibrarySort.RECENTLY_OPENED -> compareByDescending { it.media.lastOpenedAt ?: 0L }
         LibrarySort.TITLE -> compareBy { it.media.title.lowercase(Locale.ROOT) }
         LibrarySort.AUTHOR -> compareBy { it.media.author?.lowercase(Locale.ROOT) ?: "\uFFFF" }
     }

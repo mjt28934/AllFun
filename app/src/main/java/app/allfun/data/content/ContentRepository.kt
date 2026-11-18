@@ -69,6 +69,10 @@ class ContentRepository(
     suspend fun enabledSources(category: ContentCategory): List<SourceEntity> =
         sourceDao.all().filter { it.enabled && it.type == category.sourceType }
 
+    /** Every enabled source, for screens that need a count before a search has run. */
+    suspend fun enabledSources(): List<SourceEntity> =
+        sourceDao.all().filter { it.enabled }
+
     /**
      * Builds the category feed from every enabled source. [force] bypasses the cache and
      * is used by the explicit refresh control.
@@ -243,7 +247,9 @@ class ContentRepository(
                     type = entity.type,
                     available = true,
                     itemCount = laneItems.size,
-                    message = if (items.isEmpty()) "Returned no titles." else null
+                    // A source with no catalogue (imported books, local video) has nothing
+                    // until the user imports something. That is an empty shelf, not a fault.
+                    message = null
                 ),
                 lanes
             )

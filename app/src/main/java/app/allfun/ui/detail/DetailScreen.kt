@@ -1,5 +1,7 @@
 package app.allfun.ui.detail
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +27,8 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Star
@@ -55,6 +59,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -75,6 +81,8 @@ import app.allfun.ui.components.rememberViewModel
 import app.allfun.ui.countLabel
 import app.allfun.ui.formatDuration
 import app.allfun.ui.formatNumber
+import app.allfun.ui.theme.LocalReduceMotion
+import app.allfun.ui.theme.Motion
 
 /**
  * One detail layout for every provider. Movies, books and manga share the hero,
@@ -233,7 +241,18 @@ fun DetailScreen(
 
             if (!item.description.isNullOrBlank()) {
                 item {
-                    Column(Modifier.padding(horizontal = 16.dp)) {
+                    val reduceMotion = LocalReduceMotion.current
+                    Column(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .animateContentSize(
+                                animationSpec = if (reduceMotion) {
+                                    androidx.compose.animation.core.snap()
+                                } else {
+                                    tween(Motion.MEDIUM, easing = Motion.EaseOut)
+                                }
+                            )
+                    ) {
                         Text(
                             text = item.description.orEmpty(),
                             style = MaterialTheme.typography.bodyMedium,
@@ -241,8 +260,23 @@ fun DetailScreen(
                             overflow = TextOverflow.Ellipsis
                         )
                         if ((item.description?.length ?: 0) > 260) {
-                            TextButton(onClick = { expanded = !expanded }) {
-                                Text(if (expanded) "Less" else "More")
+                            TextButton(
+                                onClick = { expanded = !expanded },
+                                modifier = Modifier.semantics {
+                                    stateDescription = if (expanded) "Expanded" else "Collapsed"
+                                }
+                            ) {
+                                Text(if (expanded) "Show less" else "Read more")
+                                Spacer(Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = if (expanded) {
+                                        Icons.Outlined.ExpandLess
+                                    } else {
+                                        Icons.Outlined.ExpandMore
+                                    },
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
                         }
                     }

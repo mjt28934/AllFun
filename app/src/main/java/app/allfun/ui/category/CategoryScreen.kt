@@ -1,5 +1,14 @@
 package app.allfun.ui.category
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,17 +33,23 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Sort
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -42,7 +58,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -58,34 +73,45 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.allfun.data.AppContainer
 import app.allfun.data.content.ContentCategory
 import app.allfun.data.content.ContentItem
+import app.allfun.data.content.ProviderStatus
 import app.allfun.data.content.category
+import app.allfun.data.db.ContinueRow
 import app.allfun.data.db.LibraryRow
 import app.allfun.ui.components.ContentCard
+import app.allfun.ui.components.ContentReveal
 import app.allfun.ui.components.EmptyState
 import app.allfun.ui.components.ErrorState
+import app.allfun.ui.components.GridSkeleton
+import app.allfun.ui.components.IconBadge
 import app.allfun.ui.components.LoadingState
 import app.allfun.ui.components.MediaCard
 import app.allfun.ui.components.NoticeCard
 import app.allfun.ui.components.ProviderStatusLine
 import app.allfun.ui.components.SectionHeader
+import app.allfun.ui.components.StatusPill
 import app.allfun.ui.components.accent
 import app.allfun.ui.components.icon
 import app.allfun.ui.components.rememberViewModel
+import app.allfun.ui.theme.LocalReduceMotion
+import app.allfun.ui.theme.Motion
 
 /**
  * The single category browse experience. Movies, books and manga share the same cards,
- * search field, filters, loading/error handling and source status reporting; the only
- * per-category differences are metadata labels and accent colour.
+ * search field, filters, sorting, loading/error handling and source status reporting; the
+ * only per-category differences are metadata labels and accent colour.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -93,6 +119,7 @@ fun CategoryScreen(
     container: AppContainer,
     category: ContentCategory,
     onOpenMedia: (String) -> Unit,
+    onOpenLibrary: () -> Unit,
     onManageSources: () -> Unit
 ) {
     val vm = rememberViewModel(key = category.name) { CategoryViewModel(category, container) }
@@ -100,6 +127,7 @@ fun CategoryScreen(
     val continueRows by vm.continueRows.collectAsStateWithLifecycle()
     val libraryRows by vm.libraryRows.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
+    val focus = LocalFocusManager.current
     var statusExpanded by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -125,8 +153,20 @@ fun CategoryScreen(
     val history = libraryForCategory
         .filter { it.media.lastOpenedAt != null }
         .sortedByDescending { it.media.lastOpenedAt }
-    val visibleItems = state.filtered(state.allItems)
-    val unmatched = state.feed?.statuses.orEmpty().filter { !it.available || it.message != null }
+    val visibleItems = state.sorted(state.filtered(state.allItems))
+    val searchResults = state.sorted(state.filtered(state.searchResults))
+    val statuses = state.feed?.statuses.orEmpty()
+    val issues = statuses.filter { !it.available || it.message != null }
+
+    val phase = when {
+        state.query.isNotBlank() -> CategoryPhase.SEARCH
+        state.loading && state.feed == null -> CategoryPhase.LOADING
+        state.feed?.sources?.isEmpty() == true &&
+            continueForCategory.isEmpty() && libraryForCategory.isEmpty() -> CategoryPhase.NO_SOURCES
+        state.error != null && state.allItems.isEmpty() -> CategoryPhase.ERROR
+        state.browseAll -> CategoryPhase.BROWSE
+        else -> CategoryPhase.SECTIONS
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
@@ -138,39 +178,15 @@ fun CategoryScreen(
                 .padding(padding)
                 .statusBarsPadding()
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 20.dp, end = 8.dp, top = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = category.label,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = category.tagline,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2
-                    )
-                }
-                IconButton(onClick = { vm.openFilters() }) {
-                    Icon(
-                        Icons.Outlined.FilterList,
-                        contentDescription = "Filter ${category.label}",
-                        tint = if (state.hasActiveFilters) category.accent()
-                        else MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                IconButton(onClick = vm::refresh, enabled = !state.refreshing) {
-                    Icon(Icons.Outlined.Refresh, contentDescription = "Refresh category")
-                }
-            }
+            CategoryHeader(
+                category = category,
+                state = state,
+                sourceCount = state.feed?.sources.orEmpty().size,
+                issueCount = issues.size,
+                onOpenFilters = vm::openFilters,
+                onSort = vm::selectSort,
+                onRefresh = vm::refresh
+            )
 
             OutlinedTextField(
                 value = state.query,
@@ -188,8 +204,9 @@ fun CategoryScreen(
                     }
                 },
                 singleLine = true,
-                shape = MaterialTheme.shapes.medium,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search)
+                shape = CircleShape,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() })
             )
 
             if (state.feed?.sources.orEmpty().size > 1) {
@@ -204,7 +221,7 @@ fun CategoryScreen(
                             label = { Text("All sources") }
                         )
                     }
-                    items(state.feed?.sources.orEmpty()) { source ->
+                    items(state.feed?.sources.orEmpty(), key = { it.id }) { source ->
                         FilterChip(
                             selected = state.sourceFilter == source.id,
                             onClick = {
@@ -255,6 +272,8 @@ fun CategoryScreen(
                         text = filterSummary(state),
                         style = MaterialTheme.typography.labelSmall,
                         color = category.accent(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
                     TextButton(onClick = vm::clearFilters) { Text("Clear") }
@@ -262,24 +281,32 @@ fun CategoryScreen(
             }
 
             if (state.opening || state.refreshing) {
-                LinearProgressIndicator(Modifier.fillMaxWidth())
+                LinearProgressIndicator(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .clip(CircleShape)
+                )
             }
 
-            Box(Modifier.weight(1f)) {
-                when {
-                    state.query.isNotBlank() -> SearchGrid(
+            AnimatedPhase(
+                phase = phase,
+                modifier = Modifier.weight(1f)
+            ) {
+                when (it) {
+                    CategoryPhase.SEARCH -> SearchGrid(
                         state = state,
                         category = category,
+                        items = searchResults,
                         onOpen = vm::open,
                         onRetry = { vm.setQuery(state.query) },
                         onClear = vm::clearSearch,
                         onManageSources = onManageSources
                     )
 
-                    state.loading -> LoadingState("Loading ${category.label.lowercase()} from your sources")
+                    CategoryPhase.LOADING -> LoadingGrid(category)
 
-                    state.feed != null && state.feed?.sources?.isEmpty() == true &&
-                        continueForCategory.isEmpty() && libraryForCategory.isEmpty() -> EmptyState(
+                    CategoryPhase.NO_SOURCES -> EmptyState(
                         icon = Icons.Outlined.Extension,
                         title = "No ${category.shortLabel.lowercase()} sources yet",
                         message = "Install a source or add-on and its titles will appear here " +
@@ -288,22 +315,23 @@ fun CategoryScreen(
                         onAction = onManageSources
                     )
 
-                    state.error != null && state.allItems.isEmpty() -> ErrorState(
+                    CategoryPhase.ERROR -> ErrorState(
                         error = state.error!!,
                         onRetry = vm::refresh,
                         secondary = "Manage sources" to onManageSources
                     )
 
-                    state.browseAll -> BrowseAllGrid(
+                    CategoryPhase.BROWSE -> BrowseAllGrid(
                         category = category,
                         state = state,
                         items = visibleItems,
                         onOpen = vm::open,
                         onLoadMore = vm::loadMore,
+                        onClearFilters = vm::clearFilters,
                         onBack = { vm.setBrowseAll(false) }
                     )
 
-                    else -> CategorySections(
+                    CategoryPhase.SECTIONS -> CategorySections(
                         category = category,
                         state = state,
                         continueRows = continueForCategory,
@@ -311,10 +339,11 @@ fun CategoryScreen(
                         recentlyAdded = recentlyAdded,
                         history = if (category.isReading) history else emptyList(),
                         visibleItems = visibleItems,
-                        unmatched = unmatched,
+                        unmatched = issues,
                         statusExpanded = statusExpanded,
                         onToggleStatuses = { statusExpanded = !statusExpanded },
                         onOpenLibraryMedia = onOpenMedia,
+                        onOpenLibrary = onOpenLibrary,
                         onOpen = vm::open,
                         onSeeAll = { vm.setBrowseAll(true) },
                         onRetry = vm::refresh,
@@ -335,6 +364,7 @@ fun CategoryScreen(
                 onGenre = vm::selectGenre,
                 onYear = vm::selectYear,
                 onAuthor = vm::selectAuthor,
+                onSort = vm::selectSort,
                 onClear = vm::clearFilters,
                 onDone = vm::closeFilters
             )
@@ -342,19 +372,176 @@ fun CategoryScreen(
     }
 }
 
+private enum class CategoryPhase { SEARCH, LOADING, NO_SOURCES, ERROR, BROWSE, SECTIONS }
+
+/**
+ * Fade/slide between the category's phases. When motion is reduced the content simply
+ * swaps, so "remove animations" really removes them.
+ */
+@Composable
+private fun AnimatedPhase(
+    phase: CategoryPhase,
+    modifier: Modifier = Modifier,
+    content: @Composable (CategoryPhase) -> Unit
+) {
+    if (LocalReduceMotion.current) {
+        Box(modifier) { content(phase) }
+        return
+    }
+    AnimatedContent(
+        targetState = phase,
+        modifier = modifier,
+        transitionSpec = {
+            ContentTransform(
+                targetContentEnter = fadeIn(tween(Motion.MEDIUM, easing = Motion.EaseOut)) +
+                    slideInVertically(tween(Motion.MEDIUM, easing = Motion.EaseOut)) { it / 28 },
+                initialContentExit = fadeOut(tween(Motion.FAST)) +
+                    slideOutVertically(tween(Motion.FAST)) { -it / 40 }
+            )
+        },
+        label = "categoryPhase"
+    ) { target ->
+        Box(Modifier.fillMaxSize()) { content(target) }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CategoryHeader(
+    category: ContentCategory,
+    state: CategoryViewModel.UiState,
+    sourceCount: Int,
+    issueCount: Int,
+    onOpenFilters: () -> Unit,
+    onSort: (CategorySort) -> Unit,
+    onRefresh: () -> Unit
+) {
+    var sortOpen by remember { mutableStateOf(false) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 2.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconBadge(icon = category.icon(), tint = category.accent(), size = 44)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = category.label,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = category.tagline,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            FlowRow(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                StatusPill(
+                    text = when (sourceCount) {
+                        0 -> "No source"
+                        1 -> "1 source"
+                        else -> "$sourceCount sources"
+                    },
+                    tint = if (sourceCount == 0) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.secondary
+                )
+                if (issueCount > 0) {
+                    StatusPill(
+                        text = if (issueCount == 1) "1 issue" else "$issueCount issues",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+                if (state.hasActiveFilters) {
+                    StatusPill(text = "Filtered", tint = category.accent())
+                }
+            }
+            Box {
+                IconButton(onClick = { sortOpen = true }) {
+                    Icon(
+                        Icons.AutoMirrored.Outlined.Sort,
+                        contentDescription = "Sort by ${state.sort.label}"
+                    )
+                }
+                DropdownMenu(expanded = sortOpen, onDismissRequest = { sortOpen = false }) {
+                    CategorySort.entries.forEach { sort ->
+                        DropdownMenuItem(
+                            text = { Text(sort.label) },
+                            onClick = {
+                                onSort(sort)
+                                sortOpen = false
+                            },
+                            leadingIcon = {
+                                if (state.sort == sort) {
+                                    Icon(Icons.Outlined.Check, contentDescription = null)
+                                } else {
+                                    Spacer(Modifier.size(24.dp))
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+            IconButton(onClick = onOpenFilters) {
+                Box {
+                    Icon(
+                        Icons.Outlined.Tune,
+                        contentDescription = "Filter ${category.label}",
+                        tint = if (state.hasActiveFilters) category.accent()
+                        else MaterialTheme.colorScheme.onSurface
+                    )
+                    if (state.hasActiveFilters) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(category.accent())
+                        )
+                    }
+                }
+            }
+            IconButton(onClick = onRefresh, enabled = !state.refreshing) {
+                Icon(Icons.Outlined.Refresh, contentDescription = "Refresh category")
+            }
+        }
+    }
+}
+
+/** Skeletons are only shown while a request is genuinely running. */
+@Composable
+private fun LoadingGrid(category: ContentCategory) {
+    Column(Modifier.fillMaxSize()) {
+        LoadingState("Reading ${category.label.lowercase()} from your sources")
+        GridSkeleton(count = 9)
+    }
+}
+
 @Composable
 private fun CategorySections(
     category: ContentCategory,
     state: CategoryViewModel.UiState,
-    continueRows: List<app.allfun.data.db.ContinueRow>,
+    continueRows: List<ContinueRow>,
     favorites: List<LibraryRow>,
     recentlyAdded: List<LibraryRow>,
     history: List<LibraryRow>,
     visibleItems: List<ContentItem>,
-    unmatched: List<app.allfun.data.content.ProviderStatus>,
+    unmatched: List<ProviderStatus>,
     statusExpanded: Boolean,
     onToggleStatuses: () -> Unit,
     onOpenLibraryMedia: (String) -> Unit,
+    onOpenLibrary: () -> Unit,
     onOpen: (ContentItem) -> Unit,
     onSeeAll: () -> Unit,
     onRetry: () -> Unit,
@@ -378,24 +565,27 @@ private fun CategorySections(
         }
 
         if (continueRows.isNotEmpty()) {
-            item {
+            item("continue-header") {
                 SectionHeader(
                     title = if (category.isVideo) "Continue watching" else "Continue reading",
+                    subtitle = "Across every source",
                     actionLabel = "Library",
-                    onAction = { onOpenLibraryMedia(continueRows.first().media.id) }
+                    onAction = onOpenLibrary
                 )
             }
-            item {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(continueRows, key = { it.media.id }) { row ->
-                        MediaCard(
-                            media = row.media,
-                            progress = row.fraction,
-                            onClick = { onOpenLibraryMedia(row.media.id) }
-                        )
+            item("continue-row") {
+                ContentReveal {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(continueRows, key = { it.media.id }) { row ->
+                            MediaCard(
+                                media = row.media,
+                                progress = row.fraction,
+                                onClick = { onOpenLibraryMedia(row.media.id) }
+                            )
+                        }
                     }
                 }
             }
@@ -403,62 +593,72 @@ private fun CategorySections(
 
         if (category.isVideo) {
             if (recentlyAdded.isNotEmpty()) {
-                item {
+                item("watchlist-header") {
                     SectionHeader(title = "Watchlist", subtitle = "Saved movies and shows")
                 }
-                item {
+                item("watchlist-row") {
                     LibraryRowCarousel(recentlyAdded, onOpenLibraryMedia)
                 }
             }
         } else if (favorites.isNotEmpty()) {
-            item {
+            item("favorites-header") {
                 SectionHeader(title = "Favorites", subtitle = "Pinned across every source")
             }
-            item {
+            item("favorites-row") {
                 LibraryRowCarousel(favorites, onOpenLibraryMedia)
             }
         }
 
         if (history.isNotEmpty()) {
-            item {
-                SectionHeader(title = "Reading history", actionLabel = "Library")
+            item("history-header") {
+                SectionHeader(
+                    title = "Reading history",
+                    actionLabel = "Library",
+                    onAction = onOpenLibrary
+                )
             }
-            item {
+            item("history-row") {
                 LibraryRowCarousel(history, onOpenLibraryMedia)
             }
         }
 
         state.feed?.shelves.orEmpty().forEach { shelf ->
-            val shelfItems = state.filtered(shelf.items)
+            val shelfItems = state.sorted(state.filtered(shelf.items))
             if (shelfItems.isEmpty()) return@forEach
             item("shelf-${shelf.id}") {
                 SectionHeader(title = shelf.title)
             }
             item("shelf-row-${shelf.id}") {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(shelfItems, key = { it.primary.sourceId + "|" + it.primary.key }) { item ->
-                        ContentCard(
-                            item = item,
-                            details = state.detailsFor(item),
-                            onClick = { onOpen(item) }
-                        )
+                ContentReveal {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(
+                            shelfItems,
+                            key = { it.primary.sourceId + "|" + it.primary.key }
+                        ) { item ->
+                            ContentCard(
+                                item = item,
+                                details = state.detailsFor(item),
+                                onClick = { onOpen(item) }
+                            )
+                        }
                     }
                 }
             }
         }
 
         if (visibleItems.isNotEmpty()) {
-            item {
+            item("all-header") {
                 SectionHeader(
                     title = "All from your sources",
+                    subtitle = "${visibleItems.size} titles · ${state.sort.label}",
                     actionLabel = "See all",
                     onAction = onSeeAll
                 )
             }
-            item {
+            item("all-row") {
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -478,16 +678,16 @@ private fun CategorySections(
         }
 
         if (recentlyAdded.isNotEmpty()) {
-            item {
+            item("added-header") {
                 SectionHeader(title = "Recently added", subtitle = "From your library")
             }
-            item {
+            item("added-row") {
                 LibraryRowCarousel(recentlyAdded.take(20), onOpenLibraryMedia)
             }
         }
 
         if (state.feed?.items.isNullOrEmpty() && visibleItems.isEmpty()) {
-            item {
+            item("category-empty") {
                 EmptyState(
                     icon = Icons.Outlined.Extension,
                     title = "Nothing to show yet",
@@ -505,7 +705,7 @@ private fun CategorySections(
         }
 
         if (unmatched.isNotEmpty()) {
-            item {
+            item("issues") {
                 HorizontalDivider(
                     modifier = Modifier.padding(top = 12.dp),
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
@@ -565,19 +765,20 @@ private fun LibraryRowCarousel(
 private fun SearchGrid(
     state: CategoryViewModel.UiState,
     category: ContentCategory,
+    items: List<ContentItem>,
     onOpen: (ContentItem) -> Unit,
     onRetry: () -> Unit,
     onClear: () -> Unit,
     onManageSources: () -> Unit
 ) {
     when {
-        state.searching -> LoadingState("Searching every ${category.shortLabel.lowercase()} source")
+        state.searching -> LoadingGrid(category)
         state.searchError != null -> ErrorState(
             error = state.searchError!!,
             onRetry = onRetry,
             secondary = "Manage sources" to onManageSources
         )
-        state.searchResults.isEmpty() -> EmptyState(
+        items.isEmpty() -> EmptyState(
             icon = Icons.Outlined.Search,
             title = "No results",
             message = "No installed ${category.shortLabel.lowercase()} source returned " +
@@ -586,27 +787,27 @@ private fun SearchGrid(
             onAction = onClear
         )
         else -> LazyVerticalGrid(
-            columns = GridCells.Adaptive(120.dp),
+            columns = GridCells.Adaptive(116.dp),
             contentPadding = PaddingValues(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 SearchSummary(
-                    count = state.searchResults.size,
+                    count = items.size,
                     query = state.query,
                     statuses = state.searchStatuses
                 )
             }
             items(
-                state.searchResults,
+                items,
                 key = { it.primary.sourceId + "|" + it.primary.key }
             ) { item ->
                 ContentCard(
                     item = item,
                     details = state.detailsFor(item),
                     onClick = { onOpen(item) },
-                    width = 120
+                    fillWidth = true
                 )
             }
         }
@@ -617,12 +818,15 @@ private fun SearchGrid(
 private fun SearchSummary(
     count: Int,
     query: String,
-    statuses: List<app.allfun.data.content.ProviderStatus>
+    statuses: List<ProviderStatus>
 ) {
     Column(Modifier.padding(bottom = 4.dp)) {
         Text(
             text = "$count ${if (count == 1) "result" else "results"} for \"$query\"",
-            style = MaterialTheme.typography.labelLarge
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.semantics {
+                contentDescription = "$count results for $query"
+            }
         )
         statuses.filter { !it.available }.take(3).forEach { status ->
             Text(
@@ -641,6 +845,7 @@ private fun BrowseAllGrid(
     items: List<ContentItem>,
     onOpen: (ContentItem) -> Unit,
     onLoadMore: () -> Unit,
+    onClearFilters: () -> Unit,
     onBack: () -> Unit
 ) {
     Column(Modifier.fillMaxSize()) {
@@ -651,7 +856,7 @@ private fun BrowseAllGrid(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "${items.size} titles",
+                text = "${items.size} titles · ${state.sort.label}",
                 style = MaterialTheme.typography.labelLarge,
                 modifier = Modifier.weight(1f)
             )
@@ -661,15 +866,17 @@ private fun BrowseAllGrid(
             EmptyState(
                 icon = Icons.Outlined.FilterList,
                 title = "No titles match these filters",
-                message = "Clear a filter or refresh the category to see the provider results again."
+                message = "Clear a filter or refresh the category to see the provider results again.",
+                actionLabel = "Clear filters",
+                onAction = onClearFilters
             )
             return@Column
         }
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(120.dp),
+            columns = GridCells.Adaptive(116.dp),
             contentPadding = PaddingValues(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
             modifier = Modifier.weight(1f)
         ) {
             items(items, key = { it.primary.sourceId + "|" + it.primary.key }) { item ->
@@ -677,7 +884,7 @@ private fun BrowseAllGrid(
                     item = item,
                     details = state.detailsFor(item),
                     onClick = { onOpen(item) },
-                    width = 120
+                    fillWidth = true
                 )
             }
             item(span = { GridItemSpan(maxLineSpan) }) {
@@ -696,7 +903,7 @@ private fun BrowseAllGrid(
                         contentAlignment = Alignment.Center
                     ) {
                         if (state.loadingMore) {
-                            CircularProgressIndicator()
+                            CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
                         } else if (state.canLoadMore) {
                             Button(onClick = onLoadMore) { Text("Load more") }
                         }
@@ -722,6 +929,7 @@ private fun FilterSheet(
     onGenre: (String?) -> Unit,
     onYear: (Int?) -> Unit,
     onAuthor: (String?) -> Unit,
+    onSort: (CategorySort) -> Unit,
     onClear: () -> Unit,
     onDone: () -> Unit
 ) {
@@ -735,7 +943,7 @@ private fun FilterSheet(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = "Filters",
+                text = "Filters & sorting",
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.weight(1f)
             )
@@ -756,6 +964,17 @@ private fun FilterSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 8.dp)
             )
+        }
+
+        FilterGroup("Sort by")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CategorySort.entries.forEach { sort ->
+                FilterChip(
+                    selected = state.sort == sort,
+                    onClick = { onSort(sort) },
+                    label = { Text(sort.label) }
+                )
+            }
         }
 
         if (state.formatOptions.isNotEmpty()) {

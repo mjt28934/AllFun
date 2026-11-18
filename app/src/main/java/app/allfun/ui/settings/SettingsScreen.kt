@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.allfun.BuildConfig
 import app.allfun.data.AppContainer
+import app.allfun.data.settings.HomeSection
 import app.allfun.data.settings.LibrarySort
 import app.allfun.data.settings.LibraryView
 import app.allfun.data.settings.MangaFit
@@ -64,10 +65,21 @@ import app.allfun.data.settings.NovelTheme
 import app.allfun.data.settings.ReaderMode
 import app.allfun.data.settings.ReadingDirection
 import app.allfun.data.settings.ThemeMode
+import app.allfun.ui.components.NoticeCard
 import app.allfun.ui.components.rememberViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+/** The shelves Home can actually render. Legacy recommendation keys stay out of this list. */
+private val HomeSectionChoices = listOf(
+    HomeSection.CONTINUE_WATCHING,
+    HomeSection.CONTINUE_READING,
+    HomeSection.FAVORITES,
+    HomeSection.RECENTLY_UPDATED,
+    HomeSection.RECENTLY_OPENED,
+    HomeSection.RECENTLY_ADDED
+)
 
 @Composable
 fun SettingsScreen(
@@ -113,9 +125,14 @@ fun SettingsScreen(
             item {
                 Text(
                     text = "Settings",
-                    fontSize = 30.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)
+                    style = MaterialTheme.typography.headlineMedium,
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp)
+                )
+                Text(
+                    text = "AllFun ${BuildConfig.VERSION_NAME} · preferences are saved as you change them",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 12.dp)
                 )
             }
 
@@ -172,6 +189,38 @@ fun SettingsScreen(
                         label = { it.label },
                         onSelect = vm::setLibrarySort
                     )
+
+                    SectionDivider()
+
+                    SettingLabel("Home shelves")
+                    Text(
+                        text = "Choose which real shelves appear on Home. Empty shelves are " +
+                            "hidden automatically; nothing is invented to fill them.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                    HomeSectionChoices.forEach { section ->
+                        SwitchRow(
+                            title = section.title,
+                            subtitle = when (section) {
+                                HomeSection.CONTINUE_WATCHING ->
+                                    "Video you have started but not finished"
+                                HomeSection.CONTINUE_READING ->
+                                    "Chapters and pages you left open"
+                                HomeSection.FAVORITES -> "Titles you pinned with the heart"
+                                HomeSection.RECENTLY_UPDATED ->
+                                    "Titles whose progress or details changed"
+                                HomeSection.RECENTLY_OPENED ->
+                                    "The last titles you opened from any source"
+                                HomeSection.RECENTLY_ADDED -> "Newest additions to your library"
+                                else -> ""
+                            },
+                            checked = section in settings.homeSections,
+                            onChange = { enabled -> vm.setHomeSection(section, enabled) }
+                        )
+                        Spacer(Modifier.height(4.dp))
+                    }
                 }
             }
 
@@ -273,9 +322,9 @@ fun SettingsScreen(
                 }
             }
 
-            // 5. Sources and extensions
+            // 5. Extensions and sources
             item {
-                SettingsSection("Sources & add-ons") {
+                SettingsSection("Extensions & sources") {
                     Text(
                         text = "Add a Stremio addon, Jellyfin server, manga extension, novel " +
                             "plugin, EPUB or video folder here. Every connected source feeds " +
@@ -285,43 +334,36 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(10.dp))
-                    OutlinedButton(onClick = onManageSources) {
-                        Icon(Icons.Outlined.Extension, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Add or manage sources")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = onManageSources) {
+                            Icon(Icons.Outlined.Extension, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Sources")
+                        }
+                        OutlinedButton(onClick = onManageExtensions) {
+                            Icon(Icons.Outlined.Extension, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Extensions")
+                        }
                     }
-                }
-            }
-
-            // 6. Extensions
-            item {
-                SettingsSection("Extensions") {
+                    Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "Manga extensions, LNReader plugins, Stremio addons and Jellyfin " +
-                            "connections are installed from the Extensions screen, where each " +
-                            "one shows its version, status and permissions.",
+                        text = "The Extensions screen shows each installed item's version, " +
+                            "content type, repository and status, and lets you update, disable " +
+                            "or remove it without touching your library.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedButton(onClick = onManageExtensions) {
-                        Icon(Icons.Outlined.Extension, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Manage extensions")
-                    }
                 }
             }
 
             // 6. Downloads
             item {
                 SettingsSection("Downloads") {
-                    Text(
+                    NoticeCard(
                         text = "Offline downloads are not implemented. AllFun streams video " +
                             "from the source you choose and does not save episodes to this " +
-                            "device, so there is no download queue or download quality setting " +
-                            "here yet.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                            "device, so there is no download queue or quality setting."
                     )
                 }
             }
@@ -390,7 +432,33 @@ fun SettingsScreen(
                 }
             }
 
-            // 9. Backup
+            // 9. App updates
+            item {
+                SettingsSection("App Updates") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onOpenUpdates)
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Outlined.SystemUpdate, contentDescription = null)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Check for updates", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                text = "Read GitHub Releases, download and install a newer " +
+                                    "version of AllFun",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Icon(Icons.Outlined.ChevronRight, contentDescription = null)
+                    }
+                }
+            }
+
+            // 10. Backup
             item {
                 SettingsSection("Backup") {
                     Text(
@@ -431,7 +499,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 10. About
+            // 11. About
             item {
                 SettingsSection("About") {
                     Text(
@@ -439,26 +507,6 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.titleSmall
                     )
                     Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(onClick = onOpenUpdates)
-                            .padding(vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Outlined.SystemUpdate, contentDescription = null)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("App Updates", style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                text = "Check GitHub Releases, download and install a newer version",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Icon(Icons.Outlined.ChevronRight, contentDescription = null)
-                    }
-                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
                     Text(
                         text = "One library for manga, light novels and video. Kotlin and " +
                             "Jetpack Compose, Room for the shelf, Media3 for playback, a WebView " +

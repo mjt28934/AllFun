@@ -32,6 +32,17 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
 /**
+ * Sort orders offered on every category screen. They apply to real provider results and
+ * to library shelves alike; nothing is re-ranked by a hidden heuristic.
+ */
+enum class CategorySort(val label: String) {
+    FEATURED("Source order"),
+    TITLE_ASC("Title A–Z"),
+    TITLE_DESC("Title Z–A"),
+    SOURCE("By source")
+}
+
+/**
  * One ViewModel drives all three category screens. The only differences between them
  * are the category passed in and the filters the UI offers; aggregation, deduping,
  * pagination and error isolation are shared.
@@ -56,6 +67,7 @@ class CategoryViewModel(
         val genreFilter: String? = null,
         val yearFilter: Int? = null,
         val authorFilter: String? = null,
+        val sort: CategorySort = CategorySort.FEATURED,
         val enrichment: Map<String, MediaDetails?> = emptyMap(),
         val enriching: Boolean = false,
         val filtersOpen: Boolean = false,
@@ -71,6 +83,21 @@ class CategoryViewModel(
             get() = feed?.items.orEmpty() + extraItems
 
         fun detailsFor(item: ContentItem): MediaDetails? = enrichment[refId(item.primary)]
+
+        /** Applies filters, then the user's sort order, keeping provider order otherwise. */
+        fun sorted(items: List<ContentItem>): List<ContentItem> = when (sort) {
+            CategorySort.FEATURED -> items
+            CategorySort.TITLE_ASC -> items.sortedWith(
+                compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+            )
+            CategorySort.TITLE_DESC -> items.sortedWith(
+                compareByDescending(String.CASE_INSENSITIVE_ORDER) { it.title }
+            )
+            CategorySort.SOURCE -> items.sortedWith(
+                compareBy<ContentItem, String>(String.CASE_INSENSITIVE_ORDER) { it.sourceLabel }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+            )
+        }
 
         fun filtered(items: List<ContentItem>): List<ContentItem> = items.mapNotNull { item ->
             val details = detailsFor(item)
@@ -142,6 +169,7 @@ class CategoryViewModel(
 
     private var feedJob: Job? = null
     private var searchJob: Job? = null
+    private var enrichJob: Job? = null
     private var searchGeneration = 0
 
     private var adoptPartials = true
@@ -373,6 +401,10 @@ class CategoryViewModel(
         _state.update { it.copy(authorFilter = author) }
     }
 
+    fun selectSort(sort: CategorySort) {
+        _state.update { it.copy(sort = sort) }
+    }
+
     fun clearFilters() {
         _state.update {
             it.copy(
@@ -396,32 +428,30 @@ class CategoryViewModel(
 
     /**
      * Details are only fetched when the user actually opens the filters, so simply
-     * browsing a category never turns into one metadata request per card.
+     * browsing a category never turns into one metadata request per card. Results are
+     * published batch by batch: the sheet fills in as real metadata arrives instead of
+     * showing one spinner until the slowest provider answers.
      */
     private fun prepareFilters() {
         val current = _state.value
-        if (current.enriching || current.feed == null) return
-        val items = current.allItems
-        val missing = items.filter { refId(it.primary) !in current.enrichment }
+        if (current.feed == null) return
+        val missing = current.allItems.filter { refId(it.primary) !in current.enrichment }
         if (missing.isEmpty()) return
+        if (enrichJob?.isActive == true) return
         _state.update { it.copy(enriching = true) }
-        viewModelScope.launch {
+        enrichJob = viewModelScope.launch {
             try {
-                val values = container.content.enrich(items)
-                _state.update { state ->
-                    state.copy(
-                        enriching = false,
-                        enrichment = state.enrichment + values
-                    )
+                missing.chunked(ENRICH_BATCH).forEach { chunk ->
+                    val values = container.content.enrich(chunk, limit = chunk.size)
+                    _state.update { state ->
+                        state.copy(enrichment = state.enrichment + values)
+                    }
                 }
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
-                _state.update {
-                    it.copy(
-                        enriching = false,
-                        loadMoreError = t.userMessage("filter metadata")
-                    )
-                }
+                _messages.send(t.userMessage("filter metadata"))
+            } finally {
+                _state.update { it.copy(enriching = false) }
             }
         }
     }
@@ -429,5 +459,10 @@ class CategoryViewModel(
     fun setBrowseAll(enabled: Boolean) {
         _state.update { it.copy(browseAll = enabled) }
         if (enabled) prepareFilters()
+    }
+
+    private companion object {
+        /** Small enough that the first facets appear in about a second. */
+        const val ENRICH_BATCH = 8
     }
 }

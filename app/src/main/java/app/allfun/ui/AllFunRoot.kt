@@ -3,12 +3,35 @@ package app.allfun.ui
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.AutoStories
@@ -21,15 +44,23 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavType
@@ -55,6 +86,7 @@ import app.allfun.ui.search.GlobalSearchScreen
 import app.allfun.ui.settings.SettingsScreen
 import app.allfun.ui.theme.AllFunTheme
 import app.allfun.ui.theme.LocalReduceMotion
+import app.allfun.ui.theme.Motion
 import app.allfun.ui.update.UpdatesScreen
 
 object Routes {
@@ -107,6 +139,120 @@ private val tabs = listOf(
     Tab(Routes.SETTINGS, "Settings", Icons.Outlined.Settings, Icons.Filled.Settings)
 )
 
+private val tabRoutes = tabs.map { it.route }.toSet()
+
+/**
+ * The app's own bottom bar: a single tinted pill slides to the selected destination while
+ * icons and labels cross-fade colour. It is built here instead of Material's
+ * NavigationBar so the indicator can actually move with the selection.
+ */
+@Composable
+private fun AllFunBottomBar(currentRoute: String?, onSelect: (Tab) -> Unit) {
+    val reduceMotion = LocalReduceMotion.current
+    val selectedIndex = tabs.indexOfFirst { it.route == currentRoute }.coerceAtLeast(0)
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = 3.dp
+    ) {
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .height(64.dp)
+        ) {
+            val itemWidth = maxWidth / tabs.size
+            val pillWidth = 52.dp
+            val target = itemWidth * selectedIndex + (itemWidth - pillWidth) / 2
+            val offset by animateDpAsState(
+                targetValue = target,
+                animationSpec = if (reduceMotion) snap()
+                else tween(Motion.SLOW, easing = Motion.EaseInOut),
+                label = "tabPill"
+            )
+            // The indicator sits behind the icon only: the label stays outside it, so a
+            // scaled label at a large font size can never be clipped by the pill. Its y
+            // follows the icon, which moves as the label grows with the system font scale.
+            val labelHeight = with(LocalDensity.current) { 11.sp.toDp() } * 1.45f
+            val iconTop = (64.dp - (22.dp + 3.dp + labelHeight)) / 2
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(x = offset, y = iconTop - 4.dp)
+                    .width(pillWidth)
+                    .height(30.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
+            )
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                tabs.forEach { tab ->
+                    TabItem(
+                        tab = tab,
+                        selected = tab.route == currentRoute,
+                        onClick = { onSelect(tab) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RowScope.TabItem(
+    tab: Tab,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val reduceMotion = LocalReduceMotion.current
+    val tint by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = if (reduceMotion) snap() else tween(Motion.FAST),
+        label = "tabTint"
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (selected && !reduceMotion) 1.08f else 1f,
+        animationSpec = tween(Motion.FAST, easing = Motion.EaseOut),
+        label = "tabScale"
+    )
+    Column(
+        modifier = Modifier
+            .weight(1f)
+            .fillMaxHeight()
+            .selectable(
+                selected = selected,
+                role = Role.Tab,
+                onClick = onClick
+            ),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = if (selected) tab.selectedIcon else tab.icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier
+                .size(22.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
+        )
+        Spacer(Modifier.height(3.dp))
+        Text(
+            text = tab.label,
+            style = MaterialTheme.typography.labelSmall,
+            fontSize = 11.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            color = tint,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
 @Composable
 fun AllFunRoot(container: AppContainer) {
     val settings by container.settings.settings.collectAsStateWithLifecycle(initialValue = Settings())
@@ -118,46 +264,46 @@ fun AllFunRoot(container: AppContainer) {
         val reduceMotion = LocalReduceMotion.current
 
         val enterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-            if (reduceMotion) EnterTransition.None else fadeIn(tween(180))
+            when {
+                reduceMotion -> EnterTransition.None
+                // Switching tabs cross-fades in place: no sideways travel between peers.
+                initialState.destination.route in tabRoutes &&
+                    targetState.destination.route in tabRoutes ->
+                    fadeIn(tween(Motion.MEDIUM, easing = Motion.EaseOut))
+                else -> fadeIn(tween(Motion.MEDIUM, easing = Motion.EaseOut)) +
+                    slideInHorizontally(tween(Motion.MEDIUM, easing = Motion.EaseOut)) {
+                        it / 6
+                    }
+            }
         }
         val exitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-            if (reduceMotion) ExitTransition.None else fadeOut(tween(140))
+            if (reduceMotion) ExitTransition.None else fadeOut(tween(Motion.FAST))
+        }
+        val popEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
+            if (reduceMotion) EnterTransition.None
+            else fadeIn(tween(Motion.MEDIUM, easing = Motion.EaseOut)) +
+                slideInHorizontally(tween(Motion.MEDIUM, easing = Motion.EaseOut)) { -it / 8 }
+        }
+        val popExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
+            if (reduceMotion) ExitTransition.None
+            else fadeOut(tween(Motion.FAST)) +
+                slideOutHorizontally(tween(Motion.MEDIUM, easing = Motion.EaseOut)) { it / 6 }
         }
 
         Scaffold(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             bottomBar = {
                 if (showBar) {
-                    NavigationBar {
-                        tabs.forEach { tab ->
-                            val selected = currentRoute == tab.route
-                            NavigationBarItem(
-                                selected = selected,
-                                onClick = {
-                                    if (!selected) {
-                                        nav.navigate(tab.route) {
-                                            popUpTo(Routes.HOME) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    }
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = if (selected) tab.selectedIcon else tab.icon,
-                                        contentDescription = tab.label
-                                    )
-                                },
-                                label = {
-                                    Text(
-                                        text = tab.label,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            )
+                    AllFunBottomBar(
+                        currentRoute = currentRoute,
+                        onSelect = { tab ->
+                            nav.navigate(tab.route) {
+                                popUpTo(Routes.HOME) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
                         }
-                    }
+                    )
                 }
             }
         ) { padding ->
@@ -166,8 +312,8 @@ fun AllFunRoot(container: AppContainer) {
                 startDestination = Routes.HOME,
                 enterTransition = enterTransition,
                 exitTransition = exitTransition,
-                popEnterTransition = enterTransition,
-                popExitTransition = exitTransition,
+                popEnterTransition = popEnterTransition,
+                popExitTransition = popExitTransition,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(bottom = padding.calculateBottomPadding())
@@ -185,7 +331,13 @@ fun AllFunRoot(container: AppContainer) {
                                     ContentCategory.BOOKS -> Routes.BOOKS
                                     ContentCategory.MANGA -> Routes.MANGA
                                 }
-                            )
+                            ) {
+                                // A category is a destination, not a pushed detail: Back
+                                // returns Home instead of walking through other tabs.
+                                popUpTo(Routes.HOME) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
                         },
                         onManageSources = { nav.navigate(Routes.SOURCES) }
                     )
@@ -196,6 +348,7 @@ fun AllFunRoot(container: AppContainer) {
                         container = container,
                         category = ContentCategory.MOVIES,
                         onOpenMedia = { nav.navigate(Routes.detail(it)) },
+                        onOpenLibrary = { nav.navigate(Routes.LIBRARY) },
                         onManageSources = { nav.navigate(Routes.SOURCES) }
                     )
                 }
@@ -205,6 +358,7 @@ fun AllFunRoot(container: AppContainer) {
                         container = container,
                         category = ContentCategory.BOOKS,
                         onOpenMedia = { nav.navigate(Routes.detail(it)) },
+                        onOpenLibrary = { nav.navigate(Routes.LIBRARY) },
                         onManageSources = { nav.navigate(Routes.SOURCES) }
                     )
                 }
@@ -214,6 +368,7 @@ fun AllFunRoot(container: AppContainer) {
                         container = container,
                         category = ContentCategory.MANGA,
                         onOpenMedia = { nav.navigate(Routes.detail(it)) },
+                        onOpenLibrary = { nav.navigate(Routes.LIBRARY) },
                         onManageSources = { nav.navigate(Routes.SOURCES) }
                     )
                 }

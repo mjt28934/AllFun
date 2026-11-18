@@ -1,5 +1,6 @@
 package app.allfun.ui.extensions
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +44,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -54,6 +56,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -74,15 +77,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.allfun.data.AppContainer
 import app.allfun.data.extension.RepoExtension
 import app.allfun.data.settings.RepositoryConfig
 import app.allfun.data.settings.RepositoryKind
 import app.allfun.ui.components.EmptyState
+import app.allfun.ui.components.IconBadge
 import app.allfun.ui.components.LoadingState
 import app.allfun.ui.components.NoticeCard
+import app.allfun.ui.components.StatusPill
 import app.allfun.ui.components.rememberViewModel
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
@@ -150,16 +154,24 @@ fun ExtensionsScreen(container: AppContainer, onBack: () -> Unit) {
                 IconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
+                IconBadge(
+                    icon = Icons.Outlined.Extension,
+                    tint = MaterialTheme.colorScheme.primary,
+                    size = 38
+                )
+                Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
                         text = "Extensions",
-                        fontSize = 26.sp,
+                        style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = summary,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 IconButton(onClick = vm::refresh) {
@@ -207,14 +219,22 @@ fun ExtensionsScreen(container: AppContainer, onBack: () -> Unit) {
                 }
             }
 
-            if (tab == TAB_DISCOVER) {
+            if (tab == TAB_INSTALLED || tab == TAB_DISCOVER || tab == TAB_DISABLED) {
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 4.dp),
-                    placeholder = { Text("Search extensions") },
+                    placeholder = {
+                        Text(
+                            when (tab) {
+                                TAB_INSTALLED -> "Search installed extensions"
+                                TAB_DISABLED -> "Search disabled extensions"
+                                else -> "Search extensions and developers"
+                            }
+                        )
+                    },
                     leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                     trailingIcon = {
                         if (query.isNotEmpty()) {
@@ -226,6 +246,8 @@ fun ExtensionsScreen(container: AppContainer, onBack: () -> Unit) {
                     singleLine = true,
                     shape = MaterialTheme.shapes.medium
                 )
+            }
+            if (tab == TAB_DISCOVER) {
                 Row(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -252,6 +274,7 @@ fun ExtensionsScreen(container: AppContainer, onBack: () -> Unit) {
                 when (tab) {
                     TAB_INSTALLED -> InstalledTab(
                         state = state,
+                        query = query,
                         onOpen = { detailInstalledKey = it.key },
                         onToggle = { item, enabled -> vm.setEnabled(item, enabled) },
                         onDiscover = { tab = TAB_DISCOVER }
@@ -288,6 +311,7 @@ fun ExtensionsScreen(container: AppContainer, onBack: () -> Unit) {
 
                     TAB_DISABLED -> DisabledTab(
                         state = state,
+                        query = query,
                         onOpen = { detailInstalledKey = it.key },
                         onEnable = { vm.setEnabled(it, true) },
                         onUninstall = { pendingRemoveKey = it.key }
@@ -372,6 +396,7 @@ fun ExtensionsScreen(container: AppContainer, onBack: () -> Unit) {
 @Composable
 private fun InstalledTab(
     state: ExtensionsViewModel.UiState,
+    query: String,
     onOpen: (InstalledExtension) -> Unit,
     onToggle: (InstalledExtension, Boolean) -> Unit,
     onDiscover: () -> Unit
@@ -392,17 +417,43 @@ private fun InstalledTab(
         )
         return
     }
+    val needle = query.trim()
+    val visible = state.installed.filter { item ->
+        needle.isBlank() ||
+            item.name.contains(needle, ignoreCase = true) ||
+            item.developer?.contains(needle, ignoreCase = true) == true ||
+            item.kind.label.contains(needle, ignoreCase = true)
+    }
+    if (visible.isEmpty()) {
+        EmptyState(
+            icon = Icons.Outlined.Search,
+            title = "No installed extension matches",
+            message = "Nothing installed matches \"$needle\". Try a shorter search."
+        )
+        return
+    }
     LazyColumn(contentPadding = PaddingValues(top = 6.dp, bottom = 24.dp)) {
         ExtensionKind.entries.forEach { kind ->
-            val group = state.installed.filter { it.kind == kind }
+            val group = visible.filter { it.kind == kind }.sortedBy { it.name.lowercase() }
             if (group.isNotEmpty()) {
                 item(key = "header-${kind.name}") {
-                    Text(
-                        text = kind.plural,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.padding(start = 20.dp, top = 14.dp, bottom = 4.dp)
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = kind.plural,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        StatusPill(
+                            text = group.size.toString(),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
                 items(group, key = { it.key }) { item ->
                     ExtensionRow(
@@ -599,7 +650,7 @@ private fun DiscoverTab(
                     subtitle = listOfNotNull(
                         entry.developer,
                         entry.version?.takeIf { it.isNotBlank() }?.let { "v$it" },
-                        entry.language,
+                        languageLabel(entry.language),
                         entry.sourceCount.takeIf { it > 0 }
                             ?.let { "$it ${if (it == 1) "source" else "sources"}" },
                         entry.repoUrl.hostLabel()
@@ -698,6 +749,7 @@ private fun RepositoriesTab(
 @Composable
 private fun DisabledTab(
     state: ExtensionsViewModel.UiState,
+    query: String,
     onOpen: (InstalledExtension) -> Unit,
     onEnable: (InstalledExtension) -> Unit,
     onUninstall: (InstalledExtension) -> Unit
@@ -712,6 +764,13 @@ private fun DisabledTab(
         )
         return
     }
+    val needle = query.trim()
+    val visible = disabled.filter { item ->
+        needle.isBlank() ||
+            item.name.contains(needle, ignoreCase = true) ||
+            item.developer?.contains(needle, ignoreCase = true) == true ||
+            item.kind.label.contains(needle, ignoreCase = true)
+    }
     LazyColumn(contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)) {
         item {
             Text(
@@ -722,7 +781,16 @@ private fun DisabledTab(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
             )
         }
-        items(disabled, key = { it.key }) { item ->
+        if (visible.isEmpty()) {
+            item {
+                EmptyState(
+                    icon = Icons.Outlined.Search,
+                    title = "No disabled extension matches",
+                    message = "Nothing disabled matches \"$needle\". Try a shorter search."
+                )
+            }
+        }
+        items(visible.sortedBy { it.name.lowercase() }, key = { it.key }) { item ->
             ExtensionRow(
                 name = item.name,
                 subtitle = item.subtitle(),
@@ -764,6 +832,10 @@ private fun ExtensionRow(
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainer,
         shape = MaterialTheme.shapes.large,
+        border = BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+        ),
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
@@ -771,11 +843,11 @@ private fun ExtensionRow(
         Row(
             modifier = Modifier
                 .clickable(onClickLabel = "Open details for $name", onClick = onClick)
-                .heightIn(min = 64.dp)
-                .padding(start = 14.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+                .heightIn(min = 72.dp)
+                .padding(start = 14.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ExtensionAvatar(iconUrl, name, Modifier.size(44.dp))
+            ExtensionAvatar(iconUrl, name, Modifier.size(46.dp))
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -788,14 +860,9 @@ private fun ExtensionRow(
                     )
                     if (nsfw) {
                         Spacer(Modifier.width(6.dp))
-                        Text(
+                        StatusPill(
                             text = "18+",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier
-                                .clip(MaterialTheme.shapes.extraSmall)
-                                .background(MaterialTheme.colorScheme.error.copy(alpha = 0.14f))
-                                .padding(horizontal = 5.dp, vertical = 1.dp)
+                            tint = MaterialTheme.colorScheme.error
                         )
                     }
                 }
@@ -807,11 +874,8 @@ private fun ExtensionRow(
                     overflow = TextOverflow.Ellipsis
                 )
                 if (status != null) {
-                    Text(
-                        text = status,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = statusColor
-                    )
+                    Spacer(Modifier.height(5.dp))
+                    StatusPill(text = status, tint = statusColor, maxLines = 2)
                 }
             }
             when {
@@ -1071,6 +1135,7 @@ private fun AddRepositoryDialog(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ExtensionDetailsDialog(
     installed: InstalledExtension?,
@@ -1091,18 +1156,20 @@ private fun ExtensionDetailsDialog(
     val developer = installed?.developer ?: entry?.developer
     val description = installed?.description ?: entry?.description
     val permissions = installed?.permissions.orEmpty()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 28.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(20.dp)
-            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     ExtensionAvatar(installed?.iconUrl ?: entry?.iconUrl, name, Modifier.size(52.dp))
                     Spacer(Modifier.width(14.dp))
@@ -1259,7 +1326,6 @@ private fun ExtensionDetailsDialog(
                 TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
                     Text("Close")
                 }
-            }
         }
     }
 }
@@ -1284,6 +1350,7 @@ private fun InstalledExtension.subtitle(): String = listOfNotNull(
     kind.label,
     version?.takeIf { it.isNotBlank() }?.let { "v$it" },
     developer,
+    repoUrl?.hostLabel(),
     sourceIds.size.takeIf { it > 1 }?.let { "$it sources" }
 ).joinToString(" · ")
 
@@ -1299,3 +1366,17 @@ private fun String?.hostLabel(): String = this
     ?.removePrefix("www.")
     ?.takeIf { it.isNotBlank() }
     ?: "repository"
+
+/**
+ * Repository indexes store a two-letter code ("en", "th"). Showing the language name
+ * makes the Discover list readable without a hand-maintained table.
+ */
+private fun languageLabel(code: String?): String? {
+    val raw = code?.trim().orEmpty()
+    if (raw.isEmpty()) return null
+    if (raw.length > 3) return raw
+    val name = runCatching { java.util.Locale(raw).displayLanguage }.getOrNull()
+    return name?.takeIf { it.isNotBlank() && !it.equals(raw, ignoreCase = true) }
+        ?.replaceFirstChar { it.uppercase() }
+        ?: raw
+}

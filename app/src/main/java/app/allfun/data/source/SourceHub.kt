@@ -66,6 +66,26 @@ class SourceHub(
         }
     }
 
+    /**
+     * Re-registers sources for extension APKs that are on disk but missing from the
+     * database. That happens after restoring a backup onto a device that already had
+     * extensions installed, or after a database reset: the Extensions screen listed the
+     * APKs while the category screens still said "no source". Loading is best-effort so
+     * one incompatible extension cannot stop startup.
+     */
+    suspend fun reconcileInstalledExtensions() {
+        val registered = sourceDao.all().mapNotNull { entity ->
+            runCatching {
+                Json.parseToJsonElement(entity.configJson ?: "{}").jsonObject.str("apk")
+            }.getOrNull()
+        }.toSet()
+        extensions.installed()
+            .filter { it.apk.name !in registered }
+            .forEach { info ->
+                runCatching { registerExtension(info, repoUrl = null, version = info.versionName) }
+            }
+    }
+
     fun instance(entity: SourceEntity): MediaSource? {
         val kind = runCatching {
             Json.parseToJsonElement(entity.configJson ?: "{}").jsonObject.str("kind")

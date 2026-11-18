@@ -103,6 +103,8 @@ interface MediaDao {
         SELECT m.*, p.episodeId AS progressEpisodeId, p.position AS progressPosition,
                p.total AS progressTotal, p.updatedAt AS progressUpdatedAt
         FROM media m INNER JOIN progress p ON p.mediaId = m.id
+        INNER JOIN sources s ON s.id = m.sourceId AND s.enabled = 1
+        WHERE NOT (m.kind = 'MOVIE' AND p.total > 0 AND p.position >= p.total)
         ORDER BY p.updatedAt DESC LIMIT 30
         """
     )

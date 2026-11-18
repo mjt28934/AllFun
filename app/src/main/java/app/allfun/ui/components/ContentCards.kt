@@ -2,6 +2,7 @@ package app.allfun.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,17 +15,20 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,14 +71,22 @@ fun ContentCard(
     modifier: Modifier = Modifier,
     progress: Float? = null,
     details: MediaDetails? = null,
-    width: Int = 132,
+    width: Int = 136,
     fillWidth: Boolean = false
 ) {
-    val format = item.format(details) ?: item.category.shortLabel
+    val interaction = remember { MutableInteractionSource() }
+    val format = item.format(details)
     Column(
         modifier = modifier
             .then(if (fillWidth) Modifier.fillMaxWidth() else Modifier.width(width.dp))
-            .clickable(onClickLabel = "Open ${item.title}", onClick = onClick)
+            .pressScale(interaction)
+            .focusOutline()
+            .clickable(
+                interactionSource = interaction,
+                indication = ripple(),
+                onClickLabel = "Open ${item.title}",
+                onClick = onClick
+            )
     ) {
         Box(
             modifier = Modifier
@@ -90,36 +102,39 @@ fun ContentCard(
             )
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
+                    .height(50.dp)
                     .background(
                         Brush.verticalGradient(
-                            0.42f to Color.Transparent,
-                            1f to Color.Black.copy(alpha = 0.84f)
+                            0f to Color.Black.copy(alpha = 0.40f),
+                            1f to Color.Transparent
                         )
                     )
             )
-            Row(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(8.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Color.Black.copy(alpha = 0.62f))
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = item.category.icon(),
-                    contentDescription = null,
-                    tint = item.category.accent(),
-                    modifier = Modifier.size(11.dp)
-                )
-                Spacer(Modifier.width(3.dp))
-                Text(
-                    text = format,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White,
-                    maxLines = 1
-                )
+            if (!format.isNullOrBlank()) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.Black.copy(alpha = 0.46f))
+                        .padding(horizontal = 7.dp, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = item.category.icon(),
+                        contentDescription = null,
+                        tint = item.category.accent(),
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = format,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        maxLines = 1
+                    )
+                }
             }
             if (item.alternateCount > 0) {
                 Text(
@@ -129,55 +144,50 @@ fun ContentCard(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(8.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color.Black.copy(alpha = 0.62f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.Black.copy(alpha = 0.46f))
+                        .padding(horizontal = 7.dp, vertical = 3.dp)
                 )
             }
-            Text(
-                text = item.title,
-                style = MaterialTheme.typography.titleSmall,
-                color = Color.White,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(8.dp)
-            )
             if (progress != null && progress > 0f) {
-                LinearProgressIndicator(
-                    progress = { progress.coerceIn(0f, 1f) },
-                    color = Cyan,
-                    trackColor = Color.White.copy(alpha = 0.25f),
+                Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .height(3.dp)
-                )
+                        .background(Color.Black.copy(alpha = 0.32f))
+                ) {
+                    AnimatedProgress(progress = progress, height = 4)
+                }
             }
         }
-        Spacer(Modifier.height(6.dp))
-        if (!item.stub.subtitle.isNullOrBlank()) {
-            Text(
-                text = item.stub.subtitle.orEmpty(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = item.title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(Modifier.height(2.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(5.dp)
+                    .clip(CircleShape)
+                    .background(item.category.accent())
+            )
+            Spacer(Modifier.width(5.dp))
             Text(
                 text = item.sourceLabel,
                 style = MaterialTheme.typography.labelSmall,
-                color = item.category.accent(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false)
             )
             if (item.alternateCount > 0) {
                 Text(
-                    text = " · +${item.alternateCount} more",
+                    text = " · +${item.alternateCount}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1
@@ -187,64 +197,100 @@ fun ContentCard(
     }
 }
 
-/** Large entry card for the Home screen's three categories. */
+/**
+ * Large entry card for the Home screen's three categories. A faint accent wash and two
+ * real counters (saved titles, sources answering right now) make it useful even on a
+ * fresh install.
+ */
 @Composable
 fun CategoryCard(
     category: ContentCategory,
     count: Int,
     sourceCount: Int,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    issueCount: Int = 0
 ) {
     val accent = category.accent()
+    val interaction = remember { MutableInteractionSource() }
     Surface(
-        onClick = onClick,
         color = MaterialTheme.colorScheme.surfaceContainer,
         shape = MaterialTheme.shapes.large,
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier
+            .fillMaxWidth()
+            .pressScale(interaction, pressedScale = 0.985f)
+            .focusOutline(MaterialTheme.shapes.large)
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
+        Box {
             Box(
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(MaterialTheme.shapes.medium)
-                    .background(accent.copy(alpha = 0.16f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = category.icon(),
-                    contentDescription = null,
-                    tint = accent
-                )
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = category.label,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = category.tagline,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = buildString {
-                        append("$count saved")
-                        append(" · ")
-                        append(
-                            if (sourceCount == 1) "1 source" else "$sourceCount sources"
+                    .fillMaxSize()
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(accent.copy(alpha = 0.13f), Color.Transparent)
                         )
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = accent
+                    )
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = interaction,
+                        indication = ripple(),
+                        onClickLabel = "Open ${category.label}",
+                        onClick = onClick
+                    )
+                    .padding(horizontal = 16.dp, vertical = 18.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                IconBadge(icon = category.icon(), tint = accent, size = 52)
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = category.label,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = category.tagline,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        StatusPill(
+                            text = if (count == 1) "1 saved" else "$count saved",
+                            tint = accent
+                        )
+                        StatusPill(
+                            text = when {
+                                sourceCount == 1 -> "1 source"
+                                sourceCount > 1 -> "$sourceCount sources"
+                                issueCount > 0 -> "No source available"
+                                else -> "No source"
+                            },
+                            tint = if (sourceCount == 0) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.secondary
+                            }
+                        )
+                        if (issueCount > 0) {
+                            StatusPill(
+                                text = if (issueCount == 1) "1 needs attention"
+                                else "$issueCount need attention",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+                Icon(
+                    Icons.Outlined.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -257,19 +303,19 @@ fun ProviderStatusLine(status: ProviderStatus) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 2.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(6.dp)
-                .clip(RoundedCornerShape(3.dp))
+                .size(7.dp)
+                .clip(CircleShape)
                 .background(
-                    if (status.available) MaterialTheme.colorScheme.tertiary
+                    if (status.available) MaterialTheme.colorScheme.secondary
                     else MaterialTheme.colorScheme.error
                 )
         )
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(9.dp))
         Text(
             text = buildString {
                 append(status.sourceName)
@@ -281,7 +327,7 @@ fun ProviderStatusLine(status: ProviderStatus) {
             style = MaterialTheme.typography.labelSmall,
             color = if (status.available) MaterialTheme.colorScheme.onSurfaceVariant
             else MaterialTheme.colorScheme.error,
-            maxLines = 2,
+            maxLines = 3,
             overflow = TextOverflow.Ellipsis
         )
     }

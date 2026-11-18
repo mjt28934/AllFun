@@ -22,8 +22,8 @@ Reader    ─ vertical / paged / right-to-left manga with zoom;
             EPUB or network novel reader with live typography
 Player    ─ Media3, resume, subtitles, next episode, readable errors
 Extensions─ Installed · Discover · Updates · Repositories · Disabled
-Settings  ─ Appearance · Accessibility · Reading · Playback · Sources & add-ons ·
-            Extensions · Downloads · Storage · Network · Backup · About
+Settings  ─ Appearance · Accessibility · Reading · Playback · Extensions & sources ·
+            Downloads · Storage · Network · App Updates · Backup · About
 ```
 
 There are exactly three content destinations. Extensions, add-ons and providers feed
@@ -45,8 +45,8 @@ Verify the checksum, then open the APK. Releases are signed with one fixed certi
 each version installs over the previous one and keeps the library:
 
 ```powershell
-(Get-FileHash .\AllFun-0.5.0-release.apk -Algorithm SHA256).Hash.ToLower()
-Get-Content .\AllFun-0.5.0-release.apk.sha256
+(Get-FileHash .\AllFun-0.6.0-release.apk -Algorithm SHA256).Hash.ToLower()
+Get-Content .\AllFun-0.6.0-release.apk.sha256
 ```
 
 From inside the app, **Settings → About → App Updates** does the same work without a
@@ -59,10 +59,10 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Check | Result |
 |---|---|
 | `:app:assembleDebug` | **BUILD SUCCESSFUL** |
-| `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking, 11,039,153 bytes |
-| `:app:testDebugUnitTest` | **26 tests pass** — semantic version comparison, release JSON parsing, checksum-file parsing, category/dedupe/format mapping, Tachiyomi page conversion |
-| APK metadata | `app.allfun`, `versionCode 500`, `versionName 0.5.0`, v2 signature, `CN=AllFun` |
-| Runtime, Android 15 / API 35 (emulator) | Install → empty shelf (nothing seeded) → Home, Movies & Shows, Books & Novels, Manhwa & Manga, Library, Sources, Detail, Extensions, Settings; manga (vertical + paged + chapter picker) and novel readers; video playback with a sidecar subtitle, resume and retry |
+| `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking, 11,071,921 bytes |
+| `:app:testDebugUnitTest` | **30 tests pass** — semantic version comparison, release JSON parsing, checksum-file parsing, category/dedupe/format mapping, category sorting, Tachiyomi page conversion |
+| APK metadata | `app.allfun`, `versionCode 600`, `versionName 0.6.0`, v2 signature, `CN=AllFun` |
+| Runtime, Android 15 / API 35 (emulator) | Signed 0.6.0 APK installed over 0.5.0 (same signer, library and settings kept) → five destinations, three category cards with live counts, real Weeb Central Popular shelf and category search ("solo" → 15 results), streamed filter facets, recent searches that survive a restart, animated bottom navigation, extension manager (Installed · Discover · Updates · Repositories) with Updates reporting "Everything is up to date", settings; empty and error states; no crash |
 | Unified content layer | Three categories are built from every enabled source of the matching kind: staged arrival, round-robin shelves, title dedupe with provider merging, per-request timeouts and a feed budget, provider status reporting, pagination, global search grouped by category, and a remembered preferred source per title |
 | Manga category, end to end | Weeb Central (real Keiyoushi extension installed from Discover) → Popular shelf with real covers → One Piece detail (1198 chapters, author, genres) → reader loads real page images → progress on the shelf |
 | Cross-source search | "Lantern" returns 3 grouped results across Movies & Shows, Books & Novels and Manhwa & Manga with provider chips and source filters; "one piece" returns real manga results from the installed extension |
@@ -75,7 +75,7 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Settings maintenance | Storage stats, clear cached files (5.5 MB freed without touching the library), repository connection test (1,710 extensions in 1,194 ms) |
 | Release (R8) runtime | All paths above re-verified on a signed release build |
 | In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` confirmation → 0.5.0 (code 500) installed over a signed 0.4.0 build with the restored library and progress intact afterwards (see [In-app updates](#in-app-updates)) |
-| Version | `0.5.0` (versionCode 500) |
+| Version | `0.6.0` (versionCode 600) |
 | Min SDK | 26 (Android 8.0) |
 | Target SDK | 35 |
 
@@ -191,20 +191,21 @@ busy label, and failures leave the previous installation untouched.
 
 ## Settings, backup and storage
 
-Settings is ten sections, and every control writes a real preference that the app reads:
+Settings has eleven sections, and every control writes a real preference that the app reads:
 
 | Section | What it changes |
 |---|---|
-| Appearance | System/Dark/Light, Material You colours, library grid/list and sort |
-| Accessibility | Reduce motion (screen cross-fades), plus a statement of the app's font-scaling and touch-target behaviour |
+| Appearance | System/Dark/Light, Material You colours, library grid/list and sort, Home shelf visibility |
+| Accessibility | Reduce motion (all non-essential animation), plus a statement of the app's font-scaling and touch-target behaviour |
 | Reading | Manga layout, fit, page order, novel text size, line spacing and theme |
 | Playback | Resume position, subtitle tracks |
-| Extensions | Link to the Extensions screen |
+| Extensions & sources | Links to the Sources and Extensions screens and a summary of how providers feed the categories |
 | Downloads | An honest notice: offline downloads are not implemented |
 | Storage | Cache/extension/database sizes, clear cached files, refresh |
 | Network | Timeouts and a real repository connection test |
+| App Updates | GitHub Releases check, download and install |
 | Backup | JSON export/restore through the system file picker |
-| About | Version, **App Updates**, what the source layer runs, built-in repositories, unsupported features |
+| About | Version, what the source layer runs, built-in repositories, unsupported features |
 
 **Backup** contains settings, repository URLs, the library, chapters/episodes and progress.
 It deliberately excludes extension code and Jellyfin/Stremio credentials, so it cannot
@@ -269,6 +270,21 @@ you want to update this app?" dialog, and installed it. Afterwards the package r
 `d2a16106…900df`, the same SHA-256 as the GitHub asset, so the running app is byte-for-byte
 the published file, not a local rebuild.
 
+## Design and motion
+
+The visual system is Material 3-inspired and dark-first: ink surfaces (`Ink`, `InkRaised`,
+`InkCard`), an amber accent, a 32/25/21 sp display-to-section scale, 16 and 22 dp shapes,
+and a consistent 16–20 dp gutter. Posters carry their title and metadata below the cover
+instead of over it; cards show format, the number of alternate providers and saved progress.
+
+Motion is centralised in `ui/theme/Motion.kt` (140 / 220 / 320 ms with shared easing):
+tab switches cross-fade while pushed screens slide in, the bottom bar's pill glides to the
+selected destination, cards scale slightly on press, shelves fade/slide in as real content
+arrives, progress bars animate, and descriptions expand smoothly. Shimmer skeletons appear
+only while a request is genuinely running. `Settings → Accessibility → Reduce motion`
+(or Android's animator duration scale) turns all of it off; code checks
+`LocalReduceMotion` before every non-essential animation.
+
 ## Accessibility
 
 The UI follows the system font scale (text wraps rather than clipping), keeps interactive
@@ -325,7 +341,7 @@ app/src/main/java/app/allfun/
 │   │                         APK inspector, PackageInstaller session, notifier, worker
 │   └── settings/             DataStore preferences (including preferred sources)
 ├── ui/
-│   ├── AllFunRoot.kt         routes + five-tab bottom navigation + fade transitions
+│   ├── AllFunRoot.kt         routes + five-tab bottom bar (sliding pill) + transitions
 │   ├── home/ category/ search/ detail/ library/ browse/ extensions/ settings/
 │   ├── update/               App Updates screen and its ViewModel
 │   ├── reader/               manga (vertical/paged/zoom) and novel (WebView) readers
@@ -393,19 +409,19 @@ Versions are semantic, and the tag is the single source of truth:
 
 `versionCode = major * 10000 + minor * 100 + patch`. The release workflow computes both
 from the tag and passes `-PappVersionName` / `-PappVersionCode` to Gradle, so the APK can
-never disagree with its release. Local builds fall back to `0.5.0` / `500`.
+never disagree with its release. Local builds fall back to `0.6.0` / `600`.
 
 The first published build was numbered 1.0.0; it has been renumbered and re-published as
-0.4.0, and the three-category redesign is 0.5.0. The numbering is now monotonic again
-(0.4.0 → 0.5.0 → …), so installs upgrade in place.
+0.4.0, the three-category redesign is 0.5.0, and the UI/motion redesign is 0.6.0. The
+numbering is now monotonic again (0.4.0 → 0.5.0 → 0.6.0 → …), so installs upgrade in place.
 
 ### Release process
 
 Publishing a version takes one push of a tag; no APK is uploaded by hand.
 
 ```bash
-git tag -a v0.5.1 -m "AllFun 0.5.1"
-git push origin v0.5.1
+git tag -a v0.6.0 -m "AllFun 0.6.0"
+git push origin v0.6.0
 ```
 
 What `.github/workflows/release.yml` does with that push:
@@ -429,7 +445,7 @@ endpoint keeps pointing at the previous version. Fix the cause, move the tag (or
 and tag the fixed commit), and push again; the workflow replaces its own draft. A version
 that has already been published is never overwritten: bump the patch number instead.
 
-Optional curated notes live in `docs/releases/<tag>.md` (`docs/releases/v0.5.0.md` is
+Optional curated notes live in `docs/releases/<tag>.md` (`docs/releases/v0.6.0.md` is
 this release). If that file has no install heading, the workflow appends a short install
 block with the asset names and the in-app path.
 

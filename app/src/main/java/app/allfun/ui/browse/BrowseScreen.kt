@@ -70,6 +70,8 @@ import app.allfun.data.model.MediaStub
 import app.allfun.ui.components.DiscoveryCard
 import app.allfun.ui.components.EmptyState
 import app.allfun.ui.components.ErrorState
+import app.allfun.ui.components.GridSkeleton
+import app.allfun.ui.components.LoadingState
 import app.allfun.ui.components.rememberViewModel
 
 private enum class AddDialog { NONE, STREMIO, JELLYFIN }
@@ -137,7 +139,7 @@ fun BrowseScreen(
                     Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
                 }
                 Column(Modifier.weight(1f)) {
-                    Text(text = "Sources", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "Sources", style = MaterialTheme.typography.headlineSmall)
                     Text(
                         text = "Connect a provider, then its titles appear in the three categories.",
                         style = MaterialTheme.typography.bodySmall,
@@ -233,17 +235,9 @@ fun BrowseScreen(
             Box(Modifier.fillMaxSize()) {
                 val error = state.error
                 when {
-                    state.loading -> Column(
-                        modifier = Modifier.align(Alignment.Center),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        CircularProgressIndicator()
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            text = "Loading ${selected?.name ?: "source"}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    state.loading -> Column(Modifier.fillMaxSize()) {
+                        LoadingState("Loading ${selected?.name ?: "source"}")
+                        GridSkeleton(count = 9)
                     }
 
                     error != null && state.results.isEmpty() -> ErrorState(

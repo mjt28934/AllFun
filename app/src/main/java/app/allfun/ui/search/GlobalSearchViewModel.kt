@@ -39,7 +39,10 @@ class GlobalSearchViewModel(
         val sourceFilter: String? = null,
         val error: UserError? = null,
         val opening: Boolean = false,
-        val searched: Boolean = false
+        val searched: Boolean = false,
+        val history: List<String> = emptyList(),
+        /** Enabled sources known before any search has run, so the idle state is honest. */
+        val knownSources: Int = 0
     ) {
         val total: Int get() = results.values.sumOf { it.size }
 
@@ -74,9 +77,50 @@ class GlobalSearchViewModel(
     private var searchJob: Job? = null
     private var generation = 0
 
+    init {
+        viewModelScope.launch {
+            container.settings.settings.collect { settings ->
+                if (settings.searchHistory != _state.value.history) {
+                    _state.update { it.copy(history = settings.searchHistory) }
+                }
+            }
+        }
+        viewModelScope.launch {
+            val count = runCatching { container.content.enabledSources().size }
+                .getOrDefault(0)
+            _state.update { it.copy(knownSources = count) }
+        }
+    }
+
     fun setQuery(query: String) {
         _state.update { it.copy(query = query) }
         scheduleSearch()
+    }
+
+    /**
+     * Commits the current query: it is stored in recent searches and searched without the
+     * typing debounce. Debounced searches are not recorded, so history never fills with
+     * every prefix the user typed.
+     */
+    fun submit() {
+        val query = _state.value.query.trim()
+        if (query.isBlank()) return
+        viewModelScope.launch { container.settings.addSearchTerm(query) }
+        scheduleSearch(immediate = true)
+    }
+
+    fun useHistory(term: String) {
+        _state.update { it.copy(query = term) }
+        viewModelScope.launch { container.settings.addSearchTerm(term) }
+        scheduleSearch(immediate = true)
+    }
+
+    fun removeHistory(term: String) {
+        viewModelScope.launch { container.settings.removeSearchTerm(term) }
+    }
+
+    fun clearHistory() {
+        viewModelScope.launch { container.settings.clearSearchHistory() }
     }
 
     fun setCategory(category: ContentCategory?) {
