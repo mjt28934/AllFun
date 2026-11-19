@@ -1,7 +1,7 @@
 # AllFun
 
 One Android app for **manga, light novels, movies and series** — a single shelf, a single
-progress bar, one Continue row that doesn't care what kind of media it is.
+progress bar, one library that doesn't care what kind of media it is.
 
 Komikku/Mihon and LNReader each pick one medium. AllFun treats "what you're reading or
 watching" as the unit, not "what app you opened".
@@ -77,7 +77,7 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Settings maintenance | Storage stats, clear cached files without touching the library, repository connection test (1,710 extensions in 1,194 ms) |
 | Release (R8) runtime | All paths above re-verified on a signed release build |
 | In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` confirmation |
-| Published release | [v0.7.2](https://github.com/mjt28934/AllFun/releases/tag/v0.7.2) — `AllFun-0.7.2-release.apk`, 11,134,950 bytes, SHA-256 `67df2030e2476014f3988b4dfc3393dea77623039fcbf81dcd5016827ddd8eab`; downloaded back, checksum and signer re-checked against the workflow build, and the release is the repository's latest |
+| Published release | [v0.7.3](https://github.com/mjt28934/AllFun/releases/tag/v0.7.3) — `AllFun-0.7.3-release.apk`, 11,102,178 bytes, SHA-256 `b55671b6af52a03fc6bd94567a422e3f2f524df15bb3b1277e9c2bfce7ead0a0`; downloaded back, checksum and signer re-checked against the workflow build, and the release is the repository's latest |
 | Version | `0.7.3` (versionCode 703) |
 | Min SDK | 26 (Android 8.0) |
 | Target SDK | 35 |
