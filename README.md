@@ -49,8 +49,8 @@ Verify the checksum, then open the APK. Releases are signed with one fixed certi
 each version installs over the previous one and keeps the library:
 
 ```powershell
-(Get-FileHash .\AllFun-0.6.0-release.apk -Algorithm SHA256).Hash.ToLower()
-Get-Content .\AllFun-0.6.0-release.apk.sha256
+(Get-FileHash .\AllFun-0.7.1-release.apk -Algorithm SHA256).Hash.ToLower()
+Get-Content .\AllFun-0.7.1-release.apk.sha256
 ```
 
 From inside the app, **Settings → About → App Updates** does the same work without a
@@ -65,8 +65,8 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | `:app:assembleDebug` | **BUILD SUCCESSFUL** |
 | `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking, 11,104,689 bytes |
 | `:app:testDebugUnitTest` | **30 tests pass** — semantic version comparison, release JSON parsing, checksum-file parsing, category/dedupe/format mapping, category sorting, Tachiyomi page conversion |
-| APK metadata | `app.allfun`, `versionCode 700`, `versionName 0.7.0`, v2 signature, `CN=AllFun` |
-| Runtime, Android 15 / API 35 (emulator) | Signed 0.7.0 APK installed over 0.6.0 (same signer, library and extensions kept) → six destinations, compact category toolbars with the extension button top-right, category-scoped marketplace with focused search, real Weeb Central downloads, offline reading, Settings → Downloads, Library download badges and sizes; empty and error states; no crash |
+| APK metadata | `app.allfun`, `versionCode 701`, `versionName 0.7.1`, v2 signature, `CN=AllFun` |
+| Runtime, Android 15 / API 35 (emulator) | Signed 0.7.1 APK installed over 0.7.0 (same signer, library, extensions and downloads kept) → six destinations, compact category toolbars with the extension button top-right, category-scoped marketplace with focused search, real Weeb Central downloads, offline reading, Settings → Downloads, Library download badges and sizes; empty and error states; no crash |
 | Unified content layer | Three categories are built from every enabled source of the matching kind: staged arrival, round-robin shelves, title dedupe with provider merging, per-request timeouts and a feed budget, provider state reporting with Retry and diagnostics, pagination, global search grouped by category, and a remembered preferred source per title |
 | Manga category, end to end | Weeb Central (real Keiyoushi extension installed from Discover) → Popular shelf with real covers → One Piece detail (1198 chapters, author, genres) → reader loads real page images → progress on the shelf |
 | Offline downloads | Manga chapters saved as page folders + `pages.json`, novels as saved chapter HTML, direct HTTP video streamed with progress; chapter 1055 (11,087,549 bytes) and chapter 24 (4,968,054 bytes) completed, opened with Wi-Fi and mobile data off, and survived a force-stop; HLS/DASH manifests are refused honestly |
@@ -82,7 +82,7 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Release (R8) runtime | All paths above re-verified on a signed release build |
 | In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` confirmation |
 | Published release | [v0.7.0](https://github.com/mjt28934/AllFun/releases/tag/v0.7.0) — `AllFun-0.7.0-release.apk`, 11,104,689 bytes, SHA-256 `4b81130bbd0c7448b0ff0691a12ac71eee33ba84ac2029e038f80e3f4fc50a1c`; downloaded back, checksum and signer re-checked against the workflow build, and the release is the repository's latest |
-| Version | `0.7.0` (versionCode 700) |
+| Version | `0.7.1` (versionCode 701) |
 | Min SDK | 26 (Android 8.0) |
 | Target SDK | 35 |
 
@@ -434,24 +434,25 @@ Versions are semantic, and the tag is the single source of truth:
 | `v0.5.1` | `0.5.1` | `501` |
 | `v0.6.0` | `0.6.0` | `600` |
 | `v0.7.0` | `0.7.0` | `700` |
+| `v0.7.1` | `0.7.1` | `701` |
 | `v1.0.0` | `1.0.0` | `10000` |
 
 `versionCode = major * 10000 + minor * 100 + patch`. The release workflow computes both
 from the tag and passes `-PappVersionName` / `-PappVersionCode` to Gradle, so the APK can
-never disagree with its release. Local builds fall back to `0.7.0` / `700`.
+never disagree with its release. Local builds fall back to `0.7.1` / `701`.
 
 The first published build was numbered 1.0.0; it has been renumbered and re-published as
 0.4.0, the three-category redesign is 0.5.0, the UI/motion redesign is 0.6.0, and the
-navigation, library and download rebuild is 0.7.0. The
-numbering is now monotonic again (0.4.0 → 0.5.0 → 0.6.0 → 0.7.0 → …), so installs upgrade in place.
+navigation, library and download rebuild is 0.7.0, and 0.7.1 polishes the bottom bar. The
+numbering is now monotonic again (0.4.0 → 0.5.0 → 0.6.0 → 0.7.0 → 0.7.1 → …), so installs upgrade in place.
 
 ### Release process
 
 Publishing a version takes one push of a tag; no APK is uploaded by hand.
 
 ```bash
-git tag -a v0.7.0 -m "AllFun 0.7.0"
-git push origin v0.7.0
+git tag -a v0.7.1 -m "AllFun 0.7.1"
+git push origin v0.7.1
 ```
 
 What `.github/workflows/release.yml` does with that push:
@@ -475,7 +476,7 @@ endpoint keeps pointing at the previous version. Fix the cause, move the tag (or
 and tag the fixed commit), and push again; the workflow replaces its own draft. A version
 that has already been published is never overwritten: bump the patch number instead.
 
-Optional curated notes live in `docs/releases/<tag>.md` (`docs/releases/v0.7.0.md` is
+Optional curated notes live in `docs/releases/<tag>.md` (`docs/releases/v0.7.1.md` is
 this release). If that file has no install heading, the workflow appends a short install
 block with the asset names and the in-app path.
 
