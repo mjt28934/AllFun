@@ -27,11 +27,15 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.DownloadDone
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -71,6 +75,8 @@ import app.allfun.data.content.ContentCategory
 import app.allfun.data.content.SourceOption
 import app.allfun.data.content.category
 import app.allfun.data.db.EpisodeEntity
+import app.allfun.data.db.DownloadEntity
+import app.allfun.data.db.DownloadStatus
 import app.allfun.data.db.MediaEntity
 import app.allfun.data.model.MediaKind
 import app.allfun.ui.components.CoverImage
@@ -80,6 +86,7 @@ import app.allfun.ui.components.accentColor
 import app.allfun.ui.components.rememberViewModel
 import app.allfun.ui.countLabel
 import app.allfun.ui.formatDuration
+import app.allfun.ui.formatBytes
 import app.allfun.ui.formatNumber
 import app.allfun.ui.theme.LocalReduceMotion
 import app.allfun.ui.theme.Motion
@@ -102,10 +109,13 @@ fun DetailScreen(
     val media by vm.media.collectAsStateWithLifecycle()
     val episodes by vm.episodes.collectAsStateWithLifecycle()
     val progress by vm.progress.collectAsStateWithLifecycle()
+    val downloads by vm.downloads.collectAsStateWithLifecycle()
+    val canDownload by vm.canDownload.collectAsStateWithLifecycle()
     val sourceState by vm.sources.collectAsStateWithLifecycle()
     val switched by vm.switchMediaId.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var expanded by remember { mutableStateOf(false) }
+    var pendingRemove by remember { mutableStateOf<DownloadEntity?>(null) }
 
     LaunchedEffect(Unit) {
         vm.messages.collect { snackbar.showSnackbar(it) }
@@ -136,6 +146,30 @@ fun DetailScreen(
                     val saved = media?.inLibrary == true
                     val favorite = media?.favorite == true
                     val category = media?.kind?.category()
+                    if (canDownload) {
+                        val allDone = downloads.isNotEmpty() &&
+                            downloads.none { it.status.isActive } &&
+                            downloads.count { it.status == DownloadStatus.COMPLETED } == episodes.size
+                        IconButton(
+                            onClick = { vm.download() },
+                            enabled = episodes.isNotEmpty() && !allDone
+                        ) {
+                            Icon(
+                                imageVector = if (allDone) Icons.Outlined.DownloadDone
+                                else Icons.Outlined.Download,
+                                contentDescription = if (allDone) {
+                                    "Everything is downloaded"
+                                } else {
+                                    "Download all ${media?.unitLabel?.lowercase() ?: "items"}"
+                                },
+                                tint = if (downloads.isNotEmpty()) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                }
+                            )
+                        }
+                    }
                     IconButton(onClick = { vm.toggleFavorite() }) {
                         Icon(
                             imageVector = if (favorite) Icons.Filled.Favorite
@@ -335,7 +369,13 @@ fun DetailScreen(
                             kind = item.kind,
                             position = progress?.takeIf { it.episodeId == episode.id }?.position,
                             total = progress?.takeIf { it.episodeId == episode.id }?.total,
-                            onClick = { onOpen(mediaId, episode.id, item.kind) }
+                            download = downloads.firstOrNull { it.unitId == episode.id },
+                            canDownload = canDownload,
+                            onClick = { onOpen(mediaId, episode.id, item.kind) },
+                            onDownload = { vm.download(episode.id) },
+                            onCancelDownload = vm::cancelDownload,
+                            onRetryDownload = vm::retryDownload,
+                            onRemoveDownload = { pendingRemove = it }
                         )
                     }
                 }
@@ -346,11 +386,41 @@ fun DetailScreen(
                         kind = item.kind,
                         position = progress?.takeIf { it.episodeId == episode.id }?.position,
                         total = progress?.takeIf { it.episodeId == episode.id }?.total,
-                        onClick = { onOpen(mediaId, episode.id, item.kind) }
+                        download = downloads.firstOrNull { it.unitId == episode.id },
+                        canDownload = canDownload,
+                        onClick = { onOpen(mediaId, episode.id, item.kind) },
+                        onDownload = { vm.download(episode.id) },
+                        onCancelDownload = vm::cancelDownload,
+                        onRetryDownload = vm::retryDownload,
+                        onRemoveDownload = { pendingRemove = it }
                     )
                 }
             }
         }
+    }
+
+    pendingRemove?.let { row ->
+        AlertDialog(
+            onDismissRequest = { pendingRemove = null },
+            title = { Text("Remove downloaded file?") },
+            text = {
+                Text(
+                    "\"${row.unitTitle}\" is deleted from this device. You can download it " +
+                        "again while ${media?.title ?: "this title"}'s provider is available."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        vm.removeDownload(row.key)
+                        pendingRemove = null
+                    }
+                ) { Text("Remove", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRemove = null }) { Text("Cancel") }
+            }
+        )
     }
 }
 
@@ -623,17 +693,24 @@ private fun EpisodeRow(
     kind: MediaKind,
     position: Long?,
     total: Long?,
-    onClick: () -> Unit
+    download: DownloadEntity?,
+    canDownload: Boolean,
+    onClick: () -> Unit,
+    onDownload: () -> Unit,
+    onCancelDownload: (String) -> Unit,
+    onRetryDownload: (String) -> Unit,
+    onRemoveDownload: (DownloadEntity) -> Unit
 ) {
     val fraction = if (total != null && total > 0L && position != null) {
         (position.toFloat() / total.toFloat()).coerceIn(0f, 1f)
     } else 0f
+    val status = download?.status
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(start = 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
@@ -646,9 +723,12 @@ private fun EpisodeRow(
                 ),
             contentAlignment = Alignment.Center
         ) {
-            if (kind.isVideo && episode.number <= 0.0) {
+            if (episode.number <= 0.0) {
+                // Providers that only expose titles leave the numeric index unset. A topic
+                // icon reads better than the placeholder number "-1".
                 Icon(
-                    Icons.Filled.PlayArrow,
+                    imageVector = if (kind.isVideo) Icons.Filled.PlayArrow
+                    else Icons.AutoMirrored.Outlined.MenuBook,
                     contentDescription = null,
                     tint = if (fraction > 0f) kind.accentColor()
                     else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -671,16 +751,37 @@ private fun EpisodeRow(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-            val subtitle = when {
-                kind.isVideo && episode.durationMs != null -> formatDuration(episode.durationMs)
-                episode.pageCount != null -> "${episode.pageCount} pages"
-                else -> ""
+            val subtitle = when (status) {
+                DownloadStatus.COMPLETED ->
+                    "Downloaded · ${formatBytes(download?.totalBytes ?: 0L)}"
+                DownloadStatus.RUNNING ->
+                    if ((download?.progress ?: -1) >= 0) {
+                        "Downloading ${download?.progress}%"
+                    } else {
+                        "Downloading"
+                    }
+                DownloadStatus.QUEUED, DownloadStatus.WAITING ->
+                    download?.note ?: "Queued"
+                DownloadStatus.FAILED -> download?.error ?: "Download failed"
+                DownloadStatus.CANCELED -> "Download cancelled"
+                null -> when {
+                    kind.isVideo && episode.durationMs != null ->
+                        formatDuration(episode.durationMs)
+                    episode.pageCount != null -> "${episode.pageCount} pages"
+                    else -> ""
+                }
             }
             if (subtitle.isNotBlank()) {
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = when (status) {
+                        DownloadStatus.FAILED -> MaterialTheme.colorScheme.error
+                        DownloadStatus.COMPLETED -> MaterialTheme.colorScheme.secondary
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -690,6 +791,50 @@ private fun EpisodeRow(
                 contentDescription = "Continue",
                 tint = kind.accentColor()
             )
+        }
+        if (canDownload) {
+            when (status) {
+                DownloadStatus.COMPLETED -> IconButton(onClick = { onRemoveDownload(download) }) {
+                    Icon(
+                        Icons.Outlined.DownloadDone,
+                        contentDescription = "Remove downloaded ${episode.title}",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                DownloadStatus.RUNNING, DownloadStatus.QUEUED, DownloadStatus.WAITING ->
+                    IconButton(onClick = { onCancelDownload(download.key) }) {
+                        Box(contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(
+                                progress = {
+                                    ((download.progress.takeIf { it >= 0 } ?: 0) / 100f)
+                                        .coerceIn(0f, 1f)
+                                },
+                                modifier = Modifier.size(22.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Icon(
+                                Icons.Outlined.Close,
+                                contentDescription = "Cancel download of ${episode.title}",
+                                modifier = Modifier.size(11.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                DownloadStatus.FAILED -> IconButton(onClick = { onRetryDownload(download.key) }) {
+                    Icon(
+                        Icons.Outlined.Download,
+                        contentDescription = "Retry download of ${episode.title}",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+                DownloadStatus.CANCELED, null -> IconButton(onClick = onDownload) {
+                    Icon(
+                        Icons.Outlined.Download,
+                        contentDescription = "Download ${episode.title}",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }

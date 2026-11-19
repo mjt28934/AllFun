@@ -185,3 +185,46 @@ interface SourceDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(source: SourceEntity)
 }
+
+@Dao
+interface DownloadDao {
+    @Upsert
+    suspend fun upsert(download: DownloadEntity)
+
+    @Query("SELECT * FROM downloads ORDER BY createdAt DESC")
+    fun observeAll(): Flow<List<DownloadEntity>>
+
+    @Query("SELECT * FROM downloads ORDER BY createdAt DESC")
+    suspend fun all(): List<DownloadEntity>
+
+    @Query("SELECT * FROM downloads WHERE mediaId = :mediaId")
+    suspend fun forMedia(mediaId: String): List<DownloadEntity>
+
+    @Query("SELECT * FROM downloads WHERE mediaId = :mediaId AND unitId = :unitId")
+    suspend fun one(mediaId: String, unitId: String): DownloadEntity?
+
+    @Query("SELECT * FROM downloads WHERE status IN ('QUEUED', 'WAITING', 'RUNNING') ORDER BY createdAt")
+    suspend fun active(): List<DownloadEntity>
+
+    @Query("UPDATE downloads SET status = :status, progress = :progress, downloadedBytes = :bytes, totalBytes = :total, path = :path, error = :error, note = :note, completedAt = :completedAt WHERE key = :key")
+    suspend fun update(
+        key: String,
+        status: DownloadStatus,
+        progress: Int,
+        bytes: Long,
+        total: Long,
+        path: String?,
+        error: String?,
+        note: String?,
+        completedAt: Long?
+    )
+
+    @Query("DELETE FROM downloads WHERE key = :key")
+    suspend fun delete(key: String)
+
+    @Query("DELETE FROM downloads WHERE status IN ('COMPLETED', 'FAILED', 'CANCELED')")
+    suspend fun clearFinished()
+
+    @Query("SELECT COUNT(*) FROM downloads WHERE status IN ('QUEUED', 'WAITING', 'RUNNING')")
+    suspend fun activeCount(): Int
+}

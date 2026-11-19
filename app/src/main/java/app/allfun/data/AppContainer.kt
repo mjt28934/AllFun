@@ -5,11 +5,10 @@ import app.allfun.BuildConfig
 import app.allfun.data.backup.BackupManager
 import app.allfun.data.content.ContentRepository
 import app.allfun.data.db.AppDatabase
+import app.allfun.data.download.DownloadManager
 import app.allfun.data.extension.ExtensionManager
 import app.allfun.data.extension.ExtensionRepository
 import app.allfun.data.extension.NovelPluginHost
-import app.allfun.data.importer.BookImporter
-import app.allfun.data.importer.LocalVideoImporter
 import app.allfun.data.net.Http
 import app.allfun.data.repo.LibraryRepository
 import app.allfun.data.repo.ProgressRepository
@@ -35,10 +34,6 @@ import java.io.File
 
 /** Source id used by the demo manga builds up to 0.2 shipped. Only referenced to clean up. */
 private const val DEMO_SOURCE_ID = "demo-manga"
-
-/** Title/author of the demo EPUB those same builds imported into the library once. */
-private const val DEMO_BOOK_TITLE = "Signal Fires"
-private const val DEMO_BOOK_AUTHOR = "Demo Author"
 
 /**
  * Hand-wired dependency graph. Small enough to keep in one place; swapping in Hilt later
@@ -88,6 +83,9 @@ class AppContainer(context: Context) {
     /** The three-category aggregation layer that all content screens use. */
     val content: ContentRepository
 
+    /** Real offline downloads: queue, files, offline reads and Library integration. */
+    val downloads: DownloadManager
+
     init {
         // Extensions link against the eu.kanade.tachiyomi.* API implemented by this app,
         // so the host services must exist before any extension class is instantiated.
@@ -108,10 +106,17 @@ class AppContainer(context: Context) {
             sourceDao = database.sourceDao(),
             settings = settings
         )
+        downloads = DownloadManager(
+            context = app,
+            http = http,
+            dao = database.downloadDao(),
+            mediaDao = database.mediaDao(),
+            episodeDao = database.episodeDao(),
+            sourceHub = sourceHub,
+            settings = settings,
+            scope = appScope
+        )
     }
-
-    val bookImporter = BookImporter(app, database.mediaDao(), database.episodeDao())
-    val videoImporter = LocalVideoImporter(app, database.mediaDao(), database.episodeDao())
 
     /** GitHub Releases-based updater; see data/update. */
     val updates = UpdateRepository(UpdateApi(http), UpdateStore(app))
@@ -125,20 +130,27 @@ class AppContainer(context: Context) {
             sourceHub.ensureSeeded()
             runCatching { sourceHub.reconcileInstalledExtensions() }
 
+            // 0.7 removed local media browsing. Delete the source rows older builds seeded
+            // and the media/progress that only those sources could open, then remove the
+            // extracted EPUB copies. Downloaded AllFun content is untouched.
+            runCatching {
+                database.mediaDao().deleteBySource(SourceIds.LOCAL_VIDEO)
+                database.mediaDao().deleteBySource(SourceIds.LOCAL_NOVEL)
+                database.sourceDao().delete(SourceIds.LOCAL_VIDEO)
+                database.sourceDao().delete(SourceIds.LOCAL_NOVEL)
+                File(filesDir, "books").deleteRecursively()
+            }
+
+            runCatching { downloads.restore() }
+
             // 0.3 removed the bundled demo content. Earlier builds seeded a manga and an
             // EPUB into the library; drop both so an upgrade does not keep titles whose
             // source no longer exists. The manga is unambiguous (its source id is gone);
             // the demo book went through the normal import path, so it can only be
             // recognised by the exact title/author it was shipped with.
             runCatching {
-                val demoBooks = database.mediaDao()
-                    .idsMatching(SourceIds.LOCAL_NOVEL, DEMO_BOOK_TITLE, DEMO_BOOK_AUTHOR)
                 database.mediaDao().deleteBySource(DEMO_SOURCE_ID)
                 database.sourceDao().delete(DEMO_SOURCE_ID)
-                demoBooks.forEach { id ->
-                    database.mediaDao().delete(id)
-                    File(filesDir, "books/$id").deleteRecursively()
-                }
             }
 
             // Update checks: schedule the periodic job and, at most once per cooldown,

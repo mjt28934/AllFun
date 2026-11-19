@@ -90,7 +90,11 @@ data class Settings(
     val searchHistory: List<String> = emptyList(),
     val repositories: List<RepositoryConfig> = emptyList(),
     /** Preferred provider per title: "CATEGORY|normalised title" -> source id. */
-    val preferredSources: Map<String, String> = emptyMap()
+    val preferredSources: Map<String, String> = emptyMap(),
+    /** Only download files while connected to Wi-Fi or Ethernet. */
+    val downloadWifiOnly: Boolean = true,
+    /** How many downloads may transfer at once. */
+    val concurrentDownloads: Int = 2
 )
 
 class SettingsStore(private val context: Context) {
@@ -115,6 +119,8 @@ class SettingsStore(private val context: Context) {
         val searchHistory = stringPreferencesKey("search_history")
         val repositories = stringPreferencesKey("repositories")
         val preferredSources = stringPreferencesKey("preferred_sources")
+        val downloadWifiOnly = booleanPreferencesKey("download_wifi_only")
+        val concurrentDownloads = intPreferencesKey("concurrent_downloads")
     }
 
     val settings: Flow<Settings> = context.dataStore.data
@@ -139,7 +145,9 @@ class SettingsStore(private val context: Context) {
                 homeSections = parseHomeSections(prefs[Keys.homeSections]),
                 searchHistory = parseSearchHistory(prefs[Keys.searchHistory]),
                 repositories = parseRepositories(prefs[Keys.repositories]),
-                preferredSources = parsePreferredSources(prefs[Keys.preferredSources])
+                preferredSources = parsePreferredSources(prefs[Keys.preferredSources]),
+                downloadWifiOnly = prefs[Keys.downloadWifiOnly] ?: true,
+                concurrentDownloads = (prefs[Keys.concurrentDownloads] ?: 2).coerceIn(1, 4)
             )
         }
 
@@ -201,6 +209,14 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setNotifyUpdates(enabled: Boolean) {
         context.dataStore.edit { it[Keys.notifyUpdates] = enabled }
+    }
+
+    suspend fun setDownloadWifiOnly(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.downloadWifiOnly] = enabled }
+    }
+
+    suspend fun setConcurrentDownloads(value: Int) {
+        context.dataStore.edit { it[Keys.concurrentDownloads] = value.coerceIn(1, 4) }
     }
 
     suspend fun setHomeSections(sections: List<HomeSection>) {

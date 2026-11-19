@@ -26,9 +26,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.allfun.data.content.ContentCategory
 import app.allfun.data.content.ContentItem
+import app.allfun.data.content.ProviderState
 import app.allfun.data.content.ProviderStatus
 import app.allfun.data.content.format
 import app.allfun.data.model.MediaDetails
@@ -299,36 +304,67 @@ fun CategoryCard(
 
 /** Compact, honest per-provider status line used under category and search results. */
 @Composable
-fun ProviderStatusLine(status: ProviderStatus) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
+fun ProviderStatusLine(status: ProviderStatus, onRetry: (() -> Unit)? = null) {
+    var showDetails by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth()) {
+        Row(
             modifier = Modifier
-                .size(7.dp)
-                .clip(CircleShape)
-                .background(
-                    if (status.available) MaterialTheme.colorScheme.secondary
-                    else MaterialTheme.colorScheme.error
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(
+                        when (status.state) {
+                            ProviderState.WORKING -> MaterialTheme.colorScheme.secondary
+                            ProviderState.NO_CONTENT -> MaterialTheme.colorScheme.outline
+                            else -> MaterialTheme.colorScheme.error
+                        }
+                    )
+            )
+            Spacer(Modifier.width(9.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = buildString {
+                        append(status.sourceName)
+                        append(" · ")
+                        append(status.state.label)
+                        status.message?.takeIf { it.isNotBlank() }?.let {
+                            append(" — ")
+                            append(it)
+                        }
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (status.available) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
                 )
-        )
-        Spacer(Modifier.width(9.dp))
-        Text(
-            text = buildString {
-                append(status.sourceName)
-                status.message?.takeIf { it.isNotBlank() }?.let {
-                    append(" — ")
-                    append(it)
+                if (showDetails && status.diagnostics != null) {
+                    Text(
+                        text = status.diagnostics,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 6,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
                 }
-            },
-            style = MaterialTheme.typography.labelSmall,
-            color = if (status.available) MaterialTheme.colorScheme.onSurfaceVariant
-            else MaterialTheme.colorScheme.error,
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis
-        )
+            }
+            if (status.diagnostics != null) {
+                TextButton(onClick = { showDetails = !showDetails }) {
+                    Text(if (showDetails) "Hide" else "Details")
+                }
+            }
+            if (!status.available && onRetry != null) {
+                TextButton(onClick = onRetry) { Text("Retry") }
+            }
+        }
     }
 }

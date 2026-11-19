@@ -16,6 +16,12 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
+/** The response was not JSON; [detail] keeps the raw evidence for diagnostics. */
+class InvalidResponseException(
+    message: String,
+    val detail: String? = null
+) : IOException(message)
+
 class Http(
     val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
@@ -38,14 +44,76 @@ class Http(
             client.newCall(request).execute().use { response ->
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    throw IOException("HTTP ${response.code} for ${request.url}")
+                    throw IOException(
+                        "HTTP ${response.code} for ${request.url}" +
+                            body.takeIf { it.isNotBlank() }?.let { ": ${it.take(160)}" }.orEmpty()
+                    )
                 }
                 body
             }
         }
 
+    /**
+     * Reads JSON, refusing to hand HTML (a website, a Cloudflare challenge, a login page)
+     * to the JSON parser. Without this check a provider that moved or started answering
+     * with a web page produced a parser error such as "Unexpected JSON token at offset 11",
+     * which told the user nothing and looked like an AllFun bug.
+     */
     suspend fun getJson(url: String, headers: Map<String, String> = emptyMap()): JsonElement =
-        json.parseToJsonElement(get(url, headers))
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url(url)
+                .apply { headers.forEach { (k, v) -> header(k, v) } }
+                .build()
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                val contentType = response.header("content-type").orEmpty()
+                if (!response.isSuccessful) {
+                    throw IOException(
+                        "HTTP ${response.code} for ${request.url}" +
+                            body.takeIf { it.isNotBlank() }?.let { ": ${it.take(160)}" }.orEmpty()
+                    )
+                }
+                parseJsonBody(body, contentType, request.url.toString())
+            }
+        }
+
+    /** Same validation as [getJson], used by callers that already have the response text. */
+    fun parseJsonBody(body: String, contentType: String?, url: String): JsonElement {
+        val type = contentType.orEmpty()
+        val trimmed = body.trimStart('\uFEFF', ' ', '\n', '\r', '\t')
+        if (trimmed.isEmpty()) {
+            throw InvalidResponseException("$url returned an empty response", "empty body")
+        }
+        val looksHtml = trimmed.startsWith("<!doctype", ignoreCase = true) ||
+            trimmed.startsWith("<html", ignoreCase = true) ||
+            type.contains("text/html", ignoreCase = true)
+        if (looksHtml) {
+            throw InvalidResponseException(
+                "$url returned a web page instead of JSON. This is usually a wrong add-on " +
+                    "address, a sign-in or Cloudflare challenge page, or a server error.",
+                trimmed.take(400)
+            )
+        }
+        val looksJson = trimmed.startsWith("{") || trimmed.startsWith("[")
+        if (!looksJson && type.isNotBlank() &&
+            !type.contains("json", ignoreCase = true) &&
+            !type.contains("text/plain", ignoreCase = true)
+        ) {
+            throw InvalidResponseException(
+                "$url returned ${type.substringBefore(';')} instead of JSON",
+                trimmed.take(400)
+            )
+        }
+        return try {
+            json.parseToJsonElement(body)
+        } catch (error: Exception) {
+            throw InvalidResponseException(
+                "$url returned malformed JSON",
+                "$error\n${trimmed.take(400)}"
+            )
+        }
+    }
 
     /**
      * Downloads a binary payload with a hard size ceiling. Repository APKs and plugin
@@ -104,7 +172,8 @@ class Http(
             if (!response.isSuccessful) {
                 throw IOException("HTTP ${response.code}: ${text.take(200)}")
             }
-            if (text.isBlank()) JsonObject(emptyMap()) else json.parseToJsonElement(text)
+            if (text.isBlank()) JsonObject(emptyMap())
+            else parseJsonBody(text, response.header("content-type"), request.url.toString())
         }
     }
 

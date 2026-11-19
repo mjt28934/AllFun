@@ -29,6 +29,14 @@ fun Throwable.toUserError(subject: String = "this"): UserError {
         is ConnectException -> "The server refused the connection or is offline."
         is SocketTimeoutException -> "The server took too long to answer. Try again in a moment."
         is SSLException -> "The secure connection failed. The server's certificate may be invalid."
+        is InvalidResponseException -> when {
+            text.contains("web page") ->
+                "This provider returned a web page instead of data. Its address may be wrong, " +
+                    "or it is blocking automated requests."
+            text.contains("empty response") -> "This provider returned an empty response."
+            text.contains("malformed") -> "This provider returned data AllFun could not read."
+            else -> "This provider returned an unsupported response."
+        }
         is IOException -> when {
             text.contains("http 401") || text.contains("http 403") ->
                 "This source rejected the request. Sign in again or check your credentials."

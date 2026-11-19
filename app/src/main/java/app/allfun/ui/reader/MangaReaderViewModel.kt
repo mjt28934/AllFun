@@ -84,9 +84,21 @@ class MangaReaderViewModel(
         }
         viewModelScope.launch {
             try {
+                // Downloads are keyed by the local episode row, which is stable even when
+                // the provider changes its own chapter URL.
+                val local = container.downloads.localPages(mediaId, chapter.id)
+                if (local.isNotEmpty()) {
+                    val page = startPage.coerceIn(0, local.lastIndex)
+                    _state.update { it.copy(pages = local, page = page, loading = false) }
+                    persist(page, local.size)
+                    return@launch
+                }
                 val source = container.sourceHub.sourceFor(item.sourceId)
                     ?: error("That source is no longer available")
-                val pages = source.pages(item.sourceKey, chapter.sourceUnitId ?: chapter.id)
+                val pages = source.pages(
+                    item.sourceKey,
+                    chapter.sourceUnitId ?: chapter.id
+                )
                 if (pages.isEmpty()) error("This source returned no pages for that chapter")
                 val page = startPage.coerceIn(0, pages.lastIndex)
                 _state.update { it.copy(pages = pages, page = page, loading = false) }

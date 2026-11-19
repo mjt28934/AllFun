@@ -20,14 +20,15 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.CollectionsBookmark
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.outlined.ViewAgenda
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -36,6 +37,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,19 +45,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.allfun.data.AppContainer
-import app.allfun.data.db.LibraryRow
 import app.allfun.data.settings.LibrarySort
 import app.allfun.data.settings.LibraryView
 import app.allfun.ui.components.EmptyState
 import app.allfun.ui.components.MediaCard
 import app.allfun.ui.components.MediaListRow
 import app.allfun.ui.components.rememberViewModel
+import app.allfun.ui.formatBytes
 import app.allfun.ui.theme.LocalReduceMotion
+import java.text.DateFormat
+import java.util.Date
 
 @Composable
 fun LibraryScreen(
@@ -67,6 +69,7 @@ fun LibraryScreen(
     val state by vm.state.collectAsStateWithLifecycle()
     val reduceMotion = LocalReduceMotion.current
     var sortMenu by remember { mutableStateOf(false) }
+    var pendingRemove by remember { mutableStateOf<String?>(null) }
 
     Column(
         modifier = Modifier
@@ -172,30 +175,41 @@ fun LibraryScreen(
             shape = CircleShape
         )
 
+        // Content groups: everything, films/series, books and manga. Extensions, providers
+        // and downloads never become their own tab.
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(LibraryFilter.entries.size) { index ->
-                val option = LibraryFilter.entries[index]
+            items(LibraryFilter.entries) { option ->
                 val count = state.counts[option] ?: 0
                 FilterChip(
                     selected = state.filter == option,
                     onClick = { vm.setFilter(option) },
-                    label = { Text("${option.label} · $count") }
+                    label = { Text(if (count > 0) "${option.label} · $count" else option.label) }
                 )
             }
-            item {
+        }
+
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(LibraryScope.entries) { option ->
+                val count = state.scopeCounts[option] ?: 0
                 FilterChip(
-                    selected = state.favoritesOnly,
-                    onClick = { vm.toggleFavoritesOnly() },
-                    label = { Text("Favorites") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = if (state.favoritesOnly) Icons.Filled.Favorite
-                            else Icons.Outlined.FavoriteBorder,
-                            contentDescription = null
-                        )
+                    selected = state.scope == option,
+                    onClick = { vm.setScope(option) },
+                    enabled = option == LibraryScope.ALL || count > 0 || state.scope == option,
+                    label = { Text(option.label) },
+                    leadingIcon = when (option) {
+                        LibraryScope.DOWNLOADED -> {
+                            { Icon(Icons.Outlined.Download, contentDescription = null) }
+                        }
+                        LibraryScope.FAVORITES -> {
+                            { Icon(Icons.Outlined.FavoriteBorder, contentDescription = null) }
+                        }
+                        else -> null
                     }
                 )
             }
@@ -207,16 +221,22 @@ fun LibraryScreen(
                     icon = Icons.Outlined.CollectionsBookmark,
                     title = when {
                         state.all.isEmpty() -> "Nothing here yet"
-                        state.favoritesOnly && state.query.isBlank() -> "No favorites yet"
+                        state.scope == LibraryScope.FAVORITES && state.query.isBlank() ->
+                            "No favorites yet"
+                        state.scope == LibraryScope.DOWNLOADED && state.query.isBlank() ->
+                            "No downloads yet"
                         state.query.isNotBlank() -> "No matches"
                         else -> "No ${state.filter.label.lowercase()} yet"
                     },
                     message = when {
                         state.all.isEmpty() ->
-                            "Everything you add — a manga chapter, an imported EPUB, a Jellyfin " +
-                                "show — lands on this shelf."
-                        state.favoritesOnly ->
+                            "Titles you save, read or download land on this shelf. Install an " +
+                                "extension to start browsing."
+                        state.scope == LibraryScope.FAVORITES ->
                             "Open any title and tap the heart to pin it here."
+                        state.scope == LibraryScope.DOWNLOADED ->
+                            "Open a manga chapter, novel chapter or film and tap Download to " +
+                                "keep it on this device. Download settings live in Settings."
                         state.query.isNotBlank() ->
                             "Nothing matches \"${state.query}\". Try a shorter search."
                         else -> "Try another category, or add something new."
@@ -237,6 +257,8 @@ fun LibraryScreen(
                             progress = row.fraction,
                             onClick = { onOpenMedia(row.media.id) },
                             fillWidth = true,
+                            downloadLabel = state.downloads[row.media.id]?.badge(),
+                            caption = state.downloads[row.media.id]?.detail(),
                             modifier = if (reduceMotion) Modifier else Modifier.animateItem()
                         )
                     }
@@ -244,11 +266,16 @@ fun LibraryScreen(
             } else {
                 LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
                     items(state.items, key = { it.media.id }) { row ->
+                        val download = state.downloads[row.media.id]
                         MediaListRow(
                             media = row.media,
                             progress = row.fraction,
                             onClick = { onOpenMedia(row.media.id) },
                             onToggleFavorite = { vm.toggleFavorite(row.media.id) },
+                            downloadLabel = download?.detail(),
+                            onRemoveDownload = download
+                                ?.takeIf { it.completed > 0 }
+                                ?.let { { pendingRemove = row.media.id } },
                             modifier = if (reduceMotion) Modifier else Modifier.animateItem()
                         )
                     }
@@ -256,4 +283,50 @@ fun LibraryScreen(
             }
         }
     }
+
+    if (pendingRemove != null) {
+        val id = pendingRemove!!
+        val title = state.all.firstOrNull { it.media.id == id }?.media?.title.orEmpty()
+        AlertDialog(
+            onDismissRequest = { pendingRemove = null },
+            title = { Text("Remove downloaded files?") },
+            text = {
+                Text(
+                    "The offline files for \"$title\" are deleted. The title stays in your " +
+                        "library and can be opened again while its provider is available."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        vm.removeDownloads(id)
+                        pendingRemove = null
+                    }
+                ) { Text("Remove", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRemove = null }) { Text("Cancel") }
+            }
+        )
+    }
 }
+
+private fun LibraryDownload.badge(): String? = when {
+    active > 0 && waitingForWifi -> "Waiting for Wi-Fi"
+    active > 0 -> progress?.let { "Downloading $it%" } ?: "Downloading"
+    completed > 0 -> "Downloaded"
+    failed > 0 -> "Download failed"
+    else -> null
+}
+
+private fun LibraryDownload.detail(): String = buildList {
+    if (completed > 0) {
+        add("Downloaded $completed ${if (completed == 1) "file" else "files"}")
+        if (bytes > 0) add(formatBytes(bytes))
+        completedAt?.let { add(DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(it))) }
+    }
+    if (active > 0) {
+        add(if (waitingForWifi) "Waiting for Wi-Fi" else progress?.let { "Downloading $it%" } ?: "Downloading")
+    }
+    if (failed > 0) add("$failed failed")
+}.joinToString(" · ")

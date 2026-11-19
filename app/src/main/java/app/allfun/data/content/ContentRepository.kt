@@ -233,7 +233,8 @@ class ContentRepository(
                         sourceName = entity.name,
                         type = entity.type,
                         available = false,
-                        message = error.userMessage("this source")
+                        message = error.userMessage("this source"),
+                        diagnostics = error.toString()
                     ),
                     emptyMap()
                 )
@@ -345,7 +346,8 @@ class ContentRepository(
                             if (error is kotlinx.coroutines.CancellationException) throw error
                             statuses += ProviderStatus(
                                 entity.id, entity.name, entity.type, false,
-                                message = error.userMessage("more results")
+                                message = error.userMessage("more results"),
+                                diagnostics = error.toString()
                             )
                         }
                     }
@@ -460,7 +462,8 @@ class ContentRepository(
                 if (error is kotlinx.coroutines.CancellationException) throw error
                 ProviderStatus(
                     entity.id, entity.name, entity.type, false,
-                    message = error.userMessage("search")
+                    message = error.userMessage("search"),
+                    diagnostics = error.toString()
                 ) to emptyList()
             }
         )

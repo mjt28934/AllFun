@@ -28,8 +28,6 @@ class NovelReaderViewModel(
         val chapters: List<EpisodeEntity> = emptyList(),
         val index: Int = 0,
         val chapter: EpisodeEntity? = null,
-        /** Set for imported EPUBs, whose chapters live in an extracted book directory. */
-        val chapterUri: String? = null,
         /** Set for network sources; rendered directly instead of a file URL. */
         val chapterHtml: String? = null,
         val fontSize: Int = 100,
@@ -89,17 +87,12 @@ class NovelReaderViewModel(
 
     fun openChapter(index: Int, restore: Float = 0f) {
         val chapter = _state.value.chapters.getOrNull(index) ?: return
-        val href = chapter.url ?: run {
-            _state.update { it.copy(error = UserError("This chapter has no file. Re-import the book.", null)) }
-            return
-        }
         pendingRestore = restore
         lastFraction = restore
         _state.update {
             it.copy(
                 index = index,
                 chapter = chapter,
-                chapterUri = null,
                 chapterHtml = null,
                 loading = true,
                 error = null
@@ -113,13 +106,23 @@ class NovelReaderViewModel(
             try {
                 val item = container.library.media(mediaId)
                     ?: error("That book is no longer in your library")
+                // Downloads are keyed by the local episode row.
+                val downloaded = container.downloads.localChapter(mediaId, chapter.id)
+                if (!downloaded.isNullOrBlank()) {
+                    val looksLikeMarkup = downloaded.trimStart().startsWith("<")
+                    _state.update {
+                        it.copy(
+                            chapterHtml = htmlDocument(chapter.title, downloaded, looksLikeMarkup),
+                            loading = false
+                        )
+                    }
+                    return@launch
+                }
                 val source = container.sourceHub.sourceFor(item.sourceId)
                 if (source != null && source.chaptersAreRemote) {
-                    val body = source.chapterBody(item.sourceKey, chapter.sourceUnitId ?: chapter.id)
-                    val text = body ?: source.chapterText(
-                        item.sourceKey,
-                        chapter.sourceUnitId ?: chapter.id
-                    )
+                    val unitId = chapter.sourceUnitId ?: chapter.id
+                    val body = source.chapterBody(item.sourceKey, unitId)
+                    val text = body ?: source.chapterText(item.sourceKey, unitId)
                     if (text.isNullOrBlank()) {
                         error("This chapter returned no text. The site may need a browser.")
                     }
@@ -130,9 +133,10 @@ class NovelReaderViewModel(
                         )
                     }
                 } else {
-                    // Imported EPUB: the importer already extracted this chapter.
-                    val uri = container.bookImporter.chapterUri(mediaId, href)
-                    _state.update { it.copy(chapterUri = uri, loading = false) }
+                    error(
+                        "This book's provider is not installed. Reinstall the extension " +
+                            "to read this title again."
+                    )
                 }
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t

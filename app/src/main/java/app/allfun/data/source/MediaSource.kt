@@ -59,6 +59,17 @@ abstract class MediaSource {
     /** Playable stream for one movie/episode. */
     open suspend fun stream(key: String, unitId: String, payload: String?): StreamInfo? = null
 
+    /**
+     * True when AllFun can really save this source's content to disk: manga pages, remote
+     * novel chapters, or direct HTTP video files. A source that only exposes browser pages
+     * or torrents leaves this false, and the UI hides Download instead of failing later.
+     */
+    open val supportsDownloads: Boolean get() = when (type) {
+        SourceType.MANGA -> true
+        SourceType.NOVEL -> chaptersAreRemote
+        SourceType.VIDEO -> true
+    }
+
     /** Human-readable list of what this source can do, used by source management UI. */
     fun capabilityLabels(): List<String> = buildList {
         if (supportsCatalogs && catalogs().isNotEmpty()) add("Browse")
@@ -68,6 +79,7 @@ abstract class MediaSource {
             SourceType.NOVEL -> add("Chapter text")
             SourceType.VIDEO -> add("Streams")
         }
+        if (supportsDownloads) add("Offline")
     }
 }
 

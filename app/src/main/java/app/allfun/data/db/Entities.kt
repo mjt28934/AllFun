@@ -112,3 +112,45 @@ data class SourceEntity(
     val version: String? = null,
     val addedAt: Long = System.currentTimeMillis()
 )
+
+/** Real lifecycle of an offline download; nothing is simulated. */
+enum class DownloadStatus {
+    QUEUED,
+    WAITING,
+    RUNNING,
+    COMPLETED,
+    FAILED,
+    CANCELED;
+
+    val isActive: Boolean get() = this == QUEUED || this == WAITING || this == RUNNING
+}
+
+/**
+ * One downloaded chapter, episode or film. The row is keyed by media+unit so the same
+ * chapter can never be queued twice, and a completed row is what makes an item appear
+ * in the Library's Downloaded filter and be readable offline.
+ */
+@Entity(
+    tableName = "downloads",
+    indices = [Index("mediaId"), Index("status")]
+)
+data class DownloadEntity(
+    @PrimaryKey val key: String,
+    val mediaId: String,
+    val unitId: String,
+    val kind: MediaKind,
+    val mediaTitle: String,
+    val unitTitle: String,
+    val status: DownloadStatus = DownloadStatus.QUEUED,
+    /** 0..100, or -1 while the server does not report a length. */
+    val progress: Int = 0,
+    val downloadedBytes: Long = 0,
+    val totalBytes: Long = 0,
+    /** Directory for chapter pages, file path for a single-file download. */
+    val path: String? = null,
+    val error: String? = null,
+    /** Real reason a queued row is not running, e.g. waiting for Wi-Fi. */
+    val note: String? = null,
+    val createdAt: Long = System.currentTimeMillis(),
+    val completedAt: Long? = null
+)

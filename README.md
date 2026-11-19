@@ -8,28 +8,32 @@ watching" as the unit, not "what app you opened".
 
 ```
 Home      ─┬─ Continue watching / Continue reading (mixed kinds)
-           ├─ Recently added
+           ├─ Favorites · Recently opened · Recently added
            ├─ Movies & Shows · Books & Novels · Manhwa & Manga cards
            └─ search across every category at once
-Movies    ─ films, series, catalogues and filters (format, genre, year, source)
-Books     ─ novels, light novels, ebooks, authors, reading history
+Movies    ─ films, series, catalogues, compact toolbar, filters in a sheet
+Books     ─ novels, light novels, authors, reading history
 Manga     ─ manga, manhwa, manhua, comics, chapters, reading history
-Library   ─ All · Manga · Novels · Movies & TV · Books · Local media
-Sources   ─ add/manage sources and local imports (reached from Settings and
-            empty states; never a content destination of its own)
-Detail    ─ metadata, source selector, favourite, chapter/episode list, resume
-Reader    ─ vertical / paged / right-to-left manga with zoom;
-            EPUB or network novel reader with live typography
-Player    ─ Media3, resume, subtitles, next episode, readable errors
-Extensions─ Installed · Discover · Updates · Repositories · Disabled
+Library   ─ All · Movies · Books · Manga
+            Everything · Downloaded · Favorites · Recently Added · Recently Opened
 Settings  ─ Appearance · Accessibility · Reading · Playback · Extensions & sources ·
-            Downloads · Storage · Network · App Updates · Backup · About
+            Downloads (queue and storage) · Storage · Network · App Updates · Backup ·
+            About
+Detail    ─ metadata, source selector, favourite, chapter/episode list, resume,
+            per-chapter download controls
+Reader    ─ vertical / paged / right-to-left manga with zoom;
+            offline pages, or a network novel reader with live typography
+Player    ─ Media3, resume, subtitles, next episode, offline files, readable errors
+Extensions─ full screen marketplace opened from a category toolbar:
+            Discover · Installed · Updates · Repositories
+Sources   ─ add/manage remote providers (reached from Settings and empty states)
 ```
 
-There are exactly three content destinations. Extensions, add-ons and providers feed
-them in the background: a Stremio addon can only contribute to Movies & Shows, a novel
-plugin to Books & Novels, a Komikku extension to Manhwa & Manga. None of them ever
-becomes its own tab.
+There are exactly **six** destinations. Extensions, add-ons and providers feed the three
+content categories in the background: a Stremio addon can only contribute to Movies &
+Shows, a novel plugin to Books & Novels, a Komikku extension to Manhwa & Manga. None of
+them ever becomes its own tab, and the marketplace opens scoped to the category whose
+toolbar button was pressed.
 
 ## Install
 
@@ -59,43 +63,46 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Check | Result |
 |---|---|
 | `:app:assembleDebug` | **BUILD SUCCESSFUL** |
-| `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking, 11,071,921 bytes |
+| `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking, 11,104,689 bytes |
 | `:app:testDebugUnitTest` | **30 tests pass** — semantic version comparison, release JSON parsing, checksum-file parsing, category/dedupe/format mapping, category sorting, Tachiyomi page conversion |
-| APK metadata | `app.allfun`, `versionCode 600`, `versionName 0.6.0`, v2 signature, `CN=AllFun` |
-| Runtime, Android 15 / API 35 (emulator) | Signed 0.6.0 APK installed over 0.5.0 (same signer, library and settings kept) → five destinations, three category cards with live counts, real Weeb Central Popular shelf and category search ("solo" → 15 results), streamed filter facets, recent searches and reading progress that survive a restart, animated bottom navigation, extension manager (Installed · Discover · Updates · Repositories) with Updates reporting "Everything is up to date", settings; empty and error states; no crash |
-| Unified content layer | Three categories are built from every enabled source of the matching kind: staged arrival, round-robin shelves, title dedupe with provider merging, per-request timeouts and a feed budget, provider status reporting, pagination, global search grouped by category, and a remembered preferred source per title |
+| APK metadata | `app.allfun`, `versionCode 700`, `versionName 0.7.0`, v2 signature, `CN=AllFun` |
+| Runtime, Android 15 / API 35 (emulator) | Signed 0.7.0 APK installed over 0.6.0 (same signer, library and extensions kept) → six destinations, compact category toolbars with the extension button top-right, category-scoped marketplace with focused search, real Weeb Central downloads, offline reading, Settings → Downloads, Library download badges and sizes; empty and error states; no crash |
+| Unified content layer | Three categories are built from every enabled source of the matching kind: staged arrival, round-robin shelves, title dedupe with provider merging, per-request timeouts and a feed budget, provider state reporting with Retry and diagnostics, pagination, global search grouped by category, and a remembered preferred source per title |
 | Manga category, end to end | Weeb Central (real Keiyoushi extension installed from Discover) → Popular shelf with real covers → One Piece detail (1198 chapters, author, genres) → reader loads real page images → progress on the shelf |
+| Offline downloads | Manga chapters saved as page folders + `pages.json`, novels as saved chapter HTML, direct HTTP video streamed with progress; chapter 1055 (11,087,549 bytes) and chapter 24 (4,968,054 bytes) completed, opened with Wi-Fi and mobile data off, and survived a force-stop; HLS/DASH manifests are refused honestly |
+| Download manager | Settings → Downloads: active, queued, completed and failed sections, real progress, pause/resume/retry/cancel/remove, clear finished, Wi-Fi-only, concurrency limit, confirmations |
+| Library | All / Movies / Books / Manga with Everything / Downloaded / Favorites / Recently Added / Recently Opened scopes, download count, size and completion date on the cards, remove-download with confirmation |
+| Extension marketplace | Real Keiyoushi and LNReader indexes; category scopes All / Movies / Books / Manga; Discover / Installed / Updates / Repositories; install, update, update all, enable, disable, uninstall, permissions |
+| Source states | Working, Loading, No content, Temporarily unavailable, Auth required, Invalid response, Disabled and Unsupported, each with Retry and a separate technical-details disclosure; one failing provider does not block the rest |
 | Cross-source search | "Lantern" returns 3 grouped results across Movies & Shows, Books & Novels and Manhwa & Manga with provider chips and source filters; "one piece" returns real manga results from the installed extension |
-| Source selector and confirmation | Only sources that returned an exact title match are marked available; a preferred source is remembered per title in DataStore and never auto-selected while unconfirmed |
-| Extension ecosystem | Real Keiyoushi and LNReader indexes; Installed / Updates / Discover / Repositories / Disabled; install, update, update all, enable, disable, uninstall; repository add / validate / remove / retry |
-| Komikku/Mihon extension, end to end | Real APK installed from storage → catalogue → details → chapters → page images in the reader → progress on the shelf |
-| LNReader plugin, end to end | Real plugin file installed → catalogue → details → chapter text rendered in the reader |
+| Extension ecosystem, end to end | Real APK installed from storage → catalogue → details → chapters → page images in the reader → progress on the shelf; real LNReader plugin → catalogue → details → chapter text |
 | Stremio addon, end to end | Manifest → catalogue → details → direct HTTP stream with proxy headers → sidecar subtitles → season/episode mapping |
 | Backup and restore | 371 KB JSON export → restore reported 5 titles, 927 chapters/episodes, 5 progress entries and settings; a non-backup file is refused with a readable message |
-| Settings maintenance | Storage stats, clear cached files (5.5 MB freed without touching the library), repository connection test (1,710 extensions in 1,194 ms) |
+| Settings maintenance | Storage stats, clear cached files without touching the library, repository connection test (1,710 extensions in 1,194 ms) |
 | Release (R8) runtime | All paths above re-verified on a signed release build |
-| In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` confirmation → 0.5.0 (code 500) installed over a signed 0.4.0 build with the restored library and progress intact afterwards (see [In-app updates](#in-app-updates)) |
-| Published release | [v0.6.0](https://github.com/mjt28934/AllFun/releases/tag/v0.6.0) — `AllFun-0.6.0-release.apk`, 11,071,917 bytes, SHA-256 `be6b862b0e13d2be7246cec173ebd1e473dcfa36815de216874d7bf1b05a583c`; downloaded back, checksum and signer re-checked, then installed over the local build with the library and reading progress intact |
-| Version | `0.6.0` (versionCode 600) |
+| In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` confirmation |
+| Published release | [v0.7.0](https://github.com/mjt28934/AllFun/releases/tag/v0.7.0) — `AllFun-0.7.0-release.apk`, checksum published next to it; downloaded back, checksum and signer re-checked before announcing |
+| Version | `0.7.0` (versionCode 700) |
 | Min SDK | 26 (Android 8.0) |
 | Target SDK | 35 |
 
-There is no bundled sample content: a fresh install has an empty shelf and only the two
-local sources (**Imported books**, **Local videos**) until you add a source or a file.
-Nothing is seeded, pre-filled or recommended behind your back. Builds up to 0.2 shipped a
-demo manga and a demo EPUB; 0.3 removed both from the APK, and an upgrade deletes the
-library rows those builds had seeded.
+There is no bundled sample content: a fresh install has an empty shelf and no sources at
+all until you add a provider or install an extension. Nothing is seeded, pre-filled or
+recommended behind your back. Builds up to 0.2 shipped a demo manga and a demo EPUB; 0.3
+removed both from the APK, an upgrade deletes the library rows those builds had seeded, and
+0.7.0 removes the local EPUB/video importers entirely (startup cleanup drops any rows they
+left behind).
 
 Screenshots from the emulator run live in `docs/screenshots/`:
 
 | | |
 |---|---|
 | `home.png`, `library.png` | empty first run — no bundled demo content |
-| `category-books.png` | Books & Novels: reading history from an imported EPUB |
+| `category-books.png` | Books & Novels: reading history from a real plugin |
 | `search-global.png` | "Lantern" grouped across Movies & Shows, Books & Novels and Manhwa & Manga |
 | `search-manga.png` | Manga search results with real covers and provider labels |
 | `reader-manga.png` | a real extension's chapter pages in the manga reader |
-| `browse.png` | the Sources screen: add or manage sources and local imports |
+| `browse.png` | the Sources screen: add or manage remote providers |
 | `browse-stremio.png`, `detail-stremio.png` | a Stremio addon's catalogue and a movie |
 | `detail-series-stremio.png` | season/episode grouping from addon metadata |
 | `extensions-installed.png` | installed extensions with version, developer and status |
@@ -113,8 +120,6 @@ same small contract, and the UI never knows which kind it is talking to.
 
 | Source | Type | What it does |
 |---|---|---|
-| **Imported books** | novel | EPUB picker → unpacks into app storage → chapters become rows in the shelf. |
-| **Local videos** | video | Folder picker (SAF) → movies, or subfolders with 2+ videos become a series. Persisted URI permission, so playback survives reboots. |
 | **Jellyfin** | video | Username/password login, catalogue, show episodes, direct-play stream with token header. |
 | **Stremio addon** | video | Manifest/catalog/meta/stream/subtitles protocol. Catalog `extra` capabilities are honoured (search only where declared, `skip` as an item offset), `proxyHeaders` become player headers, inline or resource subtitles become a track. Torrent-only results are reported honestly, not faked. |
 | **Manga extension (.apk)** | manga | A real Tachiyomi/Mihon/Komikku extension APK. Its `CatalogueSource` is driven through AllFun's own `eu.kanade.tachiyomi.*` host classes: browse, search, details, chapter list and page images. |
@@ -145,19 +150,24 @@ because debug does not shrink.
 
 ## Extensions in the app
 
-`Extensions` is one screen for every installable kind, with five tabs:
+The marketplace is one screen for every installable kind. It is opened from the extension
+button at the top right of Movies & Shows, Books & Novels or Manhwa & Manga — already scoped
+to that category, with the search field focused — or from Settings. There are four sections:
 
+- **Discover** — the repository catalogue for the current scope (All, Movies, Books, Manga),
+  searchable, with All / Available / Installed / Updates / Compatible filters. The Install
+  button becomes Update when that key is already installed.
 - **Installed** — real installed files with name, icon, description, kind, version,
   developer, source count, install/update status and repository. Tapping one opens details:
   permissions declared by the APK, compatibility, and enable/disable or uninstall.
 - **Updates** — installed extensions whose repository version is newer. Each row updates on
   its own, or **Update all** runs them sequentially and reports each result.
-- **Discover** — the repository catalogue, searchable, filtered by All / Manga / Novels.
-  The Install button becomes Update when that key is already installed.
 - **Repositories** — the built-in Keiyoushi (manga) and LNReader (novel) indexes plus any
   the user adds. Each row shows the entry count, last error and a Retry action; repositories
   can be removed. Adding a URL validates it and parses the index before saving.
-- **Disabled** — installed extensions with all their sources turned off, with Enable.
+
+The Sources screen (Settings → Extensions & sources → Sources) still lists every connected
+provider in one place, including Jellyfin and Stremio addons, and never becomes a tab.
 
 The two built-in indexes are the real public ones:
 
@@ -181,14 +191,31 @@ busy label, and failures leave the previous installation untouched.
 - **Manga reader** — vertical scroll or paged mode, left-to-right or right-to-left paging,
   fit width / fit height / whole page, pinch-to-zoom and pan, a page slider, and a searchable
   chapter picker. Errors show a readable sentence and a separate technical-details disclosure.
-- **Novel reader** — EPUB and network chapters share one WebView. Font size, line spacing
-  and Dark/Sepia/Light themes apply live without reloading the chapter, and the chapter
-  picker is searchable.
+- **Novel reader** — downloaded chapters and network chapters share one WebView. Font size,
+  line spacing and Dark/Sepia/Light themes apply live without reloading the chapter, and the
+  chapter picker is searchable.
 - **Player** — Media3/ExoPlayer, resume where you stopped, live subtitle on/off, next
-  episode, periodic progress saves and guidance buttons on failure. A source error and a
-  playback error are different states: each has a readable message, Retry, and the raw
-  `ERROR_CODE_…` behind **Technical details**. While the error column is shown, the player's
-  own controller and buffering spinner are hidden so nothing is drawn over it.
+  episode, periodic progress saves and guidance buttons on failure. A downloaded direct-HTTP
+  file plays from app storage without a network. A source error and a playback error are
+  different states: each has a readable message, Retry, and the raw `ERROR_CODE_…` behind
+  **Technical details**. While the error column is shown, the player's own controller and
+  buffering spinner are hidden so nothing is drawn over it.
+
+## Downloads
+
+Downloads are real files owned by AllFun, not bookmarks:
+
+- **Manga** — every page is saved as a numbered image plus a `pages.json` manifest in
+  `files/downloads/<title>/<chapter>/`.
+- **Novels** — the chapter HTML is saved and rendered by the same sanitiser as the live text.
+- **Video** — only direct HTTP files are streamed to disk with byte progress. HLS and DASH
+  manifests (`.m3u8`, `.mpd`) are refused with a plain explanation instead of a fake entry.
+- **Queue** — `Settings → Downloads` shows active, queued, completed and failed items with
+  real progress; pause, resume, retry, cancel and remove, plus clear finished, Wi-Fi-only and
+  a concurrency limit. Removal asks before deleting files.
+- **Library** — a completed download appears immediately under **Downloaded** with its size,
+  completion date and a badge on the card. Rows and files survive a restart; missing files
+  are reported rather than silently listed as available.
 
 ## Settings, backup and storage
 
@@ -200,8 +227,8 @@ Settings has eleven sections, and every control writes a real preference that th
 | Accessibility | Reduce motion (all non-essential animation), plus a statement of the app's font-scaling and touch-target behaviour |
 | Reading | Manga layout, fit, page order, novel text size, line spacing and theme |
 | Playback | Resume position, subtitle tracks |
-| Extensions & sources | Links to the Sources and Extensions screens and a summary of how providers feed the categories |
-| Downloads | An honest notice: offline downloads are not implemented |
+| Extensions & sources | Links to the Sources and marketplace screens and a summary of how providers feed the categories |
+| Downloads | The download queue: progress, pause/resume/retry/cancel/remove, Wi-Fi-only, concurrency, storage use |
 | Storage | Cache/extension/database sizes, clear cached files, refresh |
 | Network | Timeouts and a real repository connection test |
 | App Updates | GitHub Releases check, download and install |
@@ -406,23 +433,25 @@ Versions are semantic, and the tag is the single source of truth:
 | `v0.5.0` | `0.5.0` | `500` |
 | `v0.5.1` | `0.5.1` | `501` |
 | `v0.6.0` | `0.6.0` | `600` |
+| `v0.7.0` | `0.7.0` | `700` |
 | `v1.0.0` | `1.0.0` | `10000` |
 
 `versionCode = major * 10000 + minor * 100 + patch`. The release workflow computes both
 from the tag and passes `-PappVersionName` / `-PappVersionCode` to Gradle, so the APK can
-never disagree with its release. Local builds fall back to `0.6.0` / `600`.
+never disagree with its release. Local builds fall back to `0.7.0` / `700`.
 
 The first published build was numbered 1.0.0; it has been renumbered and re-published as
-0.4.0, the three-category redesign is 0.5.0, and the UI/motion redesign is 0.6.0. The
-numbering is now monotonic again (0.4.0 → 0.5.0 → 0.6.0 → …), so installs upgrade in place.
+0.4.0, the three-category redesign is 0.5.0, the UI/motion redesign is 0.6.0, and the
+navigation, library and download rebuild is 0.7.0. The
+numbering is now monotonic again (0.4.0 → 0.5.0 → 0.6.0 → 0.7.0 → …), so installs upgrade in place.
 
 ### Release process
 
 Publishing a version takes one push of a tag; no APK is uploaded by hand.
 
 ```bash
-git tag -a v0.6.0 -m "AllFun 0.6.0"
-git push origin v0.6.0
+git tag -a v0.7.0 -m "AllFun 0.7.0"
+git push origin v0.7.0
 ```
 
 What `.github/workflows/release.yml` does with that push:
@@ -446,7 +475,7 @@ endpoint keeps pointing at the previous version. Fix the cause, move the tag (or
 and tag the fixed commit), and push again; the workflow replaces its own draft. A version
 that has already been published is never overwritten: bump the patch number instead.
 
-Optional curated notes live in `docs/releases/<tag>.md` (`docs/releases/v0.6.0.md` is
+Optional curated notes live in `docs/releases/<tag>.md` (`docs/releases/v0.7.0.md` is
 this release). If that file has no install heading, the workflow appends a short install
 block with the asset names and the in-app path.
 

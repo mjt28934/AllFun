@@ -7,6 +7,7 @@ import app.allfun.data.content.ContentSourceRef
 import app.allfun.data.content.SourceOption
 import app.allfun.data.content.category
 import app.allfun.data.db.EpisodeEntity
+import app.allfun.data.db.DownloadEntity
 import app.allfun.data.db.MediaEntity
 import app.allfun.data.db.ProgressEntity
 import app.allfun.data.net.userMessage
@@ -58,6 +59,18 @@ class DetailViewModel(
         initialValue = null as ProgressEntity?
     )
 
+    /** Real offline rows for this title; empty when nothing was downloaded. */
+    val downloads = container.downloads.forMedia(mediaId).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = emptyList<DownloadEntity>()
+    )
+
+    private val _canDownload = MutableStateFlow(false)
+
+    /** True only when the installed provider exposes data AllFun can save. */
+    val canDownload: StateFlow<Boolean> = _canDownload.asStateFlow()
+
     private val _sources = MutableStateFlow(SourceState())
     val sources: StateFlow<SourceState> = _sources.asStateFlow()
 
@@ -72,6 +85,8 @@ class DetailViewModel(
     init {
         viewModelScope.launch {
             container.library.touchOpened(mediaId)
+            _canDownload.value = container.library.media(mediaId)
+                ?.let { container.sourceHub.sourceFor(it.sourceId)?.supportsDownloads } == true
             refresh()
             findSources()
         }
@@ -204,6 +219,46 @@ class DetailViewModel(
 
     fun toggleFavorite() {
         viewModelScope.launch { container.library.toggleFavorite(mediaId) }
+    }
+
+    /**
+     * Queues one chapter/episode, or every unit of the title when [unitId] is null. The
+     * wording comes from what really happened: rows already queued/completed are skipped.
+     */
+    fun download(unitId: String? = null) {
+        viewModelScope.launch {
+            val ids = if (unitId == null) episodes.value.map { it.id } else listOf(unitId)
+            if (ids.isEmpty()) {
+                _messages.send("This provider has not listed any chapters or episodes yet.")
+                return@launch
+            }
+            val queued = container.downloads.enqueue(mediaId, ids)
+            _messages.send(
+                when {
+                    queued == 0 -> "Everything selected is already downloaded or queued."
+                    queued == 1 -> "Added 1 download to the queue."
+                    else -> "Added $queued downloads to the queue."
+                }
+            )
+        }
+    }
+
+    fun cancelDownload(key: String) {
+        viewModelScope.launch {
+            container.downloads.cancel(key)
+            _messages.send("Download cancelled.")
+        }
+    }
+
+    fun removeDownload(key: String) {
+        viewModelScope.launch {
+            container.downloads.remove(key)
+            _messages.send("Downloaded files removed.")
+        }
+    }
+
+    fun retryDownload(key: String) {
+        viewModelScope.launch { container.downloads.retry(key) }
     }
 
     fun clearSwitch() {

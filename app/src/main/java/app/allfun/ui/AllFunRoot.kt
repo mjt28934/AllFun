@@ -35,11 +35,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.CollectionsBookmark
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.CollectionsBookmark
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Settings
@@ -88,7 +90,7 @@ import app.allfun.ui.theme.AllFunTheme
 import app.allfun.ui.theme.LocalReduceMotion
 import app.allfun.ui.theme.Motion
 import app.allfun.ui.update.UpdatesScreen
-
+import app.allfun.ui.downloads.DownloadsScreen
 object Routes {
     const val HOME = "home"
     const val MOVIES = "movies"
@@ -96,9 +98,13 @@ object Routes {
     const val MANGA = "manga-library"
     const val LIBRARY = "library"
     const val SETTINGS = "settings"
-    const val EXTENSIONS = "extensions"
+    const val EXTENSIONS = "extensions?category={category}"
     const val UPDATES = "updates"
     const val SOURCES = "sources"
+    const val DOWNLOADS = "downloads"
+
+    fun extensions(category: ContentCategory? = null) =
+        "extensions" + (category?.let { "?category=${it.name}" } ?: "")
 
     const val SEARCH = "search?category={category}"
     fun search(category: ContentCategory? = null) =
@@ -128,7 +134,7 @@ private data class Tab(
 )
 
 /**
- * Bottom navigation is exactly the three entertainment categories plus Home and
+ * Bottom navigation is exactly the three entertainment categories, Home, the Library and
  * Settings. Extensions, individual providers and repositories never appear here.
  */
 private val tabs = listOf(
@@ -136,6 +142,12 @@ private val tabs = listOf(
     Tab(Routes.MOVIES, "Movies", Icons.Outlined.Movie, Icons.Filled.Movie),
     Tab(Routes.BOOKS, "Books", Icons.AutoMirrored.Outlined.MenuBook, Icons.Filled.MenuBook),
     Tab(Routes.MANGA, "Manga", Icons.Outlined.AutoStories, Icons.Filled.AutoStories),
+    Tab(
+        Routes.LIBRARY,
+        "Library",
+        Icons.Outlined.CollectionsBookmark,
+        Icons.Filled.CollectionsBookmark
+    ),
     Tab(Routes.SETTINGS, "Settings", Icons.Outlined.Settings, Icons.Filled.Settings)
 )
 
@@ -349,7 +361,7 @@ fun AllFunRoot(container: AppContainer) {
                         category = ContentCategory.MOVIES,
                         onOpenMedia = { nav.navigate(Routes.detail(it)) },
                         onOpenLibrary = { nav.navigate(Routes.LIBRARY) },
-                        onManageSources = { nav.navigate(Routes.SOURCES) }
+                        onOpenExtensions = { nav.navigate(Routes.extensions(ContentCategory.MOVIES)) }
                     )
                 }
 
@@ -359,7 +371,7 @@ fun AllFunRoot(container: AppContainer) {
                         category = ContentCategory.BOOKS,
                         onOpenMedia = { nav.navigate(Routes.detail(it)) },
                         onOpenLibrary = { nav.navigate(Routes.LIBRARY) },
-                        onManageSources = { nav.navigate(Routes.SOURCES) }
+                        onOpenExtensions = { nav.navigate(Routes.extensions(ContentCategory.BOOKS)) }
                     )
                 }
 
@@ -369,7 +381,7 @@ fun AllFunRoot(container: AppContainer) {
                         category = ContentCategory.MANGA,
                         onOpenMedia = { nav.navigate(Routes.detail(it)) },
                         onOpenLibrary = { nav.navigate(Routes.LIBRARY) },
-                        onManageSources = { nav.navigate(Routes.SOURCES) }
+                        onOpenExtensions = { nav.navigate(Routes.extensions(ContentCategory.MANGA)) }
                     )
                 }
 
@@ -377,7 +389,7 @@ fun AllFunRoot(container: AppContainer) {
                     LibraryScreen(
                         container = container,
                         onOpenMedia = { nav.navigate(Routes.detail(it)) },
-                        onBrowse = { nav.navigate(Routes.SOURCES) }
+                        onBrowse = { nav.navigate(Routes.extensions()) }
                     )
                 }
 
@@ -406,14 +418,27 @@ fun AllFunRoot(container: AppContainer) {
                     BrowseScreen(
                         container = container,
                         onOpenMedia = { nav.navigate(Routes.detail(it)) },
-                        onManageExtensions = { nav.navigate(Routes.EXTENSIONS) },
+                        onManageExtensions = { nav.navigate(Routes.extensions()) },
                         onBack = { nav.popBackStack() }
                     )
                 }
 
-                composable(Routes.EXTENSIONS) {
+                composable(
+                    route = Routes.EXTENSIONS,
+                    arguments = listOf(
+                        navArgument("category") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        }
+                    )
+                ) { entry ->
                     ExtensionsScreen(
                         container = container,
+                        initialCategory = ContentCategory.fromName(
+                            entry.arguments?.getString("category")
+                        ),
+                        onOpenSources = { nav.navigate(Routes.SOURCES) },
                         onBack = { nav.popBackStack() }
                     )
                 }
@@ -425,12 +450,20 @@ fun AllFunRoot(container: AppContainer) {
                     )
                 }
 
+                composable(Routes.DOWNLOADS) {
+                    DownloadsScreen(
+                        container = container,
+                        onBack = { nav.popBackStack() }
+                    )
+                }
+
                 composable(Routes.SETTINGS) {
                     SettingsScreen(
                         container = container,
-                        onManageExtensions = { nav.navigate(Routes.EXTENSIONS) },
+                        onManageExtensions = { nav.navigate(Routes.extensions()) },
                         onManageSources = { nav.navigate(Routes.SOURCES) },
-                        onOpenUpdates = { nav.navigate(Routes.UPDATES) }
+                        onOpenUpdates = { nav.navigate(Routes.UPDATES) },
+                        onOpenDownloads = { nav.navigate(Routes.DOWNLOADS) }
                     )
                 }
 

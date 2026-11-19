@@ -108,8 +108,16 @@ class KomikkuMediaSource(
             fetchDetails = false,
             fetchChapters = true
         )
+        // Some extensions report chapter_number = -1 and only put the real number in the
+        // title. Sorting those by name alone gives "1009, 101, 1010"; read the number out
+        // of the title so chapters stay in reading order.
+        fun sortNumber(chapter: SChapter): Float {
+            if (chapter.chapter_number >= 0f) return chapter.chapter_number
+            val match = Regex("""(\d+(?:\.\d+)?)""").find(chapter.name)
+            return match?.groupValues?.get(1)?.toFloatOrNull() ?: Float.MAX_VALUE
+        }
         val ordered = update.chapters.sortedWith(
-            compareBy({ it.chapter_number < 0f }, { it.chapter_number }, { it.name })
+            compareBy<SChapter>({ sortNumber(it) }, { it.name.lowercase() })
         )
         return ordered.mapIndexed { index, chapter ->
             UnitStub(

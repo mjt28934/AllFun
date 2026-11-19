@@ -20,7 +20,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -68,6 +70,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -79,6 +83,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.allfun.data.AppContainer
+import app.allfun.data.content.ContentCategory
 import app.allfun.data.extension.RepoExtension
 import app.allfun.data.settings.RepositoryConfig
 import app.allfun.data.settings.RepositoryKind
@@ -99,16 +104,62 @@ private const val TAB_DISABLED = 4
 
 private val tabTitles = listOf("Installed", "Discover", "Updates", "Repositories", "Disabled")
 
+/** Category scope of the marketplace, seeded by the screen the user opened it from. */
+private enum class ExtensionScope(val label: String) {
+    ALL("All Categories"),
+    VIDEO("Movies & TV"),
+    BOOK("Books & Novels"),
+    MANGA("Manhwa & Manga")
+}
+
+private fun ExtensionKind.inScope(scope: ExtensionScope): Boolean = when (scope) {
+    ExtensionScope.ALL -> true
+    ExtensionScope.VIDEO -> this == ExtensionKind.STREMIO || this == ExtensionKind.JELLYFIN
+    ExtensionScope.BOOK -> this == ExtensionKind.NOVEL
+    ExtensionScope.MANGA -> this == ExtensionKind.MANGA
+}
+
+private fun ExtensionScope.matches(kind: RepositoryKind): Boolean = when (this) {
+    ExtensionScope.ALL -> true
+    ExtensionScope.VIDEO -> false
+    ExtensionScope.BOOK -> kind == RepositoryKind.NOVEL
+    ExtensionScope.MANGA -> kind == RepositoryKind.MANGA
+}
+
+private fun ExtensionScope.defaultKindFilter(): String? = when (this) {
+    ExtensionScope.BOOK -> RepositoryKind.NOVEL.name
+    ExtensionScope.MANGA -> RepositoryKind.MANGA.name
+    else -> null
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ExtensionsScreen(container: AppContainer, onBack: () -> Unit) {
+fun ExtensionsScreen(
+    container: AppContainer,
+    initialCategory: ContentCategory? = null,
+    onOpenSources: () -> Unit = {},
+    onBack: () -> Unit
+) {
     val vm = rememberViewModel { ExtensionsViewModel(container) }
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
+    val searchFocus = remember { FocusRequester() }
 
-    var tab by rememberSaveable { mutableIntStateOf(TAB_INSTALLED) }
+    var tab by rememberSaveable {
+        mutableIntStateOf(if (initialCategory == null) TAB_INSTALLED else TAB_DISCOVER)
+    }
     var query by rememberSaveable { mutableStateOf("") }
     var kindFilter by rememberSaveable { mutableStateOf<String?>(null) }
+    var scope by rememberSaveable {
+        mutableStateOf(
+            when (initialCategory) {
+                ContentCategory.MOVIES -> ExtensionScope.VIDEO
+                ContentCategory.BOOKS -> ExtensionScope.BOOK
+                ContentCategory.MANGA -> ExtensionScope.MANGA
+                null -> ExtensionScope.ALL
+            }
+        )
+    }
     var detailInstalledKey by rememberSaveable { mutableStateOf<String?>(null) }
     var detailEntryKey by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingRemoveKey by rememberSaveable { mutableStateOf<String?>(null) }
@@ -120,6 +171,13 @@ fun ExtensionsScreen(container: AppContainer, onBack: () -> Unit) {
     LaunchedEffect(state.repositoryAddTicket) {
         if (state.repositoryAddTicket > 0) showAddRepository = false
     }
+    LaunchedEffect(Unit) {
+        // Opened from a category toolbar: the search is ready to type into immediately.
+        if (initialCategory != null) searchFocus.requestFocus()
+    }
+
+    val scoped = if (scope == ExtensionScope.ALL) state
+    else state.copy(installed = state.installed.filter { it.kind.inScope(scope) })
 
     val detailInstalled = state.installed.firstOrNull { it.key == detailInstalledKey }
     val detailEntry = state.discover.firstOrNull { it.key == detailEntryKey }
@@ -201,9 +259,9 @@ fun ExtensionsScreen(container: AppContainer, onBack: () -> Unit) {
             ) {
                 tabTitles.forEachIndexed { index, title ->
                     val count = when (index) {
-                        TAB_INSTALLED -> state.installed.size
-                        TAB_UPDATES -> state.updates.size
-                        TAB_DISABLED -> state.disabled.size
+                        TAB_INSTALLED -> scoped.installed.size
+                        TAB_UPDATES -> scoped.updates.size
+                        TAB_DISABLED -> scoped.disabled.size
                         else -> 0
                     }
                     Tab(
@@ -219,13 +277,35 @@ fun ExtensionsScreen(container: AppContainer, onBack: () -> Unit) {
                 }
             }
 
+            LazyRow(
+                state = rememberLazyListState(
+                    // Opened from a category: start the strip at that category instead of
+                    // hiding the selected chip off the right edge.
+                    initialFirstVisibleItemIndex = if (initialCategory != null) scope.ordinal else 0
+                ),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(ExtensionScope.entries) { option ->
+                    FilterChip(
+                        selected = scope == option,
+                        onClick = {
+                            scope = option
+                            kindFilter = null
+                        },
+                        label = { Text(option.label) }
+                    )
+                }
+            }
+
             if (tab == TAB_INSTALLED || tab == TAB_DISCOVER || tab == TAB_DISABLED) {
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .focusRequester(searchFocus),
                     placeholder = {
                         Text(
                             when (tab) {
@@ -248,32 +328,14 @@ fun ExtensionsScreen(container: AppContainer, onBack: () -> Unit) {
                 )
             }
             if (tab == TAB_DISCOVER) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = kindFilter == null,
-                        onClick = { kindFilter = null },
-                        label = { Text("All") }
-                    )
-                    FilterChip(
-                        selected = kindFilter == RepositoryKind.MANGA.name,
-                        onClick = { kindFilter = RepositoryKind.MANGA.name },
-                        label = { Text("Manga") }
-                    )
-                    FilterChip(
-                        selected = kindFilter == RepositoryKind.NOVEL.name,
-                        onClick = { kindFilter = RepositoryKind.NOVEL.name },
-                        label = { Text("Novels") }
-                    )
-                }
+                // Category scope already narrows the index; the All/Manga/Novels chips were
+                // redundant here and pushed the list down.
             }
 
             Box(Modifier.weight(1f)) {
                 when (tab) {
                     TAB_INSTALLED -> InstalledTab(
-                        state = state,
+                        state = scoped,
                         query = query,
                         onOpen = { detailInstalledKey = it.key },
                         onToggle = { item, enabled -> vm.setEnabled(item, enabled) },
@@ -281,7 +343,7 @@ fun ExtensionsScreen(container: AppContainer, onBack: () -> Unit) {
                     )
 
                     TAB_UPDATES -> UpdatesTab(
-                        state = state,
+                        state = scoped,
                         onUpdate = { item -> item.update?.let(vm::install) },
                         onUpdateAll = vm::installAllUpdates,
                         onCheck = vm::refresh,
@@ -292,11 +354,13 @@ fun ExtensionsScreen(container: AppContainer, onBack: () -> Unit) {
                     TAB_DISCOVER -> DiscoverTab(
                         state = state,
                         query = query,
-                        kindFilter = kindFilter,
+                        kindFilter = kindFilter ?: scope.defaultKindFilter(),
+                        scope = scope,
                         onRetryRepository = vm::retryRepository,
                         onOpen = { detailEntryKey = it.key },
                         onInstall = vm::install,
-                        onManageRepositories = { tab = TAB_REPOSITORIES }
+                        onManageRepositories = { tab = TAB_REPOSITORIES },
+                        onOpenSources = onOpenSources
                     )
 
                     TAB_REPOSITORIES -> RepositoriesTab(
@@ -310,7 +374,7 @@ fun ExtensionsScreen(container: AppContainer, onBack: () -> Unit) {
                     )
 
                     TAB_DISABLED -> DisabledTab(
-                        state = state,
+                        state = scoped,
                         query = query,
                         onOpen = { detailInstalledKey = it.key },
                         onEnable = { vm.setEnabled(it, true) },
@@ -568,17 +632,20 @@ private fun DiscoverTab(
     state: ExtensionsViewModel.UiState,
     query: String,
     kindFilter: String?,
+    scope: ExtensionScope,
     onRetryRepository: (RepositoryConfig) -> Unit,
     onOpen: (RepoExtension) -> Unit,
     onInstall: (RepoExtension) -> Unit,
-    onManageRepositories: () -> Unit
+    onManageRepositories: () -> Unit,
+    onOpenSources: () -> Unit
 ) {
     val filterKind = kindFilter?.let { name ->
         RepositoryKind.entries.firstOrNull { it.name == name }
     }
-    val visible = remember(state.discover, query, filterKind) {
+    val visible = remember(state.discover, query, filterKind, scope) {
         state.discover.filter { entry ->
-            (filterKind == null || entry.kind == filterKind) &&
+            scope.matches(entry.kind) &&
+                (filterKind == null || entry.kind == filterKind) &&
                 (
                     query.isBlank() ||
                         entry.name.contains(query, ignoreCase = true) ||
@@ -589,6 +656,21 @@ private fun DiscoverTab(
         }.sortedBy { it.name.lowercase() }
     }
     val failed = state.repos.filter { it.error != null }
+
+    if (scope == ExtensionScope.VIDEO) {
+        // Repository indexes carry manga and novel extensions only. Video sources are
+        // add-ons (Stremio) or servers (Jellyfin), so this is the honest path for them.
+        EmptyState(
+            icon = Icons.Outlined.Extension,
+            title = "Movies & TV sources are add-ons",
+            message = "AllFun reads video from Stremio add-ons and Jellyfin servers. Add one " +
+                "with its manifest URL or server address, and its films and episodes appear " +
+                "in Movies & TV.",
+            actionLabel = "Add a video source",
+            onAction = onOpenSources
+        )
+        return
+    }
 
     if (visible.isEmpty() && state.repos.any { it.loading }) {
         LoadingState("Reading repository indexes")

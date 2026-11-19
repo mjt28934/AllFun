@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material3.Button
@@ -188,7 +189,10 @@ fun MediaCard(
     width: Int = 136,
     fillWidth: Boolean = false,
     metaOverride: String? = null,
-    showType: Boolean = true
+    showType: Boolean = true,
+    downloadLabel: String? = null,
+    /** Extra honest line under the author, e.g. download size and date. */
+    caption: String? = null
 ) {
     val interaction = remember { MutableInteractionSource() }
     val meta = metaOverride ?: media.author
@@ -268,6 +272,21 @@ fun MediaCard(
                         .size(15.dp)
                 )
             }
+            if (downloadLabel != null) {
+                Text(
+                    text = downloadLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 8.dp, end = 8.dp, bottom = 11.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.Black.copy(alpha = 0.66f))
+                        .padding(horizontal = 7.dp, vertical = 3.dp)
+                )
+            }
             if (progress != null && progress > 0f) {
                 Box(
                     modifier = Modifier
@@ -308,6 +327,16 @@ fun MediaCard(
                 style = MaterialTheme.typography.labelSmall,
                 color = Cyan,
                 maxLines = 1
+            )
+        }
+        if (!caption.isNullOrBlank()) {
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = caption,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -378,7 +407,9 @@ fun MediaListRow(
     progress: Float?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    onToggleFavorite: (() -> Unit)? = null
+    onToggleFavorite: (() -> Unit)? = null,
+    downloadLabel: String? = null,
+    onRemoveDownload: (() -> Unit)? = null
 ) {
     val interaction = remember { MutableInteractionSource() }
     val reduceMotion = LocalReduceMotion.current
@@ -457,6 +488,16 @@ fun MediaListRow(
                     color = Cyan
                 )
             }
+            if (downloadLabel != null) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = downloadLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
         if (onToggleFavorite != null) {
             IconButton(onClick = onToggleFavorite) {
@@ -469,6 +510,15 @@ fun MediaListRow(
                         "Add ${media.title} to favorites"
                     },
                     tint = favoriteColor
+                )
+            }
+        }
+        if (onRemoveDownload != null) {
+            IconButton(onClick = onRemoveDownload) {
+                Icon(
+                    Icons.Outlined.DeleteOutline,
+                    contentDescription = "Remove downloaded files for ${media.title}",
+                    tint = MaterialTheme.colorScheme.error
                 )
             }
         }

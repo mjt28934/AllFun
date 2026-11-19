@@ -84,11 +84,21 @@ class PlayerViewModel(
         }
         viewModelScope.launch {
             try {
+                val unitId = episode.sourceUnitId ?: episode.id
+                // A downloaded film or episode plays from the app's own storage first.
+                // Downloads are keyed by the local episode row.
+                val localFile = container.downloads.localStream(mediaId, episode.id)
+                if (localFile != null) {
+                    _state.update {
+                        it.copy(stream = StreamInfo(url = localFile), loading = false)
+                    }
+                    return@launch
+                }
                 val source = container.sourceHub.sourceFor(item.sourceId)
                     ?: error("That source is no longer available")
                 val stream = source.stream(
                     item.sourceKey,
-                    episode.sourceUnitId ?: episode.id,
+                    unitId,
                     episode.payload
                 ) ?: error(
                     "This source returned no playable stream. Torrent-only addons are not supported."

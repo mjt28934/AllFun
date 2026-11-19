@@ -74,6 +74,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -120,7 +122,7 @@ fun CategoryScreen(
     category: ContentCategory,
     onOpenMedia: (String) -> Unit,
     onOpenLibrary: () -> Unit,
-    onManageSources: () -> Unit
+    onOpenExtensions: () -> Unit
 ) {
     val vm = rememberViewModel(key = category.name) { CategoryViewModel(category, container) }
     val state by vm.state.collectAsStateWithLifecycle()
@@ -128,7 +130,9 @@ fun CategoryScreen(
     val libraryRows by vm.libraryRows.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val focus = LocalFocusManager.current
+    val searchFocus = remember { FocusRequester() }
     var statusExpanded by rememberSaveable { mutableStateOf(false) }
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         vm.messages.collect { snackbar.showSnackbar(it) }
@@ -183,81 +187,45 @@ fun CategoryScreen(
                 state = state,
                 sourceCount = state.feed?.sources.orEmpty().size,
                 issueCount = issues.size,
-                onOpenFilters = vm::openFilters,
-                onSort = vm::selectSort,
-                onRefresh = vm::refresh
-            )
-
-            OutlinedTextField(
-                value = state.query,
-                onValueChange = vm::setQuery,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                placeholder = { Text("Search ${category.label.lowercase()}") },
-                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (state.query.isNotEmpty()) {
-                        IconButton(onClick = vm::clearSearch) {
-                            Icon(Icons.Outlined.Close, contentDescription = "Clear search")
-                        }
-                    }
+                searchOpen = searchOpen,
+                onOpenSearch = {
+                    searchOpen = true
                 },
-                singleLine = true,
-                shape = CircleShape,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() })
+                onOpenFilters = vm::openFilters,
+                onRefresh = vm::refresh,
+                onOpenExtensions = onOpenExtensions
             )
 
-            if (state.feed?.sources.orEmpty().size > 1) {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    item {
-                        FilterChip(
-                            selected = state.sourceFilter == null,
-                            onClick = { vm.selectSource(null) },
-                            label = { Text("All sources") }
-                        )
-                    }
-                    items(state.feed?.sources.orEmpty(), key = { it.id }) { source ->
-                        FilterChip(
-                            selected = state.sourceFilter == source.id,
+            if (searchOpen || state.query.isNotEmpty()) {
+                OutlinedTextField(
+                    value = state.query,
+                    onValueChange = vm::setQuery,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .focusRequester(searchFocus),
+                    placeholder = { Text("Search ${category.label.lowercase()}") },
+                    leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                    trailingIcon = {
+                        IconButton(
                             onClick = {
-                                vm.selectSource(
-                                    if (state.sourceFilter == source.id) null else source.id
-                                )
-                            },
-                            label = { Text(source.name, maxLines = 1) }
-                        )
-                    }
-                }
-            }
-
-            if (state.formatOptions.isNotEmpty()) {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    item {
-                        FilterChip(
-                            selected = state.formatFilter == null,
-                            onClick = { vm.selectFormat(null) },
-                            label = { Text("All formats") }
-                        )
-                    }
-                    items(state.formatOptions) { format ->
-                        FilterChip(
-                            selected = state.formatFilter == format,
-                            onClick = {
-                                vm.selectFormat(
-                                    if (state.formatFilter == format) null else format
-                                )
-                            },
-                            label = { Text(format) }
-                        )
-                    }
+                                if (state.query.isEmpty()) {
+                                    searchOpen = false
+                                } else {
+                                    vm.clearSearch()
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Outlined.Close, contentDescription = "Close search")
+                        }
+                    },
+                    singleLine = true,
+                    shape = CircleShape,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() })
+                )
+                LaunchedEffect(searchOpen) {
+                    if (searchOpen) searchFocus.requestFocus()
                 }
             }
 
@@ -301,7 +269,7 @@ fun CategoryScreen(
                         onOpen = vm::open,
                         onRetry = { vm.setQuery(state.query) },
                         onClear = vm::clearSearch,
-                        onManageSources = onManageSources
+                        onManageSources = onOpenExtensions
                     )
 
                     CategoryPhase.LOADING -> LoadingGrid(category)
@@ -312,13 +280,13 @@ fun CategoryScreen(
                         message = "Install a source or add-on and its titles will appear here " +
                             "automatically. Sources never become separate tabs.",
                         actionLabel = "Manage sources",
-                        onAction = onManageSources
+                        onAction = onOpenExtensions
                     )
 
                     CategoryPhase.ERROR -> ErrorState(
                         error = state.error!!,
                         onRetry = vm::refresh,
-                        secondary = "Manage sources" to onManageSources
+                        secondary = "Manage sources" to onOpenExtensions
                     )
 
                     CategoryPhase.BROWSE -> BrowseAllGrid(
@@ -347,7 +315,7 @@ fun CategoryScreen(
                         onOpen = vm::open,
                         onSeeAll = { vm.setBrowseAll(true) },
                         onRetry = vm::refresh,
-                        onManageSources = onManageSources
+                        onManageSources = onOpenExtensions
                     )
                 }
             }
@@ -412,86 +380,53 @@ private fun CategoryHeader(
     state: CategoryViewModel.UiState,
     sourceCount: Int,
     issueCount: Int,
+    searchOpen: Boolean,
+    onOpenSearch: () -> Unit,
     onOpenFilters: () -> Unit,
-    onSort: (CategorySort) -> Unit,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    onOpenExtensions: () -> Unit
 ) {
-    var sortOpen by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 2.dp)
+            .padding(start = 20.dp, end = 4.dp, top = 8.dp, bottom = 2.dp)
     ) {
+        // The category name owns the first row; the marketplace entry sits at its end so
+        // every category screen opens extensions the same way.
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconBadge(icon = category.icon(), tint = category.accent(), size = 44)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = category.label,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = category.tagline,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+            Text(
+                text = category.label,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = onOpenExtensions) {
+                Icon(
+                    Icons.Outlined.Extension,
+                    contentDescription = "Extensions for ${category.label}"
                 )
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            FlowRow(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                StatusPill(
-                    text = when (sourceCount) {
-                        0 -> "No source"
-                        1 -> "1 source"
-                        else -> "$sourceCount sources"
-                    },
-                    tint = if (sourceCount == 0) MaterialTheme.colorScheme.onSurfaceVariant
-                    else MaterialTheme.colorScheme.secondary
+            Text(
+                text = category.tagline,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 4.dp)
+            )
+            IconButton(onClick = onOpenSearch) {
+                Icon(
+                    Icons.Outlined.Search,
+                    contentDescription = "Search ${category.label}",
+                    tint = if (searchOpen) category.accent()
+                    else MaterialTheme.colorScheme.onSurface
                 )
-                if (issueCount > 0) {
-                    StatusPill(
-                        text = if (issueCount == 1) "1 issue" else "$issueCount issues",
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
-                if (state.hasActiveFilters) {
-                    StatusPill(text = "Filtered", tint = category.accent())
-                }
-            }
-            Box {
-                IconButton(onClick = { sortOpen = true }) {
-                    Icon(
-                        Icons.AutoMirrored.Outlined.Sort,
-                        contentDescription = "Sort by ${state.sort.label}"
-                    )
-                }
-                DropdownMenu(expanded = sortOpen, onDismissRequest = { sortOpen = false }) {
-                    CategorySort.entries.forEach { sort ->
-                        DropdownMenuItem(
-                            text = { Text(sort.label) },
-                            onClick = {
-                                onSort(sort)
-                                sortOpen = false
-                            },
-                            leadingIcon = {
-                                if (state.sort == sort) {
-                                    Icon(Icons.Outlined.Check, contentDescription = null)
-                                } else {
-                                    Spacer(Modifier.size(24.dp))
-                                }
-                            }
-                        )
-                    }
-                }
             }
             IconButton(onClick = onOpenFilters) {
                 Box {
@@ -514,6 +449,28 @@ private fun CategoryHeader(
             }
             IconButton(onClick = onRefresh, enabled = !state.refreshing) {
                 Icon(Icons.Outlined.Refresh, contentDescription = "Refresh category")
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            StatusPill(
+                text = when (sourceCount) {
+                    0 -> "No source"
+                    1 -> "1 source"
+                    else -> "$sourceCount sources"
+                },
+                tint = if (sourceCount == 0) MaterialTheme.colorScheme.onSurfaceVariant
+                else MaterialTheme.colorScheme.secondary
+            )
+            Spacer(Modifier.width(6.dp))
+            if (issueCount > 0) {
+                StatusPill(
+                    text = if (issueCount == 1) "1 issue" else "$issueCount issues",
+                    tint = MaterialTheme.colorScheme.error
+                )
+                Spacer(Modifier.width(6.dp))
+            }
+            if (state.hasActiveFilters) {
+                StatusPill(text = "Filtered", tint = category.accent())
             }
         }
     }
@@ -730,7 +687,7 @@ private fun CategorySections(
                 }
                 if (statusExpanded) {
                     Column(Modifier.padding(bottom = 8.dp)) {
-                        unmatched.forEach { ProviderStatusLine(it) }
+                        unmatched.forEach { ProviderStatusLine(it, onRetry) }
                         TextButton(
                             onClick = onManageSources,
                             modifier = Modifier.padding(start = 8.dp)

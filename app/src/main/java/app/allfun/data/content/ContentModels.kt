@@ -22,19 +22,19 @@ enum class ContentCategory(
         label = "Movies & Shows",
         shortLabel = "Movies",
         sourceType = SourceType.VIDEO,
-        tagline = "Films, series and everything your video add-ons provide"
+        tagline = "Films and series from your video add-ons"
     ),
     BOOKS(
         label = "Books & Novels",
         shortLabel = "Books",
         sourceType = SourceType.NOVEL,
-        tagline = "Ebooks, web novels and light novels from every book source"
+        tagline = "Ebooks and web novels from every book source"
     ),
     MANGA(
         label = "Manhwa & Manga",
         shortLabel = "Manga",
         sourceType = SourceType.MANGA,
-        tagline = "Manga, manhwa, manhua and comics from every installed extension"
+        tagline = "Manga, manhwa and comics from installed extensions"
     );
 
     val isVideo: Boolean get() = this == MOVIES
@@ -98,6 +98,18 @@ data class ContentShelf(
 )
 
 /** Truthful state of one installed source for a category or a search. */
+enum class ProviderState(val label: String) {
+    WORKING("Working"),
+    LOADING("Loading"),
+    NO_CONTENT("No content"),
+    TEMPORARILY_UNAVAILABLE("Temporarily unavailable"),
+    AUTH_REQUIRED("Sign-in required"),
+    INVALID_RESPONSE("Invalid response"),
+    DISABLED("Disabled"),
+    UNSUPPORTED("Unsupported")
+}
+
+/** Truthful state of one installed source for a category or a search. */
 data class ProviderStatus(
     val sourceId: String,
     val sourceName: String,
@@ -105,8 +117,32 @@ data class ProviderStatus(
     val available: Boolean,
     val itemCount: Int = 0,
     /** Human-readable reason when [available] is false or a request failed. */
-    val message: String? = null
-)
+    val message: String? = null,
+    /** Original exception text, shown only when the user asks for details. */
+    val diagnostics: String? = null
+) {
+    val state: ProviderState get() = when {
+        available && itemCount > 0 -> ProviderState.WORKING
+        available -> ProviderState.NO_CONTENT
+        message == null -> ProviderState.DISABLED
+        message.contains("sign in", true) ||
+            message.contains("sign-in", true) ||
+            message.contains("auth", true) ||
+            message.contains("token", true) ||
+            message.contains("log in", true) -> ProviderState.AUTH_REQUIRED
+        message.contains("web page", true) ||
+            message.contains("could not read", true) ||
+            message.contains("invalid response", true) ||
+            message.contains("malformed", true) ||
+            message.contains("unsupported response", true) -> ProviderState.INVALID_RESPONSE
+        message.contains("missing", true) ||
+            message.contains("not installed", true) ||
+            message.contains("not loaded", true) -> ProviderState.DISABLED
+        message.contains("does not support", true) ||
+            message.contains("not supported", true) -> ProviderState.UNSUPPORTED
+        else -> ProviderState.TEMPORARILY_UNAVAILABLE
+    }
+}
 
 data class ContentSourceInfo(
     val id: String,

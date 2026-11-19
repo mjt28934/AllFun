@@ -12,9 +12,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MediaEntity::class,
         EpisodeEntity::class,
         ProgressEntity::class,
-        SourceEntity::class
+        SourceEntity::class,
+        DownloadEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -22,6 +23,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun episodeDao(): EpisodeDao
     abstract fun progressDao(): ProgressDao
     abstract fun sourceDao(): SourceDao
+    abstract fun downloadDao(): DownloadDao
 
     companion object {
         /** v2 adds extension-private memo columns; existing rows keep working with NULL. */
@@ -50,9 +52,39 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v5 adds the offline download queue; existing library and progress rows stay. */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `downloads` (
+                        `key` TEXT NOT NULL,
+                        `mediaId` TEXT NOT NULL,
+                        `unitId` TEXT NOT NULL,
+                        `kind` TEXT NOT NULL,
+                        `mediaTitle` TEXT NOT NULL,
+                        `unitTitle` TEXT NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `progress` INTEGER NOT NULL,
+                        `downloadedBytes` INTEGER NOT NULL,
+                        `totalBytes` INTEGER NOT NULL,
+                        `path` TEXT,
+                        `error` TEXT,
+                        `note` TEXT,
+                        `createdAt` INTEGER NOT NULL,
+                        `completedAt` INTEGER,
+                        PRIMARY KEY(`key`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_downloads_mediaId` ON `downloads` (`mediaId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_downloads_status` ON `downloads` (`status`)")
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "allfun.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .fallbackToDestructiveMigration()
                 .build()
     }

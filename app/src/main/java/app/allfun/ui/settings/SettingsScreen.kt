@@ -86,7 +86,8 @@ fun SettingsScreen(
     container: AppContainer,
     onManageExtensions: () -> Unit = {},
     onManageSources: () -> Unit = {},
-    onOpenUpdates: () -> Unit = {}
+    onOpenUpdates: () -> Unit = {},
+    onOpenDownloads: () -> Unit = {}
 ) {
     val vm = rememberViewModel { SettingsViewModel(container) }
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -326,10 +327,11 @@ fun SettingsScreen(
             item {
                 SettingsSection("Extensions & sources") {
                     Text(
-                        text = "Add a Stremio addon, Jellyfin server, manga extension, novel " +
-                            "plugin, EPUB or video folder here. Every connected source feeds " +
-                            "Movies & Shows, Books & Novels or Manhwa & Manga automatically; " +
-                            "no source ever becomes its own tab.",
+                        text = "Add a Stremio addon, Jellyfin server, manga extension or novel " +
+                            "plugin here, or install them from each category's extension " +
+                            "button. Every connected source feeds Movies & Shows, Books & " +
+                            "Novels or Manhwa & Manga automatically; no source ever becomes " +
+                            "its own tab.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -360,11 +362,14 @@ fun SettingsScreen(
             // 6. Downloads
             item {
                 SettingsSection("Downloads") {
-                    NoticeCard(
-                        text = "Offline downloads are not implemented. AllFun streams video " +
-                            "from the source you choose and does not save episodes to this " +
-                            "device, so there is no download queue or quality setting."
+                    Text(
+                        text = "Chapters, books and films saved to this device. The queue, " +
+                            "progress, Wi-Fi-only rule and storage use live on their own screen.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Spacer(Modifier.height(10.dp))
+                    Button(onClick = onOpenDownloads) { Text("Manage downloads") }
                 }
             }
 
@@ -525,8 +530,8 @@ fun SettingsScreen(
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "Not implemented: offline downloads, tracker sync (MAL, AniList), " +
-                            "and declarative remote JSON sources.",
+                        text = "Not implemented: tracker sync (MAL, AniList) and declarative " +
+                            "remote JSON sources.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

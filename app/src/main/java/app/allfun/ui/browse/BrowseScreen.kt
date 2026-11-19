@@ -31,9 +31,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Extension
-import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Link
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -89,14 +87,6 @@ fun BrowseScreen(
     val snackbar = remember { SnackbarHostState() }
     var showAdd by remember { mutableStateOf(false) }
     var dialog by remember { mutableStateOf(AddDialog.NONE) }
-
-    val epubPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri -> uri?.let { vm.importEpub(it) } }
-
-    val folderPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocumentTree()
-    ) { uri -> uri?.let { vm.importVideos(it) } }
 
     val extensionPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -327,14 +317,6 @@ fun BrowseScreen(
             AddSourceSheet(
                 onStremio = { showAdd = false; dialog = AddDialog.STREMIO },
                 onJellyfin = { showAdd = false; dialog = AddDialog.JELLYFIN },
-                onEpub = {
-                    showAdd = false
-                    epubPicker.launch(arrayOf("application/epub+zip", "application/octet-stream"))
-                },
-                onFolder = {
-                    showAdd = false
-                    folderPicker.launch(null)
-                },
                 onExtension = {
                     showAdd = false
                     extensionPicker.launch(arrayOf("*/*"))
@@ -379,8 +361,6 @@ fun BrowseScreen(
 private fun AddSourceSheet(
     onStremio: () -> Unit,
     onJellyfin: () -> Unit,
-    onEpub: () -> Unit,
-    onFolder: () -> Unit,
     onExtension: () -> Unit,
     onNovelPlugin: () -> Unit,
     onManageExtensions: () -> Unit
@@ -406,16 +386,6 @@ private fun AddSourceSheet(
             title = "Jellyfin server",
             subtitle = "Connect your own server. Movies and episodes stream from it."
         ) { onJellyfin() }
-        SheetOption(
-            icon = Icons.AutoMirrored.Outlined.MenuBook,
-            title = "EPUB file",
-            subtitle = "Import a book from device storage into your library."
-        ) { onEpub() }
-        SheetOption(
-            icon = Icons.Outlined.FolderOpen,
-            title = "Video folder",
-            subtitle = "Import MP4/MKV files. Subfolders with several videos become series."
-        ) { onFolder() }
         SheetOption(
             icon = Icons.Outlined.Extension,
             title = "Manga extension (.apk)",

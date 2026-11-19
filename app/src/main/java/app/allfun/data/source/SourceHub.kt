@@ -43,28 +43,14 @@ class SourceHub(
 ) {
     private val appContext = context.applicationContext
 
-    fun builtIns(): List<SourceEntity> = listOf(
-        SourceEntity(
-            id = SourceIds.LOCAL_NOVEL,
-            type = SourceType.NOVEL,
-            name = "Imported books",
-            configJson = """{"kind":"local-novel"}""",
-            builtIn = true
-        ),
-        SourceEntity(
-            id = SourceIds.LOCAL_VIDEO,
-            type = SourceType.VIDEO,
-            name = "Local videos",
-            configJson = """{"kind":"local-video"}""",
-            builtIn = true
-        )
-    )
+    /**
+     * 0.7 removed local media browsing: AllFun is an entertainment client for installed
+     * extensions, not a file browser. The built-in source rows are therefore gone; the
+     * cleanup in [AppContainer.bootstrap] removes the rows older versions seeded.
+     */
+    fun builtIns(): List<SourceEntity> = emptyList()
 
-    suspend fun ensureSeeded() {
-        builtIns().forEach { entity ->
-            if (sourceDao.byId(entity.id) == null) sourceDao.upsert(entity)
-        }
-    }
+    suspend fun ensureSeeded() = Unit
 
     /**
      * Re-registers sources for extension APKs that are on disk but missing from the
@@ -91,8 +77,6 @@ class SourceHub(
             Json.parseToJsonElement(entity.configJson ?: "{}").jsonObject.str("kind")
         }.getOrNull()
         return when (kind) {
-            "local-novel" -> LocalNovelSource(mediaDao, episodeDao)
-            "local-video" -> LocalVideoSource(mediaDao, episodeDao)
             "stremio" -> StremioSource(entity, http)
             "jellyfin" -> JellyfinSource(entity, http)
             "lnreader" -> {

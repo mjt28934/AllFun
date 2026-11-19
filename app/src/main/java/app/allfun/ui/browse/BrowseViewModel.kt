@@ -12,7 +12,6 @@ import app.allfun.data.model.SourceType
 import app.allfun.data.net.UserError
 import app.allfun.data.net.toUserError
 import app.allfun.data.net.userMessage
-import app.allfun.data.source.SourceIds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -301,31 +300,6 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
             selectCatalog(current.selectedCatalog)
         } else {
             selectSource(current.selectedSourceId)
-        }
-    }
-
-    fun importEpub(uri: Uri) {
-        viewModelScope.launch {
-            try {
-                val id = container.bookImporter.importUri(uri)
-                _messages.send("Book imported")
-                selectSource(SourceIds.LOCAL_NOVEL)
-                openMediaId.value = id
-            } catch (t: Throwable) {
-                _messages.send("Import failed: ${t.userMessage("that EPUB")}")
-            }
-        }
-    }
-
-    fun importVideos(uri: Uri) {
-        viewModelScope.launch {
-            try {
-                val summary = container.videoImporter.importTree(uri)
-                _messages.send(summary.message)
-                selectSource(SourceIds.LOCAL_VIDEO)
-            } catch (t: Throwable) {
-                _messages.send("Import failed: ${t.userMessage("that folder")}")
-            }
         }
     }
 

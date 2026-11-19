@@ -105,20 +105,14 @@ fun NovelReaderScreen(
             },
             update = { view ->
                 view.setBackgroundColor(android.graphics.Color.parseColor(palette.background))
-                val uri = state.chapterUri
                 val html = state.chapterHtml
                 val chapterTag = "html:" + (state.chapter?.id ?: "")
-                when {
-                    uri != null && view.tag != uri -> {
-                        view.tag = uri
-                        view.loadUrl(uri)
-                    }
-                    html != null && view.tag != chapterTag -> {
-                        view.tag = chapterTag
-                        // Remote chapters arrive as text, so render them directly. A null
-                        // base URL keeps relative links from resolving to local files.
-                        view.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
-                    }
+                if (html != null && view.tag != chapterTag) {
+                    view.tag = chapterTag
+                    // Remote and downloaded chapters arrive as markup or text, so render
+                    // them directly. A null base URL keeps relative links from resolving
+                    // to local files.
+                    view.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
                 }
             },
             modifier = Modifier
@@ -177,7 +171,7 @@ fun NovelReaderScreen(
             }
         }
 
-        if (state.loading && state.chapterUri == null && state.chapterHtml == null) {
+        if (state.loading && state.chapterHtml == null) {
             CircularProgressIndicator(
                 modifier = Modifier.align(Alignment.Center),
                 color = Color(0xFF9C8BFF)
