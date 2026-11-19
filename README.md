@@ -49,8 +49,8 @@ Verify the checksum, then open the APK. Releases are signed with one fixed certi
 each version installs over the previous one and keeps the library:
 
 ```powershell
-(Get-FileHash .\AllFun-0.7.1-release.apk -Algorithm SHA256).Hash.ToLower()
-Get-Content .\AllFun-0.7.1-release.apk.sha256
+(Get-FileHash .\AllFun-0.7.2-release.apk -Algorithm SHA256).Hash.ToLower()
+Get-Content .\AllFun-0.7.2-release.apk.sha256
 ```
 
 From inside the app, **Settings → About → App Updates** does the same work without a
@@ -63,10 +63,10 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Check | Result |
 |---|---|
 | `:app:assembleDebug` | **BUILD SUCCESSFUL** |
-| `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking, 11,104,689 bytes |
-| `:app:testDebugUnitTest` | **30 tests pass** — semantic version comparison, release JSON parsing, checksum-file parsing, category/dedupe/format mapping, category sorting, Tachiyomi page conversion |
-| APK metadata | `app.allfun`, `versionCode 701`, `versionName 0.7.1`, v2 signature, `CN=AllFun` |
-| Runtime, Android 15 / API 35 (emulator) | Signed 0.7.1 APK installed over 0.7.0 (same signer, library, extensions and downloads kept) → six destinations, compact category toolbars with the extension button top-right, category-scoped marketplace with focused search, real Weeb Central downloads, offline reading, Settings → Downloads, Library download badges and sizes; empty and error states; no crash |
+| `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking, 11,134,950 bytes |
+| `:app:testDebugUnitTest` | **36 tests pass** — serialization compatibility (generic, polymorphic, defaults, unknown fields), semantic version comparison, release JSON parsing, checksum-file parsing, category/dedupe/format mapping, category sorting, Tachiyomi page conversion |
+| APK metadata | `app.allfun`, `versionCode 702`, `versionName 0.7.2`, v2 signature, `CN=AllFun` |
+| Runtime, Android 15 / API 35 (emulator) | Signed 0.7.2 APK installed over 0.7.1 (same signer, library, extensions and downloads kept) → six destinations, compact category toolbars with the extension button top-right, category-scoped marketplace with focused search, real Weeb Central downloads, offline reading, Settings → Downloads, Library download badges and sizes; empty and error states; no crash |
 | Unified content layer | Three categories are built from every enabled source of the matching kind: staged arrival, round-robin shelves, title dedupe with provider merging, per-request timeouts and a feed budget, provider state reporting with Retry and diagnostics, pagination, global search grouped by category, and a remembered preferred source per title |
 | Manga category, end to end | Weeb Central (real Keiyoushi extension installed from Discover) → Popular shelf with real covers → One Piece detail (1198 chapters, author, genres) → reader loads real page images → progress on the shelf |
 | Offline downloads | Manga chapters saved as page folders + `pages.json`, novels as saved chapter HTML, direct HTTP video streamed with progress; chapter 1055 (11,087,549 bytes) and chapter 24 (4,968,054 bytes) completed, opened with Wi-Fi and mobile data off, and survived a force-stop; HLS/DASH manifests are refused honestly |
@@ -76,13 +76,14 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Source states | Working, Loading, No content, Temporarily unavailable, Auth required, Invalid response, Disabled and Unsupported, each with Retry and a separate technical-details disclosure; one failing provider does not block the rest |
 | Cross-source search | "Lantern" returns 3 grouped results across Movies & Shows, Books & Novels and Manhwa & Manga with provider chips and source filters; "one piece" returns real manga results from the installed extension |
 | Extension ecosystem, end to end | Real APK installed from storage → catalogue → details → chapters → page images in the reader → progress on the shelf; real LNReader plugin → catalogue → details → chapter text |
+| Modern extension compatibility | Keiyoushi extensions built with Kotlin 2.4 / kotlinx-serialization 1.13 load and browse without `AbstractMethodError`: Asura Scans (feed, search, details, 2 chapters, 16-page reader), MangaFire, Vortex Scans, Flame Comics and Drake Scans (feed, 190 titles), plus an in-app repository install; Comick fails only on the site's Cloudflare 403 and is reported per source |
 | Stremio addon, end to end | Manifest → catalogue → details → direct HTTP stream with proxy headers → sidecar subtitles → season/episode mapping |
 | Backup and restore | 371 KB JSON export → restore reported 5 titles, 927 chapters/episodes, 5 progress entries and settings; a non-backup file is refused with a readable message |
 | Settings maintenance | Storage stats, clear cached files without touching the library, repository connection test (1,710 extensions in 1,194 ms) |
 | Release (R8) runtime | All paths above re-verified on a signed release build |
 | In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` confirmation |
 | Published release | [v0.7.1](https://github.com/mjt28934/AllFun/releases/tag/v0.7.1) — `AllFun-0.7.1-release.apk`, 11,104,685 bytes, SHA-256 `62cdccd7244d7a7933b6bd77cbf84e5c6335d40f552279b41013c598e48d060f`; downloaded back, checksum and signer re-checked against the workflow build, and the release is the repository's latest |
-| Version | `0.7.1` (versionCode 701) |
+| Version | `0.7.2` (versionCode 702) |
 | Min SDK | 26 (Android 8.0) |
 | Target SDK | 35 |
 
