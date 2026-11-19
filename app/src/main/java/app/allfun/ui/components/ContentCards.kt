@@ -20,7 +20,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.AutoStories
-import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -196,106 +195,6 @@ fun ContentCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1
-                )
-            }
-        }
-    }
-}
-
-/**
- * Large entry card for the Home screen's three categories. A faint accent wash and two
- * real counters (saved titles, sources answering right now) make it useful even on a
- * fresh install.
- */
-@Composable
-fun CategoryCard(
-    category: ContentCategory,
-    count: Int,
-    sourceCount: Int,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    issueCount: Int = 0
-) {
-    val accent = category.accent()
-    val interaction = remember { MutableInteractionSource() }
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        shape = MaterialTheme.shapes.large,
-        modifier = modifier
-            .fillMaxWidth()
-            .pressScale(interaction, pressedScale = 0.985f)
-            .focusOutline(MaterialTheme.shapes.large)
-    ) {
-        Box {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(accent.copy(alpha = 0.13f), Color.Transparent)
-                        )
-                    )
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(
-                        interactionSource = interaction,
-                        indication = ripple(),
-                        onClickLabel = "Open ${category.label}",
-                        onClick = onClick
-                    )
-                    .padding(horizontal = 16.dp, vertical = 18.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                IconBadge(icon = category.icon(), tint = accent, size = 52)
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = category.label,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = category.tagline,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        StatusPill(
-                            text = if (count == 1) "1 saved" else "$count saved",
-                            tint = accent
-                        )
-                        StatusPill(
-                            text = when {
-                                sourceCount == 1 -> "1 source"
-                                sourceCount > 1 -> "$sourceCount sources"
-                                issueCount > 0 -> "No source available"
-                                else -> "No source"
-                            },
-                            tint = if (sourceCount == 0) {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            } else {
-                                MaterialTheme.colorScheme.secondary
-                            }
-                        )
-                        if (issueCount > 0) {
-                            StatusPill(
-                                text = if (issueCount == 1) "1 needs attention"
-                                else "$issueCount need attention",
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    }
-                }
-                Icon(
-                    Icons.Outlined.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

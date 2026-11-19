@@ -42,28 +42,6 @@ enum class NovelTheme(val label: String) {
     LIGHT("Light")
 }
 
-/** Home sections the user can reorder or hide. Keys are stable across versions. */
-enum class HomeSection(val title: String, val key: String) {
-    CONTINUE_READING("Continue reading", "continue_reading"),
-    CONTINUE_WATCHING("Continue watching", "continue_watching"),
-    RECENTLY_ADDED("Recently added", "recently_added"),
-    RECENTLY_OPENED("Recently opened", "recently_opened"),
-    RECENTLY_UPDATED("Recently updated", "recently_updated"),
-    FAVORITES("Favorites", "favorites"),
-
-    /**
-     * Legacy per-medium shelves. The app no longer renders provider recommendations, but
-     * the keys stay so restoring an older backup never fails.
-     */
-    MANGA_FROM_SOURCES("Manga from your sources", "recs_manga"),
-    NOVELS_FROM_SOURCES("Novels from your sources", "recs_novels"),
-    VIDEO_FROM_SOURCES("Movies & TV from your sources", "recs_video");
-
-    companion object {
-        fun fromKey(key: String): HomeSection? = entries.firstOrNull { it.key == key }
-    }
-}
-
 enum class RepositoryKind { MANGA, NOVEL }
 
 /** A user-added repository URL. Built-in repositories are not stored here. */
@@ -85,7 +63,6 @@ data class Settings(
     val subtitlesEnabled: Boolean = true,
     val autoCheckUpdates: Boolean = true,
     val notifyUpdates: Boolean = true,
-    val homeSections: List<HomeSection> = HomeSection.entries,
     /** Most recent global-search terms, newest first. */
     val searchHistory: List<String> = emptyList(),
     val repositories: List<RepositoryConfig> = emptyList(),
@@ -115,7 +92,6 @@ class SettingsStore(private val context: Context) {
         val subtitlesEnabled = booleanPreferencesKey("subtitles_enabled")
         val autoCheckUpdates = booleanPreferencesKey("auto_check_updates")
         val notifyUpdates = booleanPreferencesKey("notify_updates")
-        val homeSections = stringPreferencesKey("home_sections")
         val searchHistory = stringPreferencesKey("search_history")
         val repositories = stringPreferencesKey("repositories")
         val preferredSources = stringPreferencesKey("preferred_sources")
@@ -142,7 +118,6 @@ class SettingsStore(private val context: Context) {
                 subtitlesEnabled = prefs[Keys.subtitlesEnabled] ?: true,
                 autoCheckUpdates = prefs[Keys.autoCheckUpdates] ?: true,
                 notifyUpdates = prefs[Keys.notifyUpdates] ?: true,
-                homeSections = parseHomeSections(prefs[Keys.homeSections]),
                 searchHistory = parseSearchHistory(prefs[Keys.searchHistory]),
                 repositories = parseRepositories(prefs[Keys.repositories]),
                 preferredSources = parsePreferredSources(prefs[Keys.preferredSources]),
@@ -219,12 +194,6 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[Keys.concurrentDownloads] = value.coerceIn(1, 4) }
     }
 
-    suspend fun setHomeSections(sections: List<HomeSection>) {
-        context.dataStore.edit {
-            it[Keys.homeSections] = sections.distinct().joinToString(",") { section -> section.key }
-        }
-    }
-
     /** Records a completed search; newest first, no duplicates, capped at 8 entries. */
     suspend fun addSearchTerm(term: String) {
         val clean = term.trim()
@@ -285,8 +254,6 @@ class SettingsStore(private val context: Context) {
             prefs[Keys.subtitlesEnabled] = settings.subtitlesEnabled
             prefs[Keys.autoCheckUpdates] = settings.autoCheckUpdates
             prefs[Keys.notifyUpdates] = settings.notifyUpdates
-            prefs[Keys.homeSections] = settings.homeSections.distinct()
-                .joinToString(",") { section -> section.key }
             prefs[Keys.repositories] = settings.repositories
                 .distinctBy { repo -> "${repo.kind}:${repo.url}" }
                 .joinToString("\n") { repo -> "${repo.kind.name}|${repo.url}" }
@@ -296,12 +263,6 @@ class SettingsStore(private val context: Context) {
 
     /** Current values, for callers that are not collecting the flow (backup, export). */
     suspend fun current(): Settings = settings.first()
-
-    private fun parseHomeSections(raw: String?): List<HomeSection> {
-        if (raw == null) return HomeSection.entries
-        if (raw.isBlank()) return emptyList()
-        return raw.split(",").mapNotNull { HomeSection.fromKey(it.trim()) }.distinct()
-    }
 
     private fun parseSearchHistory(raw: String?): List<String> {
         if (raw.isNullOrBlank()) return emptyList()

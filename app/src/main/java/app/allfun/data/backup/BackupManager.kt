@@ -7,7 +7,6 @@ import app.allfun.data.db.MediaEntity
 import app.allfun.data.db.ProgressDao
 import app.allfun.data.db.ProgressEntity
 import app.allfun.data.model.MediaKind
-import app.allfun.data.settings.HomeSection
 import app.allfun.data.settings.LibrarySort
 import app.allfun.data.settings.LibraryView
 import app.allfun.data.settings.MangaFit
@@ -56,7 +55,6 @@ data class BackupSettings(
     val subtitlesEnabled: Boolean = true,
     val autoCheckUpdates: Boolean = true,
     val notifyUpdates: Boolean = true,
-    val homeSections: List<String> = HomeSection.entries.map { it.key },
     val repositories: List<BackupRepository> = emptyList()
 )
 
@@ -282,7 +280,6 @@ class BackupManager(
         subtitlesEnabled = subtitlesEnabled,
         autoCheckUpdates = autoCheckUpdates,
         notifyUpdates = notifyUpdates,
-        homeSections = homeSections.map { it.key },
         repositories = repositories.map { BackupRepository(it.kind.name, it.url) }
     )
 
@@ -304,9 +301,6 @@ class BackupManager(
             subtitlesEnabled = subtitlesEnabled,
             autoCheckUpdates = autoCheckUpdates,
             notifyUpdates = notifyUpdates,
-            homeSections = homeSections.mapNotNull { HomeSection.fromKey(it) }.ifEmpty {
-                current.homeSections
-            },
             repositories = repositories.mapNotNull { repo ->
                 val kind = RepositoryKind.entries.firstOrNull { it.name == repo.kind }
                     ?: return@mapNotNull null

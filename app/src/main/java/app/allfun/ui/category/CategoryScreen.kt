@@ -90,7 +90,6 @@ import app.allfun.data.content.ContentCategory
 import app.allfun.data.content.ContentItem
 import app.allfun.data.content.ProviderStatus
 import app.allfun.data.content.category
-import app.allfun.data.db.ContinueRow
 import app.allfun.data.db.LibraryRow
 import app.allfun.ui.components.ContentCard
 import app.allfun.ui.components.ContentReveal
@@ -102,6 +101,7 @@ import app.allfun.ui.components.LoadingState
 import app.allfun.ui.components.MediaCard
 import app.allfun.ui.components.NoticeCard
 import app.allfun.ui.components.ProviderStatusLine
+import app.allfun.ui.components.QuickAddButton
 import app.allfun.ui.components.SectionHeader
 import app.allfun.ui.components.StatusPill
 import app.allfun.ui.components.accent
@@ -121,12 +121,10 @@ fun CategoryScreen(
     container: AppContainer,
     category: ContentCategory,
     onOpenMedia: (String) -> Unit,
-    onOpenLibrary: () -> Unit,
     onOpenExtensions: () -> Unit
 ) {
     val vm = rememberViewModel(key = category.name) { CategoryViewModel(category, container) }
     val state by vm.state.collectAsStateWithLifecycle()
-    val continueRows by vm.continueRows.collectAsStateWithLifecycle()
     val libraryRows by vm.libraryRows.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val focus = LocalFocusManager.current
@@ -150,13 +148,9 @@ fun CategoryScreen(
         }
     }
 
-    val continueForCategory = continueRows.filter { it.media.kind.category() == category }
     val libraryForCategory = libraryRows.filter { it.media.kind.category() == category }
     val favorites = libraryForCategory.filter { it.media.favorite }
-    val recentlyAdded = libraryForCategory.sortedByDescending { it.media.addedAt }
-    val history = libraryForCategory
-        .filter { it.media.lastOpenedAt != null }
-        .sortedByDescending { it.media.lastOpenedAt }
+    val watchlist = libraryForCategory.sortedByDescending { it.media.addedAt }
     val visibleItems = state.sorted(state.filtered(state.allItems))
     val searchResults = state.sorted(state.filtered(state.searchResults))
     val statuses = state.feed?.statuses.orEmpty()
@@ -166,7 +160,7 @@ fun CategoryScreen(
         state.query.isNotBlank() -> CategoryPhase.SEARCH
         state.loading && state.feed == null -> CategoryPhase.LOADING
         state.feed?.sources?.isEmpty() == true &&
-            continueForCategory.isEmpty() && libraryForCategory.isEmpty() -> CategoryPhase.NO_SOURCES
+            libraryForCategory.isEmpty() -> CategoryPhase.NO_SOURCES
         state.error != null && state.allItems.isEmpty() -> CategoryPhase.ERROR
         state.browseAll -> CategoryPhase.BROWSE
         else -> CategoryPhase.SECTIONS
@@ -183,6 +177,8 @@ fun CategoryScreen(
                 .statusBarsPadding()
         ) {
             CategoryHeader(
+                container = container,
+                snackbar = snackbar,
                 category = category,
                 state = state,
                 sourceCount = state.feed?.sources.orEmpty().size,
@@ -269,7 +265,7 @@ fun CategoryScreen(
                         onOpen = vm::open,
                         onRetry = { vm.setQuery(state.query) },
                         onClear = vm::clearSearch,
-                        onManageSources = onOpenExtensions
+                        onManageExtensions = onOpenExtensions
                     )
 
                     CategoryPhase.LOADING -> LoadingGrid(category)
@@ -279,14 +275,14 @@ fun CategoryScreen(
                         title = "No ${category.shortLabel.lowercase()} sources yet",
                         message = "Install a source or add-on and its titles will appear here " +
                             "automatically. Sources never become separate tabs.",
-                        actionLabel = "Manage sources",
+                        actionLabel = "Manage extensions",
                         onAction = onOpenExtensions
                     )
 
                     CategoryPhase.ERROR -> ErrorState(
                         error = state.error!!,
                         onRetry = vm::refresh,
-                        secondary = "Manage sources" to onOpenExtensions
+                        secondary = "Manage extensions" to onOpenExtensions
                     )
 
                     CategoryPhase.BROWSE -> BrowseAllGrid(
@@ -302,20 +298,17 @@ fun CategoryScreen(
                     CategoryPhase.SECTIONS -> CategorySections(
                         category = category,
                         state = state,
-                        continueRows = continueForCategory,
                         favorites = favorites,
-                        recentlyAdded = recentlyAdded,
-                        history = if (category.isReading) history else emptyList(),
+                        watchlist = watchlist,
                         visibleItems = visibleItems,
                         unmatched = issues,
                         statusExpanded = statusExpanded,
                         onToggleStatuses = { statusExpanded = !statusExpanded },
                         onOpenLibraryMedia = onOpenMedia,
-                        onOpenLibrary = onOpenLibrary,
                         onOpen = vm::open,
                         onSeeAll = { vm.setBrowseAll(true) },
                         onRetry = vm::refresh,
-                        onManageSources = onOpenExtensions
+                        onManageExtensions = onOpenExtensions
                     )
                 }
             }
@@ -376,6 +369,8 @@ private fun AnimatedPhase(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CategoryHeader(
+    container: AppContainer,
+    snackbar: SnackbarHostState,
     category: ContentCategory,
     state: CategoryViewModel.UiState,
     sourceCount: Int,
@@ -408,6 +403,9 @@ private fun CategoryHeader(
                     contentDescription = "Extensions for ${category.label}"
                 )
             }
+            // Quick add sits beside the Extensions entry: add-ons and plugins are installed
+            // from here, while repositories and updates stay on the Extensions screen.
+            QuickAddButton(container = container, snackbar = snackbar)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -489,20 +487,17 @@ private fun LoadingGrid(category: ContentCategory) {
 private fun CategorySections(
     category: ContentCategory,
     state: CategoryViewModel.UiState,
-    continueRows: List<ContinueRow>,
     favorites: List<LibraryRow>,
-    recentlyAdded: List<LibraryRow>,
-    history: List<LibraryRow>,
+    watchlist: List<LibraryRow>,
     visibleItems: List<ContentItem>,
     unmatched: List<ProviderStatus>,
     statusExpanded: Boolean,
     onToggleStatuses: () -> Unit,
     onOpenLibraryMedia: (String) -> Unit,
-    onOpenLibrary: () -> Unit,
     onOpen: (ContentItem) -> Unit,
     onSeeAll: () -> Unit,
     onRetry: () -> Unit,
-    onManageSources: () -> Unit
+    onManageExtensions: () -> Unit
 ) {
     LazyColumn(contentPadding = PaddingValues(bottom = 32.dp)) {
         if (state.feed?.sources.isNullOrEmpty()) {
@@ -514,47 +509,20 @@ private fun CategorySections(
                             "browse and search the whole category."
                     )
                     TextButton(
-                        onClick = onManageSources,
+                        onClick = onManageExtensions,
                         modifier = Modifier.padding(start = 8.dp)
-                    ) { Text("Add a ${category.shortLabel.lowercase()} source") }
-                }
-            }
-        }
-
-        if (continueRows.isNotEmpty()) {
-            item("continue-header") {
-                SectionHeader(
-                    title = if (category.isVideo) "Continue watching" else "Continue reading",
-                    subtitle = "Across every source",
-                    actionLabel = "Library",
-                    onAction = onOpenLibrary
-                )
-            }
-            item("continue-row") {
-                ContentReveal {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(continueRows, key = { it.media.id }) { row ->
-                            MediaCard(
-                                media = row.media,
-                                progress = row.fraction,
-                                onClick = { onOpenLibraryMedia(row.media.id) }
-                            )
-                        }
-                    }
+                    ) { Text("Manage extensions") }
                 }
             }
         }
 
         if (category.isVideo) {
-            if (recentlyAdded.isNotEmpty()) {
+            if (watchlist.isNotEmpty()) {
                 item("watchlist-header") {
                     SectionHeader(title = "Watchlist", subtitle = "Saved movies and shows")
                 }
                 item("watchlist-row") {
-                    LibraryRowCarousel(recentlyAdded, onOpenLibraryMedia)
+                    LibraryRowCarousel(watchlist, onOpenLibraryMedia)
                 }
             }
         } else if (favorites.isNotEmpty()) {
@@ -563,19 +531,6 @@ private fun CategorySections(
             }
             item("favorites-row") {
                 LibraryRowCarousel(favorites, onOpenLibraryMedia)
-            }
-        }
-
-        if (history.isNotEmpty()) {
-            item("history-header") {
-                SectionHeader(
-                    title = "Reading history",
-                    actionLabel = "Library",
-                    onAction = onOpenLibrary
-                )
-            }
-            item("history-row") {
-                LibraryRowCarousel(history, onOpenLibraryMedia)
             }
         }
 
@@ -634,15 +589,6 @@ private fun CategorySections(
             }
         }
 
-        if (recentlyAdded.isNotEmpty()) {
-            item("added-header") {
-                SectionHeader(title = "Recently added", subtitle = "From your library")
-            }
-            item("added-row") {
-                LibraryRowCarousel(recentlyAdded.take(20), onOpenLibraryMedia)
-            }
-        }
-
         if (state.feed?.items.isNullOrEmpty() && visibleItems.isEmpty()) {
             item("category-empty") {
                 EmptyState(
@@ -689,9 +635,9 @@ private fun CategorySections(
                     Column(Modifier.padding(bottom = 8.dp)) {
                         unmatched.forEach { ProviderStatusLine(it, onRetry) }
                         TextButton(
-                            onClick = onManageSources,
+                            onClick = onManageExtensions,
                             modifier = Modifier.padding(start = 8.dp)
-                        ) { Text("Manage sources") }
+                        ) { Text("Manage extensions") }
                     }
                 }
             }
@@ -726,14 +672,14 @@ private fun SearchGrid(
     onOpen: (ContentItem) -> Unit,
     onRetry: () -> Unit,
     onClear: () -> Unit,
-    onManageSources: () -> Unit
+    onManageExtensions: () -> Unit
 ) {
     when {
         state.searching -> LoadingGrid(category)
         state.searchError != null -> ErrorState(
             error = state.searchError!!,
             onRetry = onRetry,
-            secondary = "Manage sources" to onManageSources
+            secondary = "Manage extensions" to onManageExtensions
         )
         items.isEmpty() -> EmptyState(
             icon = Icons.Outlined.Search,

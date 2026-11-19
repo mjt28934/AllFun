@@ -8,7 +8,6 @@ import app.allfun.data.AppContainer
 import app.allfun.data.backup.BackupFormatException
 import app.allfun.data.extension.ExtensionRepository
 import app.allfun.data.net.toUserError
-import app.allfun.data.settings.HomeSection
 import app.allfun.data.settings.LibrarySort
 import app.allfun.data.settings.LibraryView
 import app.allfun.data.settings.MangaFit
@@ -93,22 +92,6 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun setLibraryView(view: LibraryView) = launchSettings { setLibraryView(view) }
 
     fun setLibrarySort(sort: LibrarySort) = launchSettings { setLibrarySort(sort) }
-
-    /**
-     * Turns one home shelf on or off. The stored list drives Home directly, so toggling
-     * here is visible immediately and survives a restart.
-     */
-    fun setHomeSection(section: HomeSection, enabled: Boolean) {
-        viewModelScope.launch {
-            val current = container.settings.current().homeSections
-            val next = if (enabled) {
-                (current + section).distinct()
-            } else {
-                current - section
-            }
-            container.settings.setHomeSections(next)
-        }
-    }
 
     // ---- Playback ---------------------------------------------------------------------
 

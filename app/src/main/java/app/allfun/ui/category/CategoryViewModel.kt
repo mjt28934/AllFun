@@ -11,7 +11,6 @@ import app.allfun.data.content.format
 import app.allfun.data.content.matchesFormat
 import app.allfun.data.content.refId
 import app.allfun.data.content.titleKey
-import app.allfun.data.db.ContinueRow
 import app.allfun.data.db.LibraryRow
 import app.allfun.data.model.MediaDetails
 import app.allfun.data.net.UserError
@@ -155,9 +154,6 @@ class CategoryViewModel(
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
-
-    val continueRows: StateFlow<List<ContinueRow>> = container.library.observeContinue()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val libraryRows: StateFlow<List<LibraryRow>> = container.library.observeLibraryWithProgress()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())

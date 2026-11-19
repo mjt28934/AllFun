@@ -80,7 +80,7 @@ fun GlobalSearchScreen(
     initialCategory: ContentCategory?,
     onBack: () -> Unit,
     onOpenMedia: (String) -> Unit,
-    onManageSources: () -> Unit
+    onManageExtensions: () -> Unit
 ) {
     val vm = rememberViewModel {
         GlobalSearchViewModel(container, initialCategory)
@@ -241,13 +241,13 @@ fun GlobalSearchScreen(
                         onUseHistory = vm::useHistory,
                         onRemoveHistory = vm::removeHistory,
                         onClearHistory = vm::clearHistory,
-                        onManageSources = onManageSources
+                        onManageExtensions = onManageExtensions
                     )
 
                     state.error != null -> ErrorState(
                         error = state.error!!,
                         onRetry = vm::retry,
-                        secondary = "Manage sources" to onManageSources
+                        secondary = "Manage extensions" to onManageExtensions
                     )
 
                     state.searching -> Column(Modifier.fillMaxSize()) {
@@ -260,8 +260,8 @@ fun GlobalSearchScreen(
                         title = "No results",
                         message = "No installed source returned \"${state.query}\". " +
                             "Search only reports real responses; nothing is simulated.",
-                        actionLabel = "Manage sources",
-                        onAction = onManageSources
+                        actionLabel = "Manage extensions",
+                        onAction = onManageExtensions
                     )
 
                     else -> LazyColumn(
@@ -317,9 +317,9 @@ fun GlobalSearchScreen(
                                     )
                                     failedSources.forEach { ProviderStatusLine(it) }
                                     TextButton(
-                                        onClick = onManageSources,
+                                        onClick = onManageExtensions,
                                         modifier = Modifier.padding(start = 8.dp)
-                                    ) { Text("Manage sources") }
+                                    ) { Text("Manage extensions") }
                                 }
                             }
                         }
@@ -344,7 +344,7 @@ private fun SearchIdle(
     onUseHistory: (String) -> Unit,
     onRemoveHistory: (String) -> Unit,
     onClearHistory: () -> Unit,
-    onManageSources: () -> Unit
+    onManageExtensions: () -> Unit
 ) {
     LazyColumn(
         state = listState,
@@ -398,8 +398,8 @@ private fun SearchIdle(
                         "Extensions, addons and servers contribute to the three categories. " +
                             "Install one and search will query it directly."
                     },
-                    actionLabel = if (hasSources) null else "Manage sources",
-                    onAction = if (hasSources) null else onManageSources
+                    actionLabel = if (hasSources) null else "Manage extensions",
+                    onAction = if (hasSources) null else onManageExtensions
                 )
             }
         }

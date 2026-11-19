@@ -57,7 +57,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.allfun.BuildConfig
 import app.allfun.data.AppContainer
-import app.allfun.data.settings.HomeSection
 import app.allfun.data.settings.LibrarySort
 import app.allfun.data.settings.LibraryView
 import app.allfun.data.settings.MangaFit
@@ -71,21 +70,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** The shelves Home can actually render. Legacy recommendation keys stay out of this list. */
-private val HomeSectionChoices = listOf(
-    HomeSection.CONTINUE_WATCHING,
-    HomeSection.CONTINUE_READING,
-    HomeSection.FAVORITES,
-    HomeSection.RECENTLY_UPDATED,
-    HomeSection.RECENTLY_OPENED,
-    HomeSection.RECENTLY_ADDED
-)
-
 @Composable
 fun SettingsScreen(
     container: AppContainer,
     onManageExtensions: () -> Unit = {},
-    onManageSources: () -> Unit = {},
     onOpenUpdates: () -> Unit = {},
     onOpenDownloads: () -> Unit = {}
 ) {
@@ -190,38 +178,6 @@ fun SettingsScreen(
                         label = { it.label },
                         onSelect = vm::setLibrarySort
                     )
-
-                    SectionDivider()
-
-                    SettingLabel("Home shelves")
-                    Text(
-                        text = "Choose which real shelves appear on Home. Empty shelves are " +
-                            "hidden automatically; nothing is invented to fill them.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
-                    HomeSectionChoices.forEach { section ->
-                        SwitchRow(
-                            title = section.title,
-                            subtitle = when (section) {
-                                HomeSection.CONTINUE_WATCHING ->
-                                    "Video you have started but not finished"
-                                HomeSection.CONTINUE_READING ->
-                                    "Chapters and pages you left open"
-                                HomeSection.FAVORITES -> "Titles you pinned with the heart"
-                                HomeSection.RECENTLY_UPDATED ->
-                                    "Titles whose progress or details changed"
-                                HomeSection.RECENTLY_OPENED ->
-                                    "The last titles you opened from any source"
-                                HomeSection.RECENTLY_ADDED -> "Newest additions to your library"
-                                else -> ""
-                            },
-                            checked = section in settings.homeSections,
-                            onChange = { enabled -> vm.setHomeSection(section, enabled) }
-                        )
-                        Spacer(Modifier.height(4.dp))
-                    }
                 }
             }
 
@@ -323,25 +279,20 @@ fun SettingsScreen(
                 }
             }
 
-            // 5. Extensions and sources
+            // 5. Extensions
             item {
-                SettingsSection("Extensions & sources") {
+                SettingsSection("Extensions") {
                     Text(
                         text = "Add a Stremio addon, Jellyfin server, manga extension or novel " +
-                            "plugin here, or install them from each category's extension " +
-                            "button. Every connected source feeds Movies & Shows, Books & " +
-                            "Novels or Manhwa & Manga automatically; no source ever becomes " +
+                            "plugin from a category's + button, or install them from its " +
+                            "extension button. Every connected extension feeds Movies & Shows, " +
+                            "Books & Novels or Manhwa & Manga automatically; nothing becomes " +
                             "its own tab.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = onManageSources) {
-                            Icon(Icons.Outlined.Extension, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Sources")
-                        }
                         OutlinedButton(onClick = onManageExtensions) {
                             Icon(Icons.Outlined.Extension, contentDescription = null)
                             Spacer(Modifier.width(8.dp))

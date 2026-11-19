@@ -7,16 +7,12 @@ Komikku/Mihon and LNReader each pick one medium. AllFun treats "what you're read
 watching" as the unit, not "what app you opened".
 
 ```
-Home      ─┬─ Continue watching / Continue reading (mixed kinds)
-           ├─ Favorites · Recently opened · Recently added
-           ├─ Movies & Shows · Books & Novels · Manhwa & Manga cards
-           └─ search across every category at once
 Movies    ─ films, series, catalogues, compact toolbar, filters in a sheet
-Books     ─ novels, light novels, authors, reading history
-Manga     ─ manga, manhwa, manhua, comics, chapters, reading history
+Books     ─ novels, light novels, authors, catalogues
+Manga     ─ manga, manhwa, manhua, comics, chapters
 Library   ─ All · Movies · Books · Manga
             Everything · Downloaded · Favorites · Recently Added · Recently Opened
-Settings  ─ Appearance · Accessibility · Reading · Playback · Extensions & sources ·
+Settings  ─ Appearance · Accessibility · Reading · Playback · Extensions ·
             Downloads (queue and storage) · Storage · Network · App Updates · Backup ·
             About
 Detail    ─ metadata, source selector, favourite, chapter/episode list, resume,
@@ -26,10 +22,9 @@ Reader    ─ vertical / paged / right-to-left manga with zoom;
 Player    ─ Media3, resume, subtitles, next episode, offline files, readable errors
 Extensions─ full screen marketplace opened from a category toolbar:
             Discover · Installed · Updates · Repositories
-Sources   ─ add/manage remote providers (reached from Settings and empty states)
 ```
 
-There are exactly **six** destinations. Extensions, add-ons and providers feed the three
+There are exactly **five** destinations. Extensions, add-ons and providers feed the three
 content categories in the background: a Stremio addon can only contribute to Movies &
 Shows, a novel plugin to Books & Novels, a Komikku extension to Manhwa & Manga. None of
 them ever becomes its own tab, and the marketplace opens scoped to the category whose
@@ -49,8 +44,8 @@ Verify the checksum, then open the APK. Releases are signed with one fixed certi
 each version installs over the previous one and keeps the library:
 
 ```powershell
-(Get-FileHash .\AllFun-0.7.2-release.apk -Algorithm SHA256).Hash.ToLower()
-Get-Content .\AllFun-0.7.2-release.apk.sha256
+(Get-FileHash .\AllFun-0.7.3-release.apk -Algorithm SHA256).Hash.ToLower()
+Get-Content .\AllFun-0.7.3-release.apk.sha256
 ```
 
 From inside the app, **Settings → About → App Updates** does the same work without a
@@ -63,10 +58,10 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Check | Result |
 |---|---|
 | `:app:assembleDebug` | **BUILD SUCCESSFUL** |
-| `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking, 11,134,950 bytes |
+| `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking, 11,102,178 bytes |
 | `:app:testDebugUnitTest` | **36 tests pass** — serialization compatibility (generic, polymorphic, defaults, unknown fields), semantic version comparison, release JSON parsing, checksum-file parsing, category/dedupe/format mapping, category sorting, Tachiyomi page conversion |
-| APK metadata | `app.allfun`, `versionCode 702`, `versionName 0.7.2`, v2 signature, `CN=AllFun` |
-| Runtime, Android 15 / API 35 (emulator) | Signed 0.7.2 APK installed over 0.7.1 (same signer, library, extensions and downloads kept) → six destinations, compact category toolbars with the extension button top-right, category-scoped marketplace with focused search, real Weeb Central downloads, offline reading, Settings → Downloads, Library download badges and sizes; empty and error states; no crash |
+| APK metadata | `app.allfun`, `versionCode 703`, `versionName 0.7.3`, v2 signature, `CN=AllFun` |
+| Runtime, Android 15 / API 35 (emulator) | Signed 0.7.3 APK installed over 0.7.2 (same signer, library, extensions and downloads kept) → five destinations, compact category toolbars with the extension and quick-add buttons top-right, category-scoped marketplace with focused search, real Weeb Central downloads, offline reading, Settings → Downloads, Library download badges and sizes; empty and error states; no crash |
 | Unified content layer | Three categories are built from every enabled source of the matching kind: staged arrival, round-robin shelves, title dedupe with provider merging, per-request timeouts and a feed budget, provider state reporting with Retry and diagnostics, pagination, global search grouped by category, and a remembered preferred source per title |
 | Manga category, end to end | Weeb Central (real Keiyoushi extension installed from Discover) → Popular shelf with real covers → One Piece detail (1198 chapters, author, genres) → reader loads real page images → progress on the shelf |
 | Offline downloads | Manga chapters saved as page folders + `pages.json`, novels as saved chapter HTML, direct HTTP video streamed with progress; chapter 1055 (11,087,549 bytes) and chapter 24 (4,968,054 bytes) completed, opened with Wi-Fi and mobile data off, and survived a force-stop; HLS/DASH manifests are refused honestly |
@@ -83,7 +78,7 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Release (R8) runtime | All paths above re-verified on a signed release build |
 | In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` confirmation |
 | Published release | [v0.7.2](https://github.com/mjt28934/AllFun/releases/tag/v0.7.2) — `AllFun-0.7.2-release.apk`, 11,134,950 bytes, SHA-256 `67df2030e2476014f3988b4dfc3393dea77623039fcbf81dcd5016827ddd8eab`; downloaded back, checksum and signer re-checked against the workflow build, and the release is the repository's latest |
-| Version | `0.7.2` (versionCode 702) |
+| Version | `0.7.3` (versionCode 703) |
 | Min SDK | 26 (Android 8.0) |
 | Target SDK | 35 |
 
@@ -98,12 +93,11 @@ Screenshots from the emulator run live in `docs/screenshots/`:
 
 | | |
 |---|---|
-| `home.png`, `library.png` | empty first run — no bundled demo content |
+| `library.png` | empty first run — no bundled demo content |
 | `category-books.png` | Books & Novels: reading history from a real plugin |
 | `search-global.png` | "Lantern" grouped across Movies & Shows, Books & Novels and Manhwa & Manga |
 | `search-manga.png` | Manga search results with real covers and provider labels |
 | `reader-manga.png` | a real extension's chapter pages in the manga reader |
-| `browse.png` | the Sources screen: add or manage remote providers |
 | `browse-stremio.png`, `detail-stremio.png` | a Stremio addon's catalogue and a movie |
 | `detail-series-stremio.png` | season/episode grouping from addon metadata |
 | `extensions-installed.png` | installed extensions with version, developer and status |
@@ -167,8 +161,8 @@ to that category, with the search field focused — or from Settings. There are 
   the user adds. Each row shows the entry count, last error and a Retry action; repositories
   can be removed. Adding a URL validates it and parses the index before saving.
 
-The Sources screen (Settings → Extensions & sources → Sources) still lists every connected
-provider in one place, including Jellyfin and Stremio addons, and never becomes a tab.
+Connected providers are managed from the Extensions screen, including Jellyfin and Stremio
+addons, and never become a tab.
 
 The two built-in indexes are the real public ones:
 
@@ -224,11 +218,11 @@ Settings has eleven sections, and every control writes a real preference that th
 
 | Section | What it changes |
 |---|---|
-| Appearance | System/Dark/Light, Material You colours, library grid/list and sort, Home shelf visibility |
+| Appearance | System/Dark/Light, Material You colours, library grid/list and sort |
 | Accessibility | Reduce motion (all non-essential animation), plus a statement of the app's font-scaling and touch-target behaviour |
 | Reading | Manga layout, fit, page order, novel text size, line spacing and theme |
 | Playback | Resume position, subtitle tracks |
-| Extensions & sources | Links to the Sources and marketplace screens and a summary of how providers feed the categories |
+| Extensions | Links to the Extensions screen and a summary of how providers feed the categories |
 | Downloads | The download queue: progress, pause/resume/retry/cancel/remove, Wi-Fi-only, concurrency, storage use |
 | Storage | Cache/extension/database sizes, clear cached files, refresh |
 | Network | Timeouts and a real repository connection test |
@@ -294,7 +288,7 @@ with a restored library: a movie with saved progress, a novel and a manga. Insid
 App Updates found 0.5.0 through the real API, downloaded the published asset (11,039,153
 bytes), verified its size, SHA-256, package name and signing key, opened the system's "Do
 you want to update this app?" dialog, and installed it. Afterwards the package reports
-`0.5.0` / `500`, the same library and progress are on Home, and the installer reported
+`0.5.0` / `500`, the same library and progress are in the library, and the installer reported
 `INSTALL_SUCCEEDED: Session installed`. The installed `base.apk` hashes to
 `d2a16106…900df`, the same SHA-256 as the GitHub asset, so the running app is byte-for-byte
 the published file, not a local rebuild.
@@ -371,7 +365,7 @@ app/src/main/java/app/allfun/
 │   └── settings/             DataStore preferences (including preferred sources)
 ├── ui/
 │   ├── AllFunRoot.kt         routes + five-tab bottom bar (sliding pill) + transitions
-│   ├── home/ category/ search/ detail/ library/ browse/ extensions/ settings/
+│   ├── category/ search/ detail/ library/ extensions/ settings/
 │   ├── update/               App Updates screen and its ViewModel
 │   ├── reader/               manga (vertical/paged/zoom) and novel (WebView) readers
 │   ├── player/               Media3 ExoPlayer

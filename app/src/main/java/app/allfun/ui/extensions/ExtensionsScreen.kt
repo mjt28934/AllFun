@@ -137,7 +137,6 @@ private fun ExtensionScope.defaultKindFilter(): String? = when (this) {
 fun ExtensionsScreen(
     container: AppContainer,
     initialCategory: ContentCategory? = null,
-    onOpenSources: () -> Unit = {},
     onBack: () -> Unit
 ) {
     val vm = rememberViewModel { ExtensionsViewModel(container) }
@@ -359,8 +358,7 @@ fun ExtensionsScreen(
                         onRetryRepository = vm::retryRepository,
                         onOpen = { detailEntryKey = it.key },
                         onInstall = vm::install,
-                        onManageRepositories = { tab = TAB_REPOSITORIES },
-                        onOpenSources = onOpenSources
+                        onManageRepositories = { tab = TAB_REPOSITORIES }
                     )
 
                     TAB_REPOSITORIES -> RepositoriesTab(
@@ -636,8 +634,7 @@ private fun DiscoverTab(
     onRetryRepository: (RepositoryConfig) -> Unit,
     onOpen: (RepoExtension) -> Unit,
     onInstall: (RepoExtension) -> Unit,
-    onManageRepositories: () -> Unit,
-    onOpenSources: () -> Unit
+    onManageRepositories: () -> Unit
 ) {
     val filterKind = kindFilter?.let { name ->
         RepositoryKind.entries.firstOrNull { it.name == name }
@@ -664,10 +661,8 @@ private fun DiscoverTab(
             icon = Icons.Outlined.Extension,
             title = "Movies & TV sources are add-ons",
             message = "AllFun reads video from Stremio add-ons and Jellyfin servers. Add one " +
-                "with its manifest URL or server address, and its films and episodes appear " +
-                "in Movies & TV.",
-            actionLabel = "Add a video source",
-            onAction = onOpenSources
+                "with the + button on the Movies screen, and its films and episodes appear " +
+                "in Movies & TV."
         )
         return
     }
@@ -842,7 +837,7 @@ private fun DisabledTab(
             icon = Icons.Outlined.Extension,
             title = "Nothing is disabled",
             message = "Disabled extensions keep their files and library entries but are hidden " +
-                "from Browse and stop receiving updates until you enable them again."
+                "from the categories and stop receiving updates until you enable them again."
         )
         return
     }
@@ -856,8 +851,8 @@ private fun DisabledTab(
     LazyColumn(contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)) {
         item {
             Text(
-                text = "Disabled sources are hidden from Browse and Home. Their library entries " +
-                    "stay readable only if the content was already imported.",
+                text = "Disabled sources are hidden from the categories and search. Their " +
+                    "library entries stay readable only if the content was already imported.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)

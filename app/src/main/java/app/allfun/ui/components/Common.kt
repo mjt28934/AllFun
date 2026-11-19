@@ -61,7 +61,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.allfun.data.db.MediaEntity
 import app.allfun.data.model.MediaKind
-import app.allfun.data.model.MediaStub
 import app.allfun.ui.countLabel
 import app.allfun.ui.percentLabel
 import app.allfun.ui.theme.Cyan
@@ -339,61 +338,6 @@ fun MediaCard(
                 overflow = TextOverflow.Ellipsis
             )
         }
-    }
-}
-
-/** A source result that is not in the database yet (Browse / discovery shelves). */
-@Composable
-fun DiscoveryCard(
-    stub: MediaStub,
-    sourceName: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    width: Int = 132
-) {
-    val interaction = remember { MutableInteractionSource() }
-    Column(
-        modifier = modifier
-            .width(width.dp)
-            .pressScale(interaction)
-            .focusOutline()
-            .clickable(
-                interactionSource = interaction,
-                indication = ripple(),
-                onClickLabel = "Open ${stub.title}",
-                onClick = onClick
-            )
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(2f / 3f)
-                .clip(MaterialTheme.shapes.medium)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            CoverImage(
-                url = stub.coverUrl,
-                title = stub.title,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = stub.title,
-            style = MaterialTheme.typography.titleSmall,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-        if (!stub.subtitle.isNullOrBlank()) {
-            Text(
-                text = stub.subtitle,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        StatusPill(text = sourceName, tint = MaterialTheme.colorScheme.secondary)
     }
 }
 
