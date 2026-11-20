@@ -79,7 +79,7 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Settings maintenance | Storage stats, clear cached files without touching the library, repository connection test (1,710 extensions in 1,194 ms) |
 | Release (R8) runtime | All paths above re-verified on a signed release build |
 | In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` confirmation |
-| Published release | [v0.7.3](https://github.com/mjt28934/AllFun/releases/tag/v0.7.3) — `AllFun-0.7.3-release.apk`, 11,102,178 bytes, SHA-256 `b55671b6af52a03fc6bd94567a422e3f2f524df15bb3b1277e9c2bfce7ead0a0`; downloaded back, checksum and signer re-checked against the workflow build, and the release is the repository's latest |
+| Published release | [v0.8.0](https://github.com/mjt28934/AllFun/releases/tag/v0.8.0) — `AllFun-0.8.0-release.apk`, 61,618,601 bytes, SHA-256 `f456611c24da906b83ca38867359dfb4e816520782850bb85b9c066d127d5ffa`; downloaded back, checksum, package, `versionCode 800` and signer re-checked against the workflow build, and the release is the repository's latest |
 | Version | `0.8.0` (versionCode 800) |
 | Min SDK | 26 (Android 8.0) |
 | Target SDK | 35 |
