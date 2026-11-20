@@ -19,7 +19,8 @@ Detail    ─ metadata, source selector, favourite, chapter/episode list, resume
             per-chapter download controls
 Reader    ─ vertical / paged / right-to-left manga with zoom;
             offline pages, or a network novel reader with live typography
-Player    ─ Media3, resume, subtitles, next episode, offline files, readable errors
+Player    ─ Media3, resume, subtitles, next episode, offline files,
+            torrent streams with a stream picker, readable errors
 Extensions─ full screen marketplace opened from a category toolbar:
             Discover · Installed · Updates · Repositories
 ```
@@ -44,8 +45,8 @@ Verify the checksum, then open the APK. Releases are signed with one fixed certi
 each version installs over the previous one and keeps the library:
 
 ```powershell
-(Get-FileHash .\AllFun-0.7.3-release.apk -Algorithm SHA256).Hash.ToLower()
-Get-Content .\AllFun-0.7.3-release.apk.sha256
+(Get-FileHash .\AllFun-0.8.0-release.apk -Algorithm SHA256).Hash.ToLower()
+Get-Content .\AllFun-0.8.0-release.apk.sha256
 ```
 
 From inside the app, **Settings → About → App Updates** does the same work without a
@@ -58,14 +59,14 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Check | Result |
 |---|---|
 | `:app:assembleDebug` | **BUILD SUCCESSFUL** |
-| `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking, 11,102,178 bytes |
-| `:app:testDebugUnitTest` | **36 tests pass** — serialization compatibility (generic, polymorphic, defaults, unknown fields), semantic version comparison, release JSON parsing, checksum-file parsing, category/dedupe/format mapping, category sorting, Tachiyomi page conversion |
-| APK metadata | `app.allfun`, `versionCode 703`, `versionName 0.7.3`, v2 signature, `CN=AllFun` |
-| Runtime, Android 15 / API 35 (emulator) | Signed 0.7.3 APK installed over 0.7.2 (same signer, library, extensions and downloads kept) → five destinations, compact category toolbars with the extension and quick-add buttons top-right, category-scoped marketplace with focused search, real Weeb Central downloads, offline reading, Settings → Downloads, Library download badges and sizes; empty and error states; no crash |
+| `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking, 61,618,601 bytes |
+| `:app:testDebugUnitTest` | **43 tests pass** — serialization compatibility (generic, polymorphic, defaults, unknown fields), semantic version comparison, release JSON parsing, checksum-file parsing, category/dedupe/format mapping, category sorting, Tachiyomi page conversion, magnet/infohash identity, torrent quality ranking and tracker fallback |
+| APK metadata | `app.allfun`, `versionCode 800`, `versionName 0.8.0`, v2 signature, `CN=AllFun` |
+| Runtime, Android 15 / API 35 (emulator) | Signed 0.8.0 APK installed over 0.7.3 (same signer, library, extensions, sources and downloads kept) → five destinations, compact category toolbars with the extension and quick-add buttons top-right, category-scoped marketplace with focused search, real Weeb Central downloads, offline reading, the grouped download queue, torrent playback with the stream picker, Settings → Downloads, Library download badges and sizes; empty and error states; no crash |
 | Unified content layer | Three categories are built from every enabled source of the matching kind: staged arrival, round-robin shelves, title dedupe with provider merging, per-request timeouts and a feed budget, provider state reporting with Retry and diagnostics, pagination, global search grouped by category, and a remembered preferred source per title |
 | Manga category, end to end | Weeb Central (real Keiyoushi extension installed from Discover) → Popular shelf with real covers → One Piece detail (1198 chapters, author, genres) → reader loads real page images → progress on the shelf |
 | Offline downloads | Manga chapters saved as page folders + `pages.json`, novels as saved chapter HTML, direct HTTP video streamed with progress; chapter 1055 (11,087,549 bytes) and chapter 24 (4,968,054 bytes) completed, opened with Wi-Fi and mobile data off, and survived a force-stop; HLS/DASH manifests are refused honestly |
-| Download manager | Settings → Downloads: active, queued, completed and failed sections, real progress, pause/resume/retry/cancel/remove, clear finished, Wi-Fi-only, concurrency limit, confirmations |
+| Download manager | Settings → Downloads: grouped **Download queue** with a count badge and sort order, per-title and per-item menus, real progress, pause/resume/retry/cancel/remove, a floating Resume, clear finished, Wi-Fi-only, concurrency limit, confirmations |
 | Library | All / Movies / Books / Manga with Everything / Downloaded / Favorites / Recently Added / Recently Opened scopes, download count, size and completion date on the cards, remove-download with confirmation |
 | Extension marketplace | Real Keiyoushi and LNReader indexes; category scopes All / Movies / Books / Manga; Discover / Installed / Updates / Repositories; install, update, update all, enable, disable, uninstall, permissions |
 | Source states | Working, Loading, No content, Temporarily unavailable, Auth required, Invalid response, Disabled and Unsupported, each with Retry and a separate technical-details disclosure; one failing provider does not block the rest |
@@ -73,12 +74,13 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Extension ecosystem, end to end | Real APK installed from storage → catalogue → details → chapters → page images in the reader → progress on the shelf; real LNReader plugin → catalogue → details → chapter text |
 | Modern extension compatibility | Keiyoushi extensions built with Kotlin 2.4 / kotlinx-serialization 1.13 load and browse without `AbstractMethodError`: Asura Scans (feed, search, details, 2 chapters, 16-page reader), MangaFire, Vortex Scans, Flame Comics and Drake Scans (feed, 190 titles), plus an in-app repository install; Comick fails only on the site's Cloudflare 403 and is reported per source |
 | Stremio addon, end to end | Manifest → catalogue → details → direct HTTP stream with proxy headers → sidecar subtitles → season/episode mapping |
+| Torrent addons, end to end | Torrent-only addon installs and answers: metadata → file selection → sequential download → playback (Big Buck Bunny, 43 seeds, ~1.5 MB/s) with seeking and progress saving; a stale infohash fails with a readable message and the picker offers the remaining releases |
 | Backup and restore | 371 KB JSON export → restore reported 5 titles, 927 chapters/episodes, 5 progress entries and settings; a non-backup file is refused with a readable message |
 | Settings maintenance | Storage stats, clear cached files without touching the library, repository connection test (1,710 extensions in 1,194 ms) |
 | Release (R8) runtime | All paths above re-verified on a signed release build |
 | In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` confirmation |
 | Published release | [v0.7.3](https://github.com/mjt28934/AllFun/releases/tag/v0.7.3) — `AllFun-0.7.3-release.apk`, 11,102,178 bytes, SHA-256 `b55671b6af52a03fc6bd94567a422e3f2f524df15bb3b1277e9c2bfce7ead0a0`; downloaded back, checksum and signer re-checked against the workflow build, and the release is the repository's latest |
-| Version | `0.7.3` (versionCode 703) |
+| Version | `0.8.0` (versionCode 800) |
 | Min SDK | 26 (Android 8.0) |
 | Target SDK | 35 |
 
@@ -116,7 +118,7 @@ same small contract, and the UI never knows which kind it is talking to.
 | Source | Type | What it does |
 |---|---|---|
 | **Jellyfin** | video | Username/password login, catalogue, show episodes, direct-play stream with token header. |
-| **Stremio addon** | video | Manifest/catalog/meta/stream/subtitles protocol. Catalog `extra` capabilities are honoured (search only where declared, `skip` as an item offset), `proxyHeaders` become player headers, inline or resource subtitles become a track. Torrent-only results are reported honestly, not faked. |
+| **Stremio addon** | video | Manifest/catalog/meta/stream/subtitles protocol. Catalog `extra` capabilities are honoured (search only where declared, `skip` as an item offset), `proxyHeaders` become player headers, inline or resource subtitles become a track. Direct HTTP results play immediately; `infoHash`/magnet results play through a libtorrent session. Stream-only addons (Torrentio and similar) are installed, queried for every title, and kept out of the catalogue feeds. |
 | **Manga extension (.apk)** | manga | A real Tachiyomi/Mihon/Komikku extension APK. Its `CatalogueSource` is driven through AllFun's own `eu.kanade.tachiyomi.*` host classes: browse, search, details, chapter list and page images. |
 | **Novel plugin (.js)** | novel | A real LNReader plugin. It runs in an offscreen `WebView` with bundled `cheerio`/`dayjs`/`htmlparser2`, a CommonJS `require` shim for `@libs/*`, an OkHttp-backed `fetch` bridge and a synchronous `storage` that mirrors to SharedPreferences. Chapter HTML is sanitised (scripts, inline handlers and `javascript:` links removed, relative links made absolute) before rendering. |
 
@@ -191,10 +193,12 @@ busy label, and failures leave the previous installation untouched.
   chapter picker is searchable.
 - **Player** — Media3/ExoPlayer, resume where you stopped, live subtitle on/off, next
   episode, periodic progress saves and guidance buttons on failure. A downloaded direct-HTTP
-  file plays from app storage without a network. A source error and a playback error are
-  different states: each has a readable message, Retry, and the raw `ERROR_CODE_…` behind
-  **Technical details**. While the error column is shown, the player's own controller and
-  buffering spinner are hidden so nothing is drawn over it.
+  file plays from app storage without a network. Torrent releases play in the same player
+  through libtorrent: the stream picker lists every release the installed addons returned,
+  and buffering shows peers and speed until playback starts. A source error and a playback
+  error are different states: each has a readable message, Retry, and the raw `ERROR_CODE_…`
+  behind **Technical details**. While the error column is shown, the player's own controller
+  and buffering spinner are hidden so nothing is drawn over it.
 
 ## Downloads
 
@@ -203,11 +207,15 @@ Downloads are real files owned by AllFun, not bookmarks:
 - **Manga** — every page is saved as a numbered image plus a `pages.json` manifest in
   `files/downloads/<title>/<chapter>/`.
 - **Novels** — the chapter HTML is saved and rendered by the same sanitiser as the live text.
-- **Video** — only direct HTTP files are streamed to disk with byte progress. HLS and DASH
+- **Video** — direct HTTP files are streamed to disk with byte progress. HLS and DASH
   manifests (`.m3u8`, `.mpd`) are refused with a plain explanation instead of a fake entry.
-- **Queue** — `Settings → Downloads` shows active, queued, completed and failed items with
-  real progress; pause, resume, retry, cancel and remove, plus clear finished, Wi-Fi-only and
-  a concurrency limit. Removal asks before deleting files.
+  A torrent-only release can be streamed in the player but not saved: the download reports
+  that instead of attempting an HTTP request for a magnet.
+- **Queue** — `Settings → Downloads` is a grouped **Download queue**: a count of unfinished
+  items, sort by newest/oldest/title/progress, items grouped under their title with a
+  summary (`2 active · 18%`), pause all / resume / cancel / delete per group, a menu per item
+  with real progress, and a floating **Resume** button when something is paused. The overflow
+  menu holds Wi-Fi-only and the concurrency limit. Removal asks before deleting files.
 - **Library** — a completed download appears immediately under **Downloaded** with its size,
   completion date and a badge on the card. Rows and files survive a restart; missing files
   are reported rather than silently listed as available.
@@ -223,7 +231,7 @@ Settings has eleven sections, and every control writes a real preference that th
 | Reading | Manga layout, fit, page order, novel text size, line spacing and theme |
 | Playback | Resume position, subtitle tracks |
 | Extensions | Links to the Extensions screen and a summary of how providers feed the categories |
-| Downloads | The download queue: progress, pause/resume/retry/cancel/remove, Wi-Fi-only, concurrency, storage use |
+| Downloads | The grouped download queue: sort, per-title and per-item actions, progress, pause/resume/retry/cancel/remove, Wi-Fi-only, concurrency, storage use |
 | Storage | Cache/extension/database sizes, clear cached files, refresh |
 | Network | Timeouts and a real repository connection test |
 | App Updates | GitHub Releases check, download and install |
@@ -555,13 +563,16 @@ verifies, checksums, drafts, verifies the draft, publishes, and confirms the res
 | Build prints `R8: An error occurred when parsing kotlin metadata` | R8 in AGP 8.7 is older than Kotlin 2.2. It is a warning, not a failure; the build continues. |
 | A source answers with `Content-Encoding: zstd` and the app stops | Fixed in 0.5.0 by keeping `com.squareup.zstd.**` in `proguard-rules.pro`; R8 had stripped the JNI compressor that OkHttp 5 needs. |
 | Local build cannot reach `dl.google.com` | The Aliyun Google mirror in `settings.gradle.kts` is already a fallback after `google()`. |
+| A torrent stays at `Buffering torrent 0%` and then fails | The infohash has no reachable peers, or the addon returned a stale hash. Use **Choose another stream** to pick another release; the message and **Technical details** name the libtorrent error. |
+| Download button says the release is torrent-only | Saving torrents for offline playback is not implemented; they stream in the player only. Pick a direct HTTP release to download. |
 
 ## Not built yet
 
 Honest list, roughly in priority order:
 
-1. **Downloads** — offline chapters/episodes with a queue (`WorkManager`), per-title storage.
-   Settings says so instead of showing a dead switch.
+1. **Torrent offline downloads** — torrent releases stream in the player, but they are not
+   saved to device storage; the download button says so. Manga, novel and direct video
+   downloads already exist.
 2. **Tracking** — AniList/MAL/Shikimori sync for manga and novels, Trakt for video.
 3. **Paged EPUB and annotations** — the novel reader is a themed scrollable WebView;
    pagination, highlights and bookmarks are not there yet.
@@ -570,10 +581,10 @@ Honest list, roughly in priority order:
 5. **Declarative sources** — a JSON extension format (`{ "search": "/s?q={query}",
    "selectors": … }`) for sites that need no code, since `MediaSource` is already the
    boundary.
-6. **UI and instrumentation tests** — 26 JVM unit tests cover version comparison, release
-   parsing, category/dedupe/format mapping and Tachiyomi page conversion. Compose/UI tests,
-   Room tests and an on-device instrumentation suite are not written yet; those paths are
-   still verified manually on the emulator.
+6. **UI and instrumentation tests** — 43 JVM unit tests cover version comparison, release
+   parsing, category/dedupe/format mapping, Tachiyomi page conversion and the torrent
+   helpers. Compose/UI tests, Room tests and an on-device instrumentation suite are not
+   written yet; those paths are still verified manually on the emulator.
 7. **Immersive player** — playback uses Media3's controller; fullscreen/gesture controls and
    background audio are not implemented.
 
@@ -582,8 +593,8 @@ Honest list, roughly in priority order:
 AllFun is a client. It ships no catalogue and no sample media: there are no bundled books,
 manga or demo library rows, and every title on the shelf came from a source the user added.
 Jellyfin and local files are your own media. Stremio addons and extensions are supplied by
-the user; the app only follows their protocols, and it refuses torrent-only streams rather
-than embedding a torrent engine.
+the user; the app only follows their protocols, including the torrent results those addons
+return, and ships no catalogue of its own.
 
 Demo screenshots for the video path were taken against a **local mock addon** in
 [`tools/stremio-mock/`](tools/stremio-mock/): generated posters, one demo film and one demo

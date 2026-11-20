@@ -15,6 +15,7 @@ import app.allfun.data.repo.ProgressRepository
 import app.allfun.data.repo.SourceRepository
 import app.allfun.data.settings.SettingsStore
 import app.allfun.data.source.SourceHub
+import app.allfun.data.torrent.TorrentEngine
 import app.allfun.data.source.SourceIds
 import app.allfun.data.update.ApkInspector
 import app.allfun.data.update.ApkInstaller
@@ -85,6 +86,9 @@ class AppContainer(context: Context) {
 
     /** Real offline downloads: queue, files, offline reads and Library integration. */
     val downloads: DownloadManager
+
+    /** libtorrent playback for Stremio addons that only return info hashes. */
+    val torrents = TorrentEngine(app)
 
     init {
         // Extensions link against the eu.kanade.tachiyomi.* API implemented by this app,

@@ -1,3 +1,10 @@
+# libtorrent4j is a SWIG/JNI bridge: Java classes and native method names must survive
+# shrinking, and TorrentStream resolves its listener callbacks through the library.
+-keep class org.libtorrent4j.** { *; }
+-keep class com.github.se_bastiaan.torrentstream.** { *; }
+-keepclasseswithmembernames class org.libtorrent4j.** { native <methods>; }
+-dontwarn org.libtorrent4j.**
+
 # Keep kotlinx.serialization serializers
 -keepattributes *Annotation*, InnerClasses
 -dontnote kotlinx.serialization.**

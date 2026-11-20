@@ -23,9 +23,9 @@ val keystoreProperties = Properties().apply {
 // matches the release it is published under. Local builds use the defaults below.
 val appVersionName = (project.findProperty("appVersionName") as String?)
     ?.removePrefix("v")
-    ?: "0.7.3"
+    ?: "0.8.0"
 val appVersionCode = (project.findProperty("appVersionCode") as String?)?.toIntOrNull()
-    ?: 703
+    ?: 800
 
 android {
     namespace = "app.allfun"
@@ -168,6 +168,11 @@ dependencies {
 
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
+
+    // Torrent-only Stremio streams: libtorrent session with sequential piece
+    // prioritisation. The Android native libraries ship as JNI jars, so the APK grows
+    // by the selected ABIs; this is the cost of playing infoHash streams in-app.
+    implementation("com.github.TorrentStream:TorrentStream-Android:3.0.0")
 
     testImplementation("junit:junit:4.13.2")
 }

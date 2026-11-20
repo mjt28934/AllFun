@@ -10,16 +10,24 @@ import app.allfun.data.db.SourceEntity
 import app.allfun.data.extension.ExtensionManager
 import app.allfun.data.extension.NovelPluginHost
 import app.allfun.data.model.SourceType
+import app.allfun.data.model.StreamInfo
 import app.allfun.data.net.Http
 import app.allfun.data.net.arr
 import app.allfun.data.net.obj
 import app.allfun.data.net.str
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
@@ -159,6 +167,107 @@ class SourceHub(
     suspend fun sourceFor(sourceId: String): MediaSource? =
         sourceDao.byId(sourceId)?.let { instance(it) }
 
+    /**
+     * A Stremio addon with no catalogs is a stream provider (Torrentio and similar). It
+     * is installed and queried by [streamFor], but it must not appear in a category feed
+     * or be reported as a broken catalogue.
+     */
+    fun isStreamProviderOnly(entity: SourceEntity): Boolean {
+        if (entity.type != SourceType.VIDEO) return false
+        val config = runCatching {
+            Json.parseToJsonElement(entity.configJson ?: "{}").jsonObject
+        }.getOrNull() ?: return false
+        if (config.str("kind") != "stremio") return false
+        val manifest = config.obj("manifest") ?: return false
+        return manifest.arr("catalogs").isNullOrEmpty() && hasStreamResource(manifest)
+    }
+
+    /**
+     * Resolves a video stream across every installed Stremio addon that accepts the
+     * content id. Catalog addons supply the metadata; stream addons such as Torrentio
+     * answer requests for another addon's ids, so asking only the item's origin addon
+     * would hide every torrent source.
+     */
+    suspend fun streamFor(
+        originSourceId: String,
+        key: String,
+        unitId: String,
+        payload: String?
+    ): StreamInfo? = streamsFor(originSourceId, key, unitId, payload).firstOrNull()
+
+    /**
+     * Every playable option for a title. Direct HTTP streams come first because they
+     * start instantly; torrents follow, preferring 1080p/720p then seed count. The player
+     * shows this list when more than one addon or release answers, so an unreachable
+     * tracker never leaves the viewer with no alternative.
+     */
+    suspend fun streamsFor(
+        originSourceId: String,
+        key: String,
+        unitId: String,
+        payload: String?
+    ): List<StreamInfo> {
+        val origin = sourceDao.byId(originSourceId) ?: return emptyList()
+        if (origin.type != SourceType.VIDEO) return emptyList()
+        val originSource = runCatching { instance(origin) }.getOrNull() ?: return emptyList()
+
+        // Jellyfin and other non-Stremio sources use their own internal ids; querying an
+        // IMDb-keyed addon with those would always fail.
+        if (originSource !is StremioSource) {
+            return listOfNotNull(originSource.stream(key, unitId, payload))
+        }
+
+        val type = key.substringBefore('|', "movie")
+        val streamId = payload?.takeIf { it.isNotBlank() } ?: unitId
+        val addons = sourceDao.all()
+            .filter { it.enabled && it.type == SourceType.VIDEO }
+            .mapNotNull { entity ->
+                runCatching { instance(entity) }.getOrNull() as? StremioSource
+            }
+            .filter { it.supportsStreams && it.acceptsStream(type, streamId) }
+
+        val perAddon = coroutineScope {
+            addons.map { addon ->
+                async {
+                    withTimeoutOrNull(STREAM_LOOKUP_TIMEOUT_MS) {
+                        try {
+                            addon.streams(key, unitId, payload)
+                        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                            throw cancelled
+                        } catch (_: Throwable) {
+                            emptyList()
+                        }
+                    } ?: emptyList()
+                }
+            }.awaitAll()
+        }
+
+        val unique = perAddon.flatten().distinctBy(::streamIdentity)
+        val direct = unique.filter { it.torrent == null }
+        val torrents = unique.filter { it.torrent != null }
+            .sortedWith(
+                compareByDescending<StreamInfo> { StremioTorrents.qualityRank(it) }
+                    .thenByDescending { it.torrent?.seeds ?: 0 }
+            )
+        return (direct + torrents).take(MAX_STREAMS)
+    }
+
+    private fun hasStreamResource(manifest: JsonObject): Boolean =
+        manifest.arr("resources")?.any { element ->
+            when (element) {
+                is JsonPrimitive -> element.contentOrNull == "stream"
+                is JsonObject -> element.str("name") == "stream"
+                else -> false
+            }
+        } == true
+
+    private fun streamIdentity(stream: StreamInfo): String {
+        val hash = stream.torrent?.magnet
+            ?.substringAfter("xt=urn:btih:", "")
+            ?.substringBefore('&')
+        return if (hash.isNullOrBlank()) stream.url else "btih:$hash"
+    }
+
     /** Whether the files an extension-backed source needs are still on disk. */
     fun isAvailable(entity: SourceEntity): Boolean {
         val config = runCatching {
@@ -239,9 +348,13 @@ class SourceHub(
         val base = normalize(rawUrl)
         val manifest = http.getJson("$base/manifest.json").jsonObject
         val name = manifest.str("name") ?: error("That addon has no manifest name")
-        val catalogs = manifest.arr("catalogs") ?: return@runCatching error(
-            "That addon exposes no catalogs"
-        )
+        val catalogs = manifest.arr("catalogs").orEmpty()
+        // Stream-only addons (Torrentio, media fusion) are valid: they answer stream
+        // requests for ids supplied by Cinemeta or another catalog addon. Rejecting them
+        // here was why those addons appeared to install and then vanished.
+        if (catalogs.isEmpty() && !hasStreamResource(manifest)) {
+            error("That addon exposes neither catalogs nor streams")
+        }
 
         // Keep the whole manifest: catalog `extra` declarations decide which request
         // shapes the addon accepts (search, skip, genre), and the stream/subtitle
@@ -349,5 +462,12 @@ class SourceHub(
         }
         if (value.endsWith("/manifest.json")) value = value.removeSuffix("/manifest.json")
         return value
+    }
+
+    private companion object {
+        const val STREAM_LOOKUP_TIMEOUT_MS = 20_000L
+
+        /** Enough alternatives to escape a dead tracker without an endless picker. */
+        const val MAX_STREAMS = 60
     }
 }

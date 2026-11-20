@@ -259,13 +259,56 @@ system will suppress.
   **item offset**, not a page number — page *n* requests `skip = n * 100`.
 - `meta` supplies `videos[]` for series; entries are sorted by season/episode when the data
   allows it, with `season == 0` kept as specials.
-- `stream` results are scanned for a direct `http(s)` URL. `behaviorHints.proxyHeaders.request`
+- `stream` results are parsed into direct and torrent options. `behaviorHints.proxyHeaders.request`
   becomes the player's request headers, so a stream that only works with a referer does.
 - Subtitles come from the stream's inline `subtitles[]` first, then the addon's `subtitles`
   resource, and are attached as a Media3 subtitle track.
 
-Torrent (`infoHash`) and browser-only (`externalUrl`) results are skipped and reported as
-"nothing playable", rather than pretending to play them.
+A **stream-only addon** (no `catalogs`, but a `stream` resource) is a valid Stremio addon:
+Torrentio and similar answer for ids supplied by another addon. It is accepted at install
+time, excluded from category feeds and source counts by `SourceHub.isStreamProviderOnly`, and
+queried whenever a title is played.
+
+`SourceHub.streamsFor` asks **every** installed Stremio addon that declares the `stream`
+resource and accepts the id, in parallel with a 20 s cap, and merges the answers:
+
+- The origin addon is still queried; non-Stremio sources (Jellyfin) keep using their own
+  single stream and never fan out to IMDb-keyed addons.
+- Duplicates collapse on the infohash (`xt=urn:btih:`), not on the URL, because addons
+  advertise the same torrent through different trackers and display names.
+- Direct HTTP results come first — they start instantly. Torrents follow, ordered by quality
+  rank (1080p, 720p, 2160p, 480p, then unknown) and then by advertised seed count. 1080p
+  leads because it buffers on a phone far faster than a 4K remux; every resolution stays in
+  the picker.
+- At most 60 options are returned, so a dead tracker still has alternatives without an
+  endless picker.
+
+Browser-only results (`externalUrl`) are still skipped: AllFun cannot hand a page to an
+external player and claim it played the title.
+
+## Torrent playback
+
+A torrent result is not a URL, so it is played in three steps:
+
+1. `StremioSource` builds a `TorrentRef` from `infoHash`, `sources[]` trackers and the
+   optional `fileIdx`/`filename` hints (magnet construction, base32 hash decoding and
+   quality detection live in `StremioTorrents`). `StreamInfo.torrent` being non-null is the
+   only marker the player needs.
+2. `TorrentEngine` (TorrentStream + libtorrent4j) opens the magnet, waits for metadata,
+   selects the addon's file index — or the largest file when the addon sent no filename —
+   and calls `startStream()`, which prioritises pieces sequentially around the play
+   position. Its callbacks report piece buffer percentage, peers and speed to the player,
+   which shows them instead of a blank spinner.
+3. `TorrentDataSource` implements Media3's `DataSource` over the prepared torrent: open,
+   read, length and seek are served from the local file libtorrent is filling, and HTTP
+   downloads fall back to `DefaultDataSource`. The player therefore uses
+   `torrent://allfun/stream` as an ordinary media URI, and seeking, subtitles and progress
+   saving need no special cases.
+
+The engine holds one session at a time: opening another episode or leaving the player calls
+`stop()`, so the app does not seed a video the viewer has left. R8 must keep `org.libtorrent4j`
+and `com.github.se_bastiaan.torrentstream` intact — both are reached through JNI and
+reflection.
 
 ## Release builds and dynamic code
 
@@ -336,6 +379,11 @@ While that panel is visible, `useController` is turned off and buffering is set 
 Retry clears the playback error and re-resolves the stream; if the same stream still fails,
 the error returns rather than looping silently.
 
+`PlayerViewModel` keeps the whole candidate list. One option plays directly; more than one
+opens the stream picker overlay before Media3 is touched, so an unreachable torrent never
+becomes a dead end. A torrent option first passes through `TorrentEngine`, which reports
+buffer percentage, peers and speed; only `onReady` hands the pseudo-URL to the player.
+
 ## Threading
 
 - Room and OkHttp are called on `Dispatchers.IO` (repositories/importers are `suspend`).
@@ -347,7 +395,9 @@ the error returns rather than looping silently.
 - No Hilt: `AppContainer` is small and explicit. Moving to Hilt later is a mechanical
   translation of its constructor.
 - No multi-module split yet: package boundaries already match the future modules.
-- No torrent engine, no DRM, no scraping of unlicensed catalogues.
-- Unit tests cover version comparison and release parsing (`app/src/test/.../data/update`).
-  Room migrations are still covered by real upgrade installs during development, not by
-  instrumentation tests, and the UI is verified manually on the emulator.
+- No DRM, no scraping of unlicensed catalogues, no offline torrent storage (torrents stream
+  only; direct HTTP files still download).
+- Unit tests cover version comparison, release parsing, mapping helpers and the torrent
+  helpers (`app/src/test/.../`). Room migrations are still covered by real upgrade installs
+  during development, not by instrumentation tests, and the UI is verified manually on the
+  emulator.

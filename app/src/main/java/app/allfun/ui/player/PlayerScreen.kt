@@ -1,6 +1,7 @@
 package app.allfun.ui.player
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,13 +9,18 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,10 +37,12 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -52,6 +60,7 @@ import androidx.media3.ui.PlayerView
 import app.allfun.data.AppContainer
 import app.allfun.data.model.StreamInfo
 import app.allfun.data.settings.Settings
+import app.allfun.data.torrent.TorrentDataSourceFactory
 import app.allfun.ui.components.rememberViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -78,7 +87,10 @@ fun PlayerScreen(
 
     DisposableEffect(Unit) {
         view.keepScreenOn = true
-        onDispose { view.keepScreenOn = false }
+        onDispose {
+            view.keepScreenOn = false
+            vm.stopTorrentPlayback()
+        }
     }
 
     DisposableEffect(state.stream) {
@@ -90,9 +102,10 @@ fun PlayerScreen(
             val httpDataSource = DefaultHttpDataSource.Factory()
                 .setDefaultRequestProperties(stream.headers)
                 .setAllowCrossProtocolRedirects(true)
-            // content:// (SAF imports) and file:// need the default resolver; http(s) goes
-            // through the configured factory so Jellyfin/Stremio headers still apply.
-            val dataSource = DefaultDataSource.Factory(context, httpDataSource)
+            // content:// (SAF imports), file:// and http(s) keep the default resolver,
+            // while torrent:// reads come from the active libtorrent file. The factory
+            // routes each request by scheme so subtitles and Jellyfin headers still work.
+            val dataSource = TorrentDataSourceFactory(context, container.torrents, httpDataSource)
             val exo = ExoPlayer.Builder(context)
                 .setMediaSourceFactory(DefaultMediaSourceFactory(dataSource))
                 .build()
@@ -218,10 +231,29 @@ fun PlayerScreen(
         }
 
         if (state.loading) {
-            CircularProgressIndicator(
-                modifier = Modifier.align(Alignment.Center),
-                color = Color.White
-            )
+            Column(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(horizontal = 40.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                CircularProgressIndicator(color = Color.White)
+                val progress = state.torrentStatus
+                if (progress != null) {
+                    Spacer(Modifier.padding(top = 16.dp))
+                    Text(
+                        text = progress,
+                        color = Color.White.copy(alpha = 0.85f),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(Modifier.padding(top = 4.dp))
+                    Text(
+                        text = "Torrent streams start after the first pieces arrive.",
+                        color = Color.White.copy(alpha = 0.5f),
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
         }
 
         val sourceError = state.error
@@ -256,6 +288,16 @@ fun PlayerScreen(
                         vm.retry()
                     }) { Text("Retry") }
                 }
+                if (state.streams.size > 1) {
+                    TextButton(onClick = {
+                        playbackError = null
+                        showDetails = false
+                        showTechnical = false
+                        vm.chooseAnotherStream()
+                    }) {
+                        Text("Choose another stream", color = Color.White)
+                    }
+                }
                 val technical = listOfNotNull(sourceError?.technical, playbackError)
                     .joinToString("\n\n")
                     .takeIf { it.isNotBlank() }
@@ -278,6 +320,117 @@ fun PlayerScreen(
                     }
                 }
             }
+        }
+
+        if (state.showStreamPicker) {
+            StreamPicker(
+                streams = state.streams,
+                onChoose = vm::chooseStream,
+                onClose = onBack
+            )
+        }
+    }
+}
+
+/**
+ * Lists every release the installed addons returned. Torrent-only addons can answer a
+ * popular film with dozens of files; the viewer needs to be able to move on when the
+ * first pick has no reachable peers.
+ */
+@Composable
+private fun StreamPicker(
+    streams: List<StreamInfo>,
+    onChoose: (Int) -> Unit,
+    onClose: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.95f))
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onClose) {
+                Icon(
+                    Icons.AutoMirrored.Outlined.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.White
+                )
+            }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "Choose a stream",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    text = "${streams.size} options from your add-ons",
+                    color = Color.White.copy(alpha = 0.6f),
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+        }
+        Spacer(Modifier.padding(top = 4.dp))
+        LazyColumn(Modifier.weight(1f)) {
+            itemsIndexed(streams, key = { index, stream -> "$index:${stream.url}" }) { index, stream ->
+                StreamRow(stream = stream, onClick = { onChoose(index) })
+                HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun StreamRow(stream: StreamInfo, onClick: () -> Unit) {
+    val torrent = stream.torrent
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stream.name ?: if (torrent != null) "Torrent" else "Direct stream",
+                color = Color.White,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = if (torrent != null) "Torrent" else "Direct",
+                color = if (torrent != null) Color(0xFF9CC7FF) else Color(0xFF9BE7B0),
+                style = MaterialTheme.typography.labelSmall
+            )
+        }
+        stream.detail?.takeIf { it.isNotBlank() }?.let { detail ->
+            Spacer(Modifier.padding(top = 2.dp))
+            Text(
+                text = detail.replace('\n', ' ').trim(),
+                color = Color.White.copy(alpha = 0.65f),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        val meta = buildList {
+            stream.addonName?.takeIf { it.isNotBlank() }?.let(::add)
+            torrent?.seeds?.takeIf { it > 0 }?.let { add("$it seeds") }
+        }.joinToString(" · ")
+        if (meta.isNotBlank()) {
+            Spacer(Modifier.padding(top = 2.dp))
+            Text(
+                text = meta,
+                color = Color.White.copy(alpha = 0.45f),
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

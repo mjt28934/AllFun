@@ -8,6 +8,7 @@ import app.allfun.data.db.MediaEntity
 import app.allfun.data.model.StreamInfo
 import app.allfun.data.net.UserError
 import app.allfun.data.net.toUserError
+import app.allfun.data.torrent.TorrentEngine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,7 +31,14 @@ class PlayerViewModel(
         val episodeIndex: Int = 0,
         val episodeCount: Int = 0,
         val loading: Boolean = true,
-        val error: UserError? = null
+        val error: UserError? = null,
+        /** Human-readable torrent preparation state, null for direct streams. */
+        val torrentStatus: String? = null,
+        /** Every option the installed addons returned for this episode. */
+        val streams: List<StreamInfo> = emptyList(),
+        /** True while the viewer is choosing between [streams]. */
+        val showStreamPicker: Boolean = false,
+        val selectedStreamIndex: Int = -1
     )
 
     private val _state = MutableStateFlow(State())
@@ -71,6 +79,9 @@ class PlayerViewModel(
     private fun open(index: Int, startPositionMs: Long) {
         val item = media ?: return
         val episode = episodes.getOrNull(index) ?: return
+        // A new episode replaces the old torrent; leaving it running would keep seeding
+        // while the UI claims to be on a different video.
+        container.torrents.stop()
         _state.update {
             it.copy(
                 episodeIndex = index,
@@ -79,7 +90,11 @@ class PlayerViewModel(
                 stream = null,
                 startPositionMs = startPositionMs,
                 loading = true,
-                error = null
+                error = null,
+                torrentStatus = null,
+                streams = emptyList(),
+                showStreamPicker = false,
+                selectedStreamIndex = -1
             )
         }
         viewModelScope.launch {
@@ -94,16 +109,31 @@ class PlayerViewModel(
                     }
                     return@launch
                 }
-                val source = container.sourceHub.sourceFor(item.sourceId)
+                container.sourceHub.sourceFor(item.sourceId)
                     ?: error("That source is no longer available")
-                val stream = source.stream(
-                    item.sourceKey,
-                    unitId,
-                    episode.payload
-                ) ?: error(
-                    "This source returned no playable stream. Torrent-only addons are not supported."
+                val streams = container.sourceHub.streamsFor(
+                    originSourceId = item.sourceId,
+                    key = item.sourceKey,
+                    unitId = unitId,
+                    payload = episode.payload
                 )
-                _state.update { it.copy(stream = stream, loading = false) }
+                if (streams.isEmpty()) {
+                    error(
+                        "This source returned no playable stream. The addon may be offline, " +
+                            "or the release may not have an available seed."
+                    )
+                }
+                if (streams.size == 1) {
+                    play(streams, 0)
+                } else {
+                    _state.update {
+                        it.copy(
+                            streams = streams,
+                            showStreamPicker = true,
+                            loading = false
+                        )
+                    }
+                }
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
                 _state.update {
@@ -113,8 +143,127 @@ class PlayerViewModel(
         }
     }
 
+    /** Plays one entry of the current list; used by the picker and by Retry. */
+    fun chooseStream(index: Int) {
+        val streams = _state.value.streams
+        if (index !in streams.indices) return
+        play(streams, index)
+    }
+
+    private fun play(streams: List<StreamInfo>, index: Int) {
+        val stream = streams.getOrNull(index) ?: return
+        _state.update {
+            it.copy(
+                streams = streams,
+                selectedStreamIndex = index,
+                showStreamPicker = false,
+                stream = null,
+                loading = true,
+                error = null,
+                torrentStatus = null
+            )
+        }
+        val torrent = stream.torrent
+        if (torrent != null) {
+            startTorrent(stream)
+        } else {
+            _state.update { it.copy(stream = stream, loading = false) }
+        }
+    }
+
+    /** Returns to the list after a dead torrent or a stream the device cannot play. */
+    fun chooseAnotherStream() {
+        container.torrents.stop()
+        _state.update {
+            if (it.streams.size > 1) {
+                it.copy(
+                    stream = null,
+                    loading = false,
+                    error = null,
+                    torrentStatus = null,
+                    showStreamPicker = true
+                )
+            } else {
+                it.copy(error = null, torrentStatus = null, loading = true)
+            }
+        }
+        if (_state.value.streams.size <= 1) {
+            open(_state.value.episodeIndex, _state.value.startPositionMs)
+        }
+    }
+
+    /**
+     * Torrent playback becomes a normal [StreamInfo] only after libtorrent has the
+     * pieces around the start position. Until then the player shows peer progress
+     * instead of opening ExoPlayer against an incomplete file.
+     */
+    private fun startTorrent(stream: StreamInfo) {
+        val torrent = stream.torrent ?: return
+        _state.update {
+            it.copy(stream = null, loading = true, torrentStatus = "Finding peers…")
+        }
+        container.torrents.play(
+            torrent,
+            object : TorrentEngine.Callbacks {
+                override fun onStatus(status: TorrentEngine.Status) {
+                    _state.update { it.copy(torrentStatus = torrentStatusText(status)) }
+                }
+
+                override fun onReady() {
+                    _state.update {
+                        it.copy(
+                            stream = stream.copy(url = TorrentEngine.PLAYBACK_URI),
+                            loading = false,
+                            torrentStatus = null
+                        )
+                    }
+                }
+
+                override fun onError(message: String, technical: String?) {
+                    _state.update {
+                        it.copy(
+                            loading = false,
+                            torrentStatus = null,
+                            error = UserError(message, technical)
+                        )
+                    }
+                }
+            }
+        )
+    }
+
+    private fun torrentStatusText(status: TorrentEngine.Status): String {
+        val buffer = status.bufferPercent.coerceIn(0, 100)
+        val peers = if (status.seeds > 0) " · ${status.seeds} seeds" else ""
+        val speed = when {
+            status.downloadSpeed <= 0 -> ""
+            status.downloadSpeed >= 1024 * 1024 ->
+                " · %.1f MB/s".format(status.downloadSpeed / (1024.0 * 1024.0))
+            status.downloadSpeed >= 1024 ->
+                " · ${status.downloadSpeed / 1024} KB/s"
+            else -> " · ${status.downloadSpeed} B/s"
+        }
+        return "Buffering torrent $buffer%$peers$speed"
+    }
+
+    /** Releases libtorrent when the player screen goes away, not only when the VM dies. */
+    fun stopTorrentPlayback() {
+        container.torrents.stop()
+    }
+
+    override fun onCleared() {
+        container.torrents.stop()
+        super.onCleared()
+    }
+
     fun retry() {
-        open(_state.value.episodeIndex, 0L)
+        container.torrents.stop()
+        val current = _state.value
+        if (current.selectedStreamIndex in current.streams.indices) {
+            play(current.streams, current.selectedStreamIndex)
+        } else {
+            open(current.episodeIndex, 0L)
+        }
     }
 
     fun nextEpisode() {

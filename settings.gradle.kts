@@ -15,6 +15,9 @@ dependencyResolutionManagement {
         // Fallback mirror for networks where dl.google.com is unreachable.
         // Harmless when google() works: Gradle only falls through on a miss.
         maven("https://maven.aliyun.com/repository/google")
+        // TorrentStream-Android publishes to JitPack only. It supplies the libtorrent
+        // session and sequential piece prioritisation used for torrent-only addons.
+        maven("https://jitpack.io")
     }
 }
 

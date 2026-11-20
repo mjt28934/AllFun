@@ -7,6 +7,7 @@ import app.allfun.data.model.MediaKind
 import app.allfun.data.model.MediaStub
 import app.allfun.data.model.SourceType
 import app.allfun.data.model.StreamInfo
+import app.allfun.data.model.TorrentRef
 import app.allfun.data.model.UnitStub
 import app.allfun.data.net.Http
 import app.allfun.data.net.arr
@@ -30,8 +31,9 @@ import java.net.URLEncoder
  * catalogs that support it. Requesting an unsupported extra makes most addons return
  * 404, which is why guessing here is worse than asking.
  *
- * Only direct HTTP(S) streams are playable. Torrent (`infoHash`) and browser-only
- * (`externalUrl`) results are reported honestly rather than silently dropped.
+ * Direct HTTP(S) streams play as-is. Torrent entries (`infoHash` or `magnet`) are
+ * translated into a magnet with the addon's trackers and handed to the torrent engine,
+ * which streams the selected file. Browser-only (`externalUrl`) results are skipped.
  */
 class StremioSource(
     private val entity: SourceEntity,
@@ -49,6 +51,52 @@ class StremioSource(
     override val supportsCatalogs: Boolean get() = addonCatalogs.isNotEmpty()
 
     private val base = (entity.baseUrl ?: "").trimEnd('/')
+
+    /**
+     * The `stream` resource declares which content types and id prefixes the addon can
+     * answer. Torrentio, for example, has no catalogs but accepts `tt`-prefixed movie
+     * and series ids. Legacy rows without a stored manifest are assumed to stream.
+     */
+    private data class StreamResource(
+        val types: Set<String>,
+        val idPrefixes: List<String>
+    )
+
+    private val streamResource: StreamResource? by lazy {
+        manifest?.arr("resources")?.firstNotNullOfOrNull { element ->
+            when (element) {
+                is JsonPrimitive -> element.contentOrNull
+                    ?.takeIf { it == "stream" }
+                    ?.let { StreamResource(emptySet(), emptyList()) }
+                is JsonObject -> if (element.str("name") == "stream") {
+                    StreamResource(
+                        types = element.arr("types")
+                            ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+                            ?.toSet()
+                            .orEmpty(),
+                        idPrefixes = element.arr("idPrefixes")
+                            ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+                            .orEmpty()
+                    )
+                } else {
+                    null
+                }
+                else -> null
+            }
+        }
+    }
+
+    val supportsStreams: Boolean get() = manifest == null || streamResource != null
+
+    /** Whether this addon can answer a stream request for [type] and [id]. */
+    fun acceptsStream(type: String, id: String): Boolean {
+        if (manifest == null) return true
+        val resource = streamResource ?: return false
+        val typeOk = resource.types.isEmpty() || type in resource.types
+        val idOk = resource.idPrefixes.isEmpty() ||
+            resource.idPrefixes.any { id.startsWith(it) }
+        return typeOk && idOk
+    }
 
     /** One catalog entry from the manifest, including its supported extras. */
     private data class AddonCatalog(
@@ -258,37 +306,112 @@ class StremioSource(
         return sorted.mapIndexed { index, video -> video.stub.copy(index = index) }
     }
 
-    override suspend fun stream(key: String, unitId: String, payload: String?): StreamInfo? {
+    override suspend fun stream(key: String, unitId: String, payload: String?): StreamInfo? =
+        streams(key, unitId, payload).firstOrNull()
+
+    /**
+     * Every playable stream the addon offers for one title, best candidate first.
+     *
+     * Torrent-only addons routinely return hundreds of releases for a popular film,
+     * and the one with the most advertised seeds can still be a private tracker the
+     * device cannot reach. Returning the whole list lets the player offer the next
+     * release instead of dead-ending on a single bad pick.
+     */
+    suspend fun streams(key: String, unitId: String, payload: String?): List<StreamInfo> {
         val (type, _) = splitKey(key)
         val streamId = payload?.takeIf { it.isNotBlank() } ?: unitId
-        val streams = runCatching {
+        val entries = runCatching {
             http.getJson("$base/stream/$type/${encodePath(streamId)}.json")
                 .jsonObject.arr("streams")
-        }.getOrNull() ?: return null
+        }.getOrNull() ?: return emptyList()
 
-        for (element in streams) {
-            val stream = runCatching { element.jsonObject }.getOrNull() ?: continue
-            val url = stream.str("url")
-            if (url == null || !url.startsWith("http", ignoreCase = true)) {
-                // magnet:, infoHash (torrent) and externalUrl are not in-app playable.
-                continue
-            }
-            val headers = stream.obj("behaviorHints")
-                ?.obj("proxyHeaders")
-                ?.obj("request")
-                ?.let { request ->
-                    request.entries.mapNotNull { (header, value) ->
-                        (value as? JsonPrimitive)?.contentOrNull?.let { header to it }
-                    }.toMap()
-                }
-                .orEmpty()
+        val collected = mutableListOf<StreamInfo>()
+        val seen = mutableSetOf<String>()
+        entries.forEach { element ->
+            val stream = runCatching { element.jsonObject }.getOrNull() ?: return@forEach
             val inlineSubtitle = stream.arr("subtitles")
                 ?.firstNotNullOfOrNull { it.subtitleUrl() }
-            val subtitle = inlineSubtitle ?: fetchSubtitle(type, streamId)
-            return StreamInfo(url = url, headers = headers, subtitleUrl = subtitle)
+            val label = stream.str("name")?.trim()?.takeIf { it.isNotEmpty() }
+            val detail = (stream.str("title") ?: stream.str("description"))
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+            val url = stream.str("url")
+            if (url != null && url.startsWith("http", ignoreCase = true)) {
+                if (!seen.add("url:$url")) return@forEach
+                collected += StreamInfo(
+                    url = url,
+                    headers = requestHeaders(stream),
+                    subtitleUrl = inlineSubtitle,
+                    addonName = name,
+                    name = label,
+                    detail = detail
+                )
+                return@forEach
+            }
+
+            val fileName = stream.obj("behaviorHints")?.str("filename")
+            val infoHash = stream.str("infoHash")
+            val suppliedMagnet = stream.str("magnet")
+                ?.takeIf { it.startsWith("magnet:", ignoreCase = true) }
+            val sources = stream.arr("sources")
+                ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+                .orEmpty()
+            val trackers = StremioTorrents.trackers(
+                sources + listOfNotNull(stream.str("announce"))
+            )
+            val magnet = suppliedMagnet ?: StremioTorrents.magnet(
+                infoHash = infoHash,
+                displayName = fileName ?: stream.str("name"),
+                trackers = trackers
+            ) ?: return@forEach
+
+            val identity = StremioTorrents.identity(suppliedMagnet ?: magnet)
+            if (!seen.add("btih:$identity")) return@forEach
+            collected += StreamInfo(
+                url = magnet,
+                subtitleUrl = inlineSubtitle,
+                torrent = TorrentRef(
+                    magnet = magnet,
+                    fileIndex = stream.int("fileIdx")?.takeIf { it >= 0 },
+                    fileName = fileName,
+                    seeds = StremioTorrents.seeds(
+                        stream.str("name"),
+                        stream.str("title"),
+                        stream.str("description")
+                    )
+                ),
+                addonName = name,
+                name = label,
+                detail = detail
+            )
         }
-        return null
+
+        if (collected.isEmpty()) return emptyList()
+        val sorted = collected.sortedWith(
+            compareByDescending<StreamInfo> { it.torrent == null }
+                .thenByDescending { StremioTorrents.qualityRank(it) }
+                .thenByDescending { it.torrent?.seeds ?: 0 }
+        )
+        if (sorted.any { it.subtitleUrl == null }) {
+            val fallback = fetchSubtitle(type, streamId)
+            if (fallback != null) {
+                return sorted.map { if (it.subtitleUrl == null) it.copy(subtitleUrl = fallback) else it }
+            }
+        }
+        return sorted
     }
+
+    /** Proxied request headers a Stremio stream asks the player to send. */
+    private fun requestHeaders(stream: JsonObject): Map<String, String> =
+        stream.obj("behaviorHints")
+            ?.obj("proxyHeaders")
+            ?.obj("request")
+            ?.let { request ->
+                request.entries.mapNotNull { (header, value) ->
+                    (value as? JsonPrimitive)?.contentOrNull?.let { header to it }
+                }.toMap()
+            }
+            .orEmpty()
 
     private fun kotlinx.serialization.json.JsonElement.subtitleUrl(): String? {
         val entry = runCatching { jsonObject }.getOrNull() ?: return null

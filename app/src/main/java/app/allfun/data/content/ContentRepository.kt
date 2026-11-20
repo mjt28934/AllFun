@@ -67,11 +67,15 @@ class ContentRepository(
     private enum class ContentLane { POPULAR, TRENDING, LATEST, RECENT, OTHER }
 
     suspend fun enabledSources(category: ContentCategory): List<SourceEntity> =
-        sourceDao.all().filter { it.enabled && it.type == category.sourceType }
+        sourceDao.all().filter {
+            it.enabled &&
+                it.type == category.sourceType &&
+                !sourceHub.isStreamProviderOnly(it)
+        }
 
     /** Every enabled source, for screens that need a count before a search has run. */
     suspend fun enabledSources(): List<SourceEntity> =
-        sourceDao.all().filter { it.enabled }
+        sourceDao.all().filter { it.enabled && !sourceHub.isStreamProviderOnly(it) }
 
     /**
      * Builds the category feed from every enabled source. [force] bypasses the cache and

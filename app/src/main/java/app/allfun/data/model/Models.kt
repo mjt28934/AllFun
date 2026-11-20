@@ -63,10 +63,31 @@ data class UnitStub(
     val memo: String? = null
 )
 
+/**
+ * A playable BitTorrent stream. Stremio addons identify the torrent with either an
+ * `infoHash` or a ready-made magnet; [fileIndex] selects one file inside a multi-file
+ * torrent and [fileName] is the addon's filename hint when no index was given.
+ */
+data class TorrentRef(
+    val magnet: String,
+    val fileIndex: Int? = null,
+    val fileName: String? = null,
+    /** Advertised seed count, used to rank torrents from several addons. */
+    val seeds: Int = 0
+)
+
 data class StreamInfo(
     val url: String,
     val headers: Map<String, String> = emptyMap(),
-    val subtitleUrl: String? = null
+    val subtitleUrl: String? = null,
+    /** Non-null when [url] is a magnet and playback must go through the torrent engine. */
+    val torrent: TorrentRef? = null,
+    /** Addon that supplied this stream, shown when several addons answer a title. */
+    val addonName: String? = null,
+    /** Addon's own label, such as "Torrentio · 1080p". */
+    val name: String? = null,
+    /** Longer addon description: release name, seeds and size for a torrent. */
+    val detail: String? = null
 )
 
 data class Catalog(val id: String, val name: String)

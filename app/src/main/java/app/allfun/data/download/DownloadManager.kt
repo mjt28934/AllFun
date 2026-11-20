@@ -420,14 +420,24 @@ class DownloadManager(
         episode: app.allfun.data.db.EpisodeEntity,
         source: app.allfun.data.source.MediaSource
     ) {
-        val stream = source.stream(
-            sourceKey,
-            episode.sourceUnitId ?: episode.id,
-            episode.payload
+        val stream = sourceHub.streamFor(
+            originSourceId = source.id,
+            key = sourceKey,
+            unitId = episode.sourceUnitId ?: episode.id,
+            payload = episode.payload
         ) ?: throw IOException(
-            "This provider offers no downloadable file. Torrent-only and browser-only " +
-                "streams cannot be saved by AllFun."
+            "This provider offers no downloadable file. Browser-only streams cannot " +
+                "be saved by AllFun."
         )
+        if (stream.torrent != null) {
+            // The player streams torrents through libtorrent, but writing a complete
+            // torrent to offline storage is not implemented. Say so instead of attempting
+            // an HTTP request for a magnet link and failing with a network error.
+            throw IOException(
+                "This release is torrent-only. AllFun can stream it, but saving torrents " +
+                    "for offline playback is not supported yet. Pick a direct stream to download."
+            )
+        }
         if (!stream.url.startsWith("http://", true) && !stream.url.startsWith("https://", true)) {
             throw IOException("This provider returned a link AllFun cannot download.")
         }
