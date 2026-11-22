@@ -151,6 +151,14 @@ data class DownloadEntity(
     val error: String? = null,
     /** Real reason a queued row is not running, e.g. waiting for Wi-Fi. */
     val note: String? = null,
+    /** Chapter/episode number at queue time, so the queue can be ordered like Komikku's. */
+    val unitNumber: Double = 0.0,
+    /**
+     * Position in the download queue. The queue is explicit and persisted, like Komikku's:
+     * moving an item to the top or bottom writes this value, and a restart restores the
+     * same order instead of falling back to creation time.
+     */
+    val queueOrder: Long = 0L,
     val createdAt: Long = System.currentTimeMillis(),
     val completedAt: Long? = null
 )

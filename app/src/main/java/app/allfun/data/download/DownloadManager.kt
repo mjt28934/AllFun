@@ -21,6 +21,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -32,6 +33,17 @@ import kotlinx.serialization.json.buildJsonArray
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
+
+/**
+ * Queue orderings offered by the Downloads screen. Like Komikku, choosing one really
+ * rewrites the queue instead of only changing how this screen displays it.
+ */
+enum class QueueOrder(val label: String) {
+    CHAPTER_DESC("Chapter number, newest first"),
+    CHAPTER_ASC("Chapter number, oldest first"),
+    ADDED_NEWEST("Recently added first"),
+    ADDED_OLDEST("Added longest ago first")
+}
 
 /**
  * Real offline downloads for content the provider actually serves over HTTP.
@@ -65,6 +77,9 @@ class DownloadManager(
 
     private val running = ConcurrentHashMap<String, Job>()
     private val pumpLock = Mutex()
+
+    /** Serialises queue reordering so two quick menu taps cannot interleave writes. */
+    private val orderLock = Mutex()
 
     private val connectivity =
         appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
@@ -135,34 +150,175 @@ class DownloadManager(
         val provider = sourceHub.sourceFor(media.sourceId)
         if (provider == null || !provider.supportsDownloads) return 0
         val episodes = episodeDao.forMedia(mediaId).associateBy { it.id }
+        // Komikku queues the newest chapters first (sortedByDescending sourceOrder); a
+        // batch download therefore starts with what the user most likely wants to read.
+        val wanted = unitIds.distinct()
+            .mapNotNull { episodes[it] }
+            .sortedByDescending { it.orderIndex }
+        var order = dao.maxQueueOrder()
         var queued = 0
-        unitIds.distinct().forEach { unitId ->
-            val episode = episodes[unitId] ?: return@forEach
-            val key = key(mediaId, unitId)
-            val existing = dao.one(mediaId, unitId)
-            if (existing != null && (existing.status == DownloadStatus.COMPLETED ||
-                    existing.status == DownloadStatus.RUNNING ||
-                    existing.status == DownloadStatus.QUEUED)
+        wanted.forEach { episode ->
+            val key = key(mediaId, episode.id)
+            val existing = dao.one(mediaId, episode.id)
+            if (existing != null && (
+                    existing.status == DownloadStatus.COMPLETED ||
+                        existing.status == DownloadStatus.RUNNING ||
+                        existing.status == DownloadStatus.QUEUED ||
+                        existing.status == DownloadStatus.WAITING
+                    )
             ) {
                 return@forEach
             }
+            order++
             dao.upsert(
                 DownloadEntity(
                     key = key,
                     mediaId = mediaId,
-                    unitId = unitId,
+                    unitId = episode.id,
                     kind = media.kind,
                     mediaTitle = media.title,
                     unitTitle = episode.title,
                     status = DownloadStatus.QUEUED,
                     progress = 0,
-                    note = wifiBlockedNote()
+                    note = wifiBlockedNote(),
+                    unitNumber = episode.number,
+                    queueOrder = order
                 )
             )
             queued++
         }
         if (queued > 0) pump()
         return queued
+    }
+
+    // -------------------------------------------------------------- queue order
+
+    /** Writes an explicit order for the active queue, keeping saved rows untouched. */
+    suspend fun reorder(keys: List<String>) = orderLock.withLock {
+        keys.distinct().forEachIndexed { index, key ->
+            dao.setQueueOrder(key, (index + 1).toLong())
+        }
+    }
+
+    suspend fun moveToTop(key: String) = moveOne(key, toTop = true)
+
+    suspend fun moveToBottom(key: String) = moveOne(key, toTop = false)
+
+    private suspend fun moveOne(key: String, toTop: Boolean) = orderLock.withLock {
+        val active = dao.active()
+        val item = active.firstOrNull { it.key == key } ?: return@withLock
+        val reordered = active.filterNot { it.key == key }.toMutableList()
+        if (toTop) reordered.add(0, item) else reordered.add(item)
+        reordered.forEachIndexed { index, row ->
+            dao.setQueueOrder(row.key, (index + 1).toLong())
+        }
+        pump()
+    }
+
+    /** Moves every active unit of one title together, like "move all for series". */
+    suspend fun moveGroup(mediaId: String, toTop: Boolean) = orderLock.withLock {
+        val active = dao.active()
+        val group = active.filter { it.mediaId == mediaId }
+        if (group.isEmpty()) return@withLock
+        val others = active.filterNot { it.mediaId == mediaId }
+        val reordered = if (toTop) group + others else others + group
+        reordered.forEachIndexed { index, row ->
+            dao.setQueueOrder(row.key, (index + 1).toLong())
+        }
+        pump()
+    }
+
+    suspend fun sortQueue(order: QueueOrder) = orderLock.withLock {
+        val active = dao.active()
+        val sorted = when (order) {
+            QueueOrder.CHAPTER_DESC ->
+                active.sortedWith(
+                    compareByDescending<DownloadEntity> { it.unitNumber }
+                        .thenByDescending { it.createdAt }
+                )
+            QueueOrder.CHAPTER_ASC ->
+                active.sortedWith(
+                    compareBy<DownloadEntity> { it.unitNumber }
+                        .thenBy { it.createdAt }
+                )
+            QueueOrder.ADDED_NEWEST -> active.sortedByDescending { it.createdAt }
+            QueueOrder.ADDED_OLDEST -> active.sortedBy { it.createdAt }
+        }
+        sorted.forEachIndexed { index, row ->
+            dao.setQueueOrder(row.key, (index + 1).toLong())
+        }
+    }
+
+    /** Stops the whole queue; queued rows keep their place and partial files. */
+    suspend fun pauseAll() {
+        settings.setDownloadQueuePaused(true)
+        dao.active()
+            .filter { running.containsKey(it.key) || it.status == DownloadStatus.RUNNING }
+            .forEach { row ->
+                running.remove(row.key)?.cancelAndJoin()
+                val current = dao.one(row.mediaId, row.unitId) ?: row
+                dao.update(
+                    key = row.key,
+                    status = DownloadStatus.QUEUED,
+                    progress = current.progress,
+                    bytes = current.downloadedBytes,
+                    total = current.totalBytes,
+                    path = current.path,
+                    error = null,
+                    note = "Paused",
+                    completedAt = null
+                )
+            }
+    }
+
+    /** Resumes the queue and retries rows that failed, like Komikku's start action. */
+    suspend fun startAll() {
+        settings.setDownloadQueuePaused(false)
+        dao.all()
+            .filter { it.status == DownloadStatus.FAILED }
+            .forEach { row ->
+                dao.update(
+                    key = row.key,
+                    status = DownloadStatus.QUEUED,
+                    progress = row.progress,
+                    bytes = row.downloadedBytes,
+                    total = row.totalBytes,
+                    path = row.path,
+                    error = null,
+                    note = wifiBlockedNote(),
+                    completedAt = null
+                )
+            }
+        // Clear the paused marker so the rows stopped by the pause action really restart.
+        dao.active()
+            .filter { it.status == DownloadStatus.QUEUED && it.note == "Paused" }
+            .forEach { row ->
+                dao.update(
+                    key = row.key,
+                    status = DownloadStatus.QUEUED,
+                    progress = row.progress,
+                    bytes = row.downloadedBytes,
+                    total = row.totalBytes,
+                    path = row.path,
+                    error = null,
+                    note = wifiBlockedNote(),
+                    completedAt = null
+                )
+            }
+        pump()
+    }
+
+    /**
+     * Cancels everything still queued and deletes its partial files. Completed downloads
+     * stay: they are real files on disk and the Library's offline filter depends on them.
+     */
+    suspend fun clearQueue(): Int {
+        val active = dao.active()
+        active.forEach { cancel(it.key) }
+        dao.all()
+            .filter { it.status == DownloadStatus.FAILED || it.status == DownloadStatus.CANCELED }
+            .forEach { dao.delete(it.key) }
+        return active.size
     }
 
     suspend fun cancel(key: String) {
@@ -281,27 +437,32 @@ class DownloadManager(
 
     private suspend fun pump() {
         pumpLock.withLock {
+            val settingsNow = settings.current()
+            // A paused queue is explicit: nothing starts until the user taps Resume.
+            if (settingsNow.downloadQueuePaused) return@withLock
             val blocked = wifiBlockedNote()
             val rows = dao.active().filter {
                 it.status != DownloadStatus.RUNNING || !running.containsKey(it.key)
             }
             if (blocked != null) {
-                rows.filter { it.status == DownloadStatus.QUEUED }.forEach { row ->
-                    dao.update(
-                        key = row.key,
-                        status = DownloadStatus.WAITING,
-                        progress = row.progress,
-                        bytes = row.downloadedBytes,
-                        total = row.totalBytes,
-                        path = row.path,
-                        error = null,
-                        note = blocked,
-                        completedAt = null
-                    )
-                }
-                return
+                // A paused row is the user's choice and is not the same as Wi-Fi blocking.
+                rows.filter { it.status == DownloadStatus.QUEUED && it.note != "Paused" }
+                    .forEach { row ->
+                        dao.update(
+                            key = row.key,
+                            status = DownloadStatus.WAITING,
+                            progress = row.progress,
+                            bytes = row.downloadedBytes,
+                            total = row.totalBytes,
+                            path = row.path,
+                            error = null,
+                            note = blocked,
+                            completedAt = null
+                        )
+                    }
+                return@withLock
             }
-            val limit = settings.current().concurrentDownloads.coerceIn(1, 4)
+            val limit = settingsNow.concurrentDownloads.coerceIn(1, 4)
             rows.filter { it.status == DownloadStatus.WAITING && it.note == "Waiting for Wi-Fi" }
                 .forEach { row ->
                     dao.update(
@@ -319,7 +480,12 @@ class DownloadManager(
             val capacity = (limit - running.size).coerceAtLeast(0)
             if (capacity == 0) return
             dao.active()
-                .filter { it.status == DownloadStatus.QUEUED && !running.containsKey(it.key) }
+                // A row the user paused individually stays parked even when others resume.
+                .filter {
+                    it.status == DownloadStatus.QUEUED &&
+                        it.note != "Paused" &&
+                        !running.containsKey(it.key)
+                }
                 .take(capacity)
                 .forEach { row ->
                     val job = scope.launch { run(row) }
@@ -451,27 +617,29 @@ class DownloadManager(
         val directory = File(root, safe(row.mediaTitle))
         directory.mkdirs()
         val target = File(directory, safe(row.unitTitle) + extensionFor(stream.url, "mp4"))
-        val request = okhttp3.Request.Builder()
-            .url(stream.url)
-            .apply { stream.headers.forEach { (key, value) -> header(key, value) } }
-            .build()
-        http.client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw IOException("HTTP ${response.code} while downloading this file")
-            }
-            val body = response.body ?: throw IOException("The provider sent an empty file")
-            val total = body.contentLength()
-            val input = body.byteStream()
-            target.outputStream().use { output ->
-                val buffer = ByteArray(64 * 1024)
-                var written = 0L
-                while (true) {
-                    val read = input.read(buffer)
-                    if (read < 0) break
-                    output.write(buffer, 0, read)
-                    written += read
-                    val percent = if (total > 0) ((written * 100) / total).toInt() else -1
-                    publish(row, percent, 100, written, target.path, total)
+        retryTransfer {
+            val request = okhttp3.Request.Builder()
+                .url(stream.url)
+                .apply { stream.headers.forEach { (key, value) -> header(key, value) } }
+                .build()
+            http.client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IOException("HTTP ${response.code} while downloading this file")
+                }
+                val body = response.body ?: throw IOException("The provider sent an empty file")
+                val total = body.contentLength()
+                val input = body.byteStream()
+                target.outputStream().use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    var written = 0L
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        output.write(buffer, 0, read)
+                        written += read
+                        val percent = if (total > 0) ((written * 100) / total).toInt() else -1
+                        publish(row, percent, 100, written, target.path, total)
+                    }
                 }
             }
         }
@@ -481,7 +649,26 @@ class DownloadManager(
 
     // ------------------------------------------------------------------- helpers
 
-    private suspend fun fetchBytes(url: String): ByteArray {
+    /**
+     * Komikku retries a failed transfer three times, waiting 2, 4 and 8 seconds. Doing the
+     * same here keeps a flaky host from failing a whole chapter on one bad response.
+     */
+    private suspend fun <T> retryTransfer(block: suspend () -> T): T {
+        var attempt = 0
+        while (true) {
+            try {
+                return block()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                if (attempt >= MAX_RETRIES) throw error
+                delay((2L shl attempt) * 1_000L)
+                attempt++
+            }
+        }
+    }
+
+    private suspend fun fetchBytes(url: String): ByteArray = retryTransfer {
         val builder = okhttp3.Request.Builder()
             .url(url)
             .header("User-Agent", HostServices.userAgent)
@@ -490,7 +677,7 @@ class DownloadManager(
             if (!response.isSuccessful) {
                 throw IOException("HTTP ${response.code} while downloading a page")
             }
-            return response.body?.bytes() ?: throw IOException("Empty page response")
+            response.body?.bytes() ?: throw IOException("Empty page response")
         }
     }
 
@@ -599,5 +786,8 @@ class DownloadManager(
 
     companion object {
         private const val PAGES_MANIFEST = "pages.json"
+
+        /** Extra attempts after a transfer fails: Komikku waits 2, 4 then 8 seconds. */
+        private const val MAX_RETRIES = 3
     }
 }

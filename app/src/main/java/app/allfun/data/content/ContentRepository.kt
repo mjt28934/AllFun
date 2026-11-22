@@ -501,13 +501,24 @@ class ContentRepository(
         val cached = detailsCache[cacheKey]
         if (cached != null && fresh(cached.at, DETAILS_TTL_MS)) return Result.success(cached.value)
         return runCatching {
-            val source = sourceHub.sourceFor(ref.sourceId)
-                ?: error("That source is no longer installed")
-            timed { source.details(ref.key) }
+            sourceHub.detailsWithUnits(ref.sourceId, ref.key)?.details
+                ?: error("No installed add-on provides details for this title.")
         }.onSuccess { details ->
             detailsCache[cacheKey] = Timed(details, System.currentTimeMillis())
         }
     }
+
+    /**
+     * Details plus the chapter/episode list. Opening a title uses this so the metadata
+     * fan-out runs once instead of fetching the same `meta` response twice.
+     */
+    suspend fun detailsWithUnits(ref: ContentSourceRef): Result<SourceHub.DetailsBundle> =
+        runCatching {
+            sourceHub.detailsWithUnits(ref.sourceId, ref.key)
+                ?: error("No installed add-on provides details for this title.")
+        }.onSuccess { bundle ->
+            detailsCache[refId(ref)] = Timed(bundle.details, System.currentTimeMillis())
+        }
 
     /**
      * Confirms which other installed sources can serve [title]. A source is only marked

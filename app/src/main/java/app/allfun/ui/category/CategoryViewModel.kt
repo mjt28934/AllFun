@@ -9,6 +9,7 @@ import app.allfun.data.content.ContentItem
 import app.allfun.data.content.ProviderStatus
 import app.allfun.data.content.format
 import app.allfun.data.content.matchesFormat
+import app.allfun.data.content.previewDetails
 import app.allfun.data.content.refId
 import app.allfun.data.content.titleKey
 import app.allfun.data.db.LibraryRow
@@ -28,7 +29,6 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
 
 /**
  * Sort orders offered on every category screen. They apply to real provider results and
@@ -75,7 +75,6 @@ class CategoryViewModel(
         val loadingMore: Boolean = false,
         val canLoadMore: Boolean = false,
         val page: Int = 0,
-        val opening: Boolean = false,
         val loadMoreError: String? = null
     ) {
         val allItems: List<ContentItem>
@@ -346,29 +345,44 @@ class CategoryViewModel(
         }
     }
 
+    /**
+     * Opens a category result the same way Library opens a saved title: the local row is
+     * written first, so navigation starts immediately, and the provider's metadata and
+     * episode list fill in behind the detail screen. Provider failures are therefore
+     * invisible to navigation: even a catalogue addon with no `meta` resource opens.
+     */
     fun open(item: ContentItem) {
         viewModelScope.launch {
-            _state.update { it.copy(opening = true) }
-            try {
-                val ref = item.primary
-                val source = container.sourceHub.sourceFor(ref.sourceId)
-                    ?: error("That source is no longer installed")
-                val details = container.content.detailsFor(ref).getOrThrow()
-                val units = runCatching {
-                    withTimeout(20_000) { source.units(ref.key) }
-                }.getOrDefault(emptyList())
-                val mediaId = container.library.savePreview(
+            val ref = item.primary
+            val source = container.sourceHub.sourceFor(ref.sourceId)
+            if (source == null) {
+                _messages.send("That source is no longer installed.")
+                return@launch
+            }
+            val mediaId = try {
+                container.library.savePreview(
                     sourceId = ref.sourceId,
                     sourceType = source.type,
-                    details = details,
-                    units = units
+                    details = item.previewDetails(),
+                    units = emptyList()
                 )
-                openMediaId.value = mediaId
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
                 _messages.send(t.userMessage("that title"))
-            } finally {
-                _state.update { it.copy(opening = false) }
+                return@launch
+            }
+            openMediaId.value = mediaId
+
+            // The screen is already animating in; enrich it from whatever addon can answer.
+            val bundle = runCatching { container.content.detailsWithUnits(ref).getOrThrow() }
+                .getOrNull() ?: return@launch
+            runCatching {
+                container.library.savePreview(
+                    sourceId = ref.sourceId,
+                    sourceType = source.type,
+                    details = bundle.details,
+                    units = bundle.units
+                )
             }
         }
     }

@@ -132,6 +132,44 @@ class ContentModelsTest {
     }
 
     @Test
+    fun `preview opens from the card without waiting for provider metadata`() {
+        val series = ContentItem(
+            title = "Severance",
+            stub = MediaStub(
+                key = "series|tt11280740",
+                title = "Severance",
+                coverUrl = "https://example/poster.jpg"
+            ),
+            category = ContentCategory.MOVIES,
+            sources = listOf(
+                ContentSourceRef(
+                    "catalogs", "Streaming Catalogs", "series|tt11280740", SourceType.VIDEO
+                )
+            )
+        )
+        val preview = series.previewDetails()
+        // The kind comes from the id the provider published, not from metadata it lacks.
+        assertEquals(MediaKind.SERIES, preview.kind)
+        assertEquals("Episode", preview.unitLabel)
+        assertEquals("Severance", preview.title)
+        assertEquals("https://example/poster.jpg", preview.coverUrl)
+
+        val movie = series.copy(
+            stub = MediaStub(key = "movie|tt0133093", title = "The Matrix"),
+            sources = listOf(
+                ContentSourceRef(
+                    "catalogs", "Streaming Catalogs", "movie|tt0133093", SourceType.VIDEO
+                )
+            )
+        )
+        assertEquals(MediaKind.MOVIE, movie.previewDetails().kind)
+
+        val manga = item("Berserk")
+        assertEquals(MediaKind.MANGA, manga.previewDetails().kind)
+        assertEquals("Chapter", manga.previewDetails().unitLabel)
+    }
+
+    @Test
     fun `alternative providers are counted without inventing one`() {
         val single = item("Berserk")
         assertEquals(0, single.alternateCount)

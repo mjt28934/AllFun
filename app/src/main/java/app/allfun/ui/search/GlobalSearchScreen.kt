@@ -223,7 +223,7 @@ fun GlobalSearchScreen(
                 }
             }
 
-            if (state.searching || state.opening) {
+            if (state.searching) {
                 LinearProgressIndicator(
                     Modifier
                         .fillMaxWidth()

@@ -6,6 +6,7 @@ import app.allfun.data.AppContainer
 import app.allfun.data.content.ContentCategory
 import app.allfun.data.content.ContentItem
 import app.allfun.data.content.ProviderStatus
+import app.allfun.data.content.previewDetails
 import app.allfun.data.net.UserError
 import app.allfun.data.net.toUserError
 import app.allfun.data.net.userMessage
@@ -19,7 +20,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
 
 /**
  * Global search across every compatible installed source. Results are grouped by the
@@ -38,7 +38,6 @@ class GlobalSearchViewModel(
         val statuses: List<ProviderStatus> = emptyList(),
         val sourceFilter: String? = null,
         val error: UserError? = null,
-        val opening: Boolean = false,
         val searched: Boolean = false,
         val history: List<String> = emptyList(),
         /** Enabled sources known before any search has run, so the idle state is honest. */
@@ -184,27 +183,35 @@ class GlobalSearchViewModel(
 
     fun open(item: ContentItem) {
         viewModelScope.launch {
-            _state.update { it.copy(opening = true) }
-            try {
-                val ref = item.primary
-                val source = container.sourceHub.sourceFor(ref.sourceId)
-                    ?: error("That source is no longer installed")
-                val details = container.content.detailsFor(ref).getOrThrow()
-                val units = runCatching {
-                    withTimeout(20_000) { source.units(ref.key) }
-                }.getOrDefault(emptyList())
-                val mediaId = container.library.savePreview(
+            val ref = item.primary
+            val source = container.sourceHub.sourceFor(ref.sourceId)
+            if (source == null) {
+                _messages.send("That source is no longer installed.")
+                return@launch
+            }
+            val mediaId = try {
+                container.library.savePreview(
                     sourceId = ref.sourceId,
                     sourceType = source.type,
-                    details = details,
-                    units = units
+                    details = item.previewDetails(),
+                    units = emptyList()
                 )
-                openMediaId.value = mediaId
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
                 _messages.send(t.userMessage("that title"))
-            } finally {
-                _state.update { it.copy(opening = false) }
+                return@launch
+            }
+            openMediaId.value = mediaId
+
+            val bundle = runCatching { container.content.detailsWithUnits(ref).getOrThrow() }
+                .getOrNull() ?: return@launch
+            runCatching {
+                container.library.savePreview(
+                    sourceId = ref.sourceId,
+                    sourceType = source.type,
+                    details = bundle.details,
+                    units = bundle.units
+                )
             }
         }
     }

@@ -53,50 +53,24 @@ class StremioSource(
     private val base = (entity.baseUrl ?: "").trimEnd('/')
 
     /**
-     * The `stream` resource declares which content types and id prefixes the addon can
-     * answer. Torrentio, for example, has no catalogs but accepts `tt`-prefixed movie
-     * and series ids. Legacy rows without a stored manifest are assumed to stream.
+     * A resource the addon declares. The Stremio protocol lists `stream` and `meta` as
+     * either bare strings or objects with `types`/`idPrefixes`, and an addon may expose
+     * one without the other: catalogue-only addons answer `catalog` and nothing else, so
+     * asking them for `meta` returns an HTML error page. [StremioManifest] reads the
+     * declaration so every lookup happens only against addons that can answer.
      */
-    private data class StreamResource(
-        val types: Set<String>,
-        val idPrefixes: List<String>
-    )
+    val supportsStreams: Boolean get() = StremioManifest.supports(manifest, "stream")
 
-    private val streamResource: StreamResource? by lazy {
-        manifest?.arr("resources")?.firstNotNullOfOrNull { element ->
-            when (element) {
-                is JsonPrimitive -> element.contentOrNull
-                    ?.takeIf { it == "stream" }
-                    ?.let { StreamResource(emptySet(), emptyList()) }
-                is JsonObject -> if (element.str("name") == "stream") {
-                    StreamResource(
-                        types = element.arr("types")
-                            ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
-                            ?.toSet()
-                            .orEmpty(),
-                        idPrefixes = element.arr("idPrefixes")
-                            ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
-                            .orEmpty()
-                    )
-                } else {
-                    null
-                }
-                else -> null
-            }
-        }
-    }
-
-    val supportsStreams: Boolean get() = manifest == null || streamResource != null
+    /** Only addons that really declare `meta` may be asked for a detail page. */
+    val supportsMeta: Boolean get() = StremioManifest.supports(manifest, "meta")
 
     /** Whether this addon can answer a stream request for [type] and [id]. */
-    fun acceptsStream(type: String, id: String): Boolean {
-        if (manifest == null) return true
-        val resource = streamResource ?: return false
-        val typeOk = resource.types.isEmpty() || type in resource.types
-        val idOk = resource.idPrefixes.isEmpty() ||
-            resource.idPrefixes.any { id.startsWith(it) }
-        return typeOk && idOk
-    }
+    fun acceptsStream(type: String, id: String): Boolean =
+        StremioManifest.accepts(manifest, "stream", type, id)
+
+    /** Whether this addon can answer a metadata request for [type] and [id]. */
+    fun acceptsMeta(type: String, id: String): Boolean =
+        StremioManifest.accepts(manifest, "meta", type, id)
 
     /** One catalog entry from the manifest, including its supported extras. */
     private data class AddonCatalog(
@@ -231,11 +205,38 @@ class StremioSource(
         return type to metaId
     }
 
-    override suspend fun details(key: String): MediaDetails {
+    /**
+     * One title's metadata and episode list, parsed from a single `meta` response. The
+     * detail screen needs both, and addons with large series answer slowly, so fetching
+     * once avoids a second round trip for the same JSON.
+     */
+    class MetaBundle(
+        val details: MediaDetails,
+        val units: List<UnitStub>,
+        val hasVideos: Boolean
+    )
+
+    /** Returns null when the addon has no metadata for this key. */
+    suspend fun metaBundle(key: String): MetaBundle? {
         val (type, metaId) = splitKey(key)
         val meta = http.getJson("$base/meta/$type/${encodePath(metaId)}.json")
             .jsonObject.obj("meta")
-            ?: error("Addon returned no metadata")
+            ?: return null
+        return MetaBundle(
+            details = detailsFrom(key, type, meta),
+            units = unitsFrom(type, metaId, meta),
+            hasVideos = !meta.arr("videos").isNullOrEmpty()
+        )
+    }
+
+    override suspend fun details(key: String): MediaDetails =
+        metaBundle(key)?.details
+            ?: error("This addon does not provide details for that title.")
+
+    override suspend fun units(key: String): List<UnitStub> =
+        metaBundle(key)?.units.orEmpty()
+
+    private fun detailsFrom(key: String, type: String, meta: JsonObject): MediaDetails {
         val isSeries = type == "series"
         val videos = meta.arr("videos")?.size ?: 0
         return MediaDetails(
@@ -256,11 +257,7 @@ class StremioSource(
         )
     }
 
-    override suspend fun units(key: String): List<UnitStub> {
-        val (type, metaId) = splitKey(key)
-        val meta = http.getJson("$base/meta/$type/${encodePath(metaId)}.json")
-            .jsonObject.obj("meta")
-            ?: return emptyList()
+    private fun unitsFrom(type: String, metaId: String, meta: JsonObject): List<UnitStub> {
         val videos = meta.arr("videos")
         val fallback = listOf(
             UnitStub(

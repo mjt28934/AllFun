@@ -88,7 +88,39 @@ data class ContentItem(
     val primary: ContentSourceRef get() = sources.first()
     val sourceLabel: String get() = primary.sourceName
     val alternateCount: Int get() = (sources.size - 1).coerceAtLeast(0)
+
+    /**
+     * The kind this card really represents. Video addons encode the declared type in the
+     * key (`movie|tt…` / `series|tt…`), which is the provider's own answer, not a guess.
+     */
+    val kind: MediaKind
+        get() = when (category) {
+            ContentCategory.MANGA -> MediaKind.MANGA
+            ContentCategory.BOOKS -> MediaKind.NOVEL
+            ContentCategory.MOVIES -> if (
+                primary.key.startsWith("series|", ignoreCase = true) ||
+                primary.format.equals("Series", ignoreCase = true)
+            ) {
+                MediaKind.SERIES
+            } else {
+                MediaKind.MOVIE
+            }
+        }
 }
+
+/**
+ * A local detail page built from the catalogue card. Opening a category result writes
+ * this to the database first, so the screen appears as fast as a library row and the
+ * provider's metadata fills in behind it instead of blocking navigation.
+ */
+fun ContentItem.previewDetails(): MediaDetails = MediaDetails(
+    key = primary.key,
+    title = stub.title,
+    kind = kind,
+    description = stub.description,
+    coverUrl = stub.coverUrl,
+    unitLabel = kind.unit
+)
 
 /** One shelf of real provider results (Popular, Trending, Latest updates, ...). */
 data class ContentShelf(

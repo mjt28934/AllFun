@@ -5,8 +5,8 @@ import androidx.lifecycle.viewModelScope
 import app.allfun.data.AppContainer
 import app.allfun.data.db.DownloadEntity
 import app.allfun.data.db.DownloadStatus
+import app.allfun.data.download.QueueOrder
 import app.allfun.data.net.userMessage
-import app.allfun.data.settings.Settings
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -16,16 +16,17 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** Sort order for the grouped download queue. */
-enum class DownloadSort(val label: String) {
-    NEWEST("Newest first"),
-    OLDEST("Oldest first"),
-    TITLE("Title A–Z"),
-    PROGRESS("Progress")
-}
+/**
+ * A row the user paused. Pausing one item parks it as [DownloadStatus.WAITING], while
+ * pausing the whole queue leaves every row [DownloadStatus.QUEUED] in its place with the
+ * same note, so both states count as paused and both resume the same way.
+ */
+val DownloadEntity.isPaused: Boolean
+    get() = note == "Paused" && (status == DownloadStatus.QUEUED || status == DownloadStatus.WAITING)
 
 /** One title's downloads, the unit Komikku's queue groups by. */
 data class DownloadGroup(
+    val mediaId: String,
     val title: String,
     val rows: List<DownloadEntity>
 ) {
@@ -35,16 +36,22 @@ data class DownloadGroup(
         it.status == DownloadStatus.FAILED || it.status == DownloadStatus.CANCELED
     }
 
-    /** Average progress of the unfinished rows, or 100 when the whole group is saved. */
+    /**
+     * Transfer progress for the header. Only rows that really reported progress count, so
+     * a title with one finished chapter and one fresh queue entry does not read as 0%, and
+     * a server that sent no length leaves the number out instead of inventing one.
+     */
     val progress: Int?
         get() {
-            val running = active
-            if (running.isEmpty()) {
+            val active = active
+            if (active.isEmpty()) {
                 return if (rows.isNotEmpty() && completed.size == rows.size) 100 else null
             }
-            return running.map { if (it.progress in 0..100) it.progress else 0 }
-                .average()
-                .toInt()
+            val measured = active.filter { it.progress in 1..100 }
+            return measured.takeIf { it.isNotEmpty() }
+                ?.map { it.progress }
+                ?.average()
+                ?.toInt()
         }
 }
 
@@ -52,14 +59,18 @@ data class DownloadsUiState(
     val rows: List<DownloadEntity> = emptyList(),
     val wifiOnly: Boolean = true,
     val concurrent: Int = 2,
-    val sort: DownloadSort = DownloadSort.NEWEST
+    /** True while the user has paused the whole queue, like Komikku's pause action. */
+    val paused: Boolean = false
 ) {
+    /** The live queue in its explicit, persisted order. */
     val active: List<DownloadEntity>
         get() = rows.filter { it.status.isActive }
-            .sortedWith(compareBy({ it.status.ordinal }, { it.createdAt }))
+            .sortedWith(compareBy({ it.queueOrder }, { it.createdAt }))
+
     val completed: List<DownloadEntity>
         get() = rows.filter { it.status == DownloadStatus.COMPLETED }
             .sortedByDescending { it.completedAt ?: it.createdAt }
+
     val failed: List<DownloadEntity>
         get() = rows.filter { it.status == DownloadStatus.FAILED || it.status == DownloadStatus.CANCELED }
             .sortedByDescending { it.createdAt }
@@ -71,30 +82,39 @@ data class DownloadsUiState(
     /** The number shown in the queue title. */
     val activeCount: Int get() = rows.count { it.status.isActive }
 
+    /** Whether the queue can be started or paused from the floating button. */
+    val canToggleQueue: Boolean get() = activeCount > 0
+
     /** Paused rows only; items waiting for Wi-Fi cannot be resumed by a button. */
-    val pausedCount: Int
-        get() = rows.count { it.status == DownloadStatus.WAITING && it.note == "Paused" }
+    val pausedCount: Int get() = rows.count { it.isPaused }
 
     val groups: List<DownloadGroup>
         get() {
-            val grouped = rows.groupBy { it.mediaTitle }
-                .map { (title, items) ->
-                    DownloadGroup(title, items.sortedBy { it.createdAt })
-                }
-            return when (sort) {
-                DownloadSort.NEWEST ->
-                    grouped.sortedByDescending { group -> group.rows.maxOf { it.createdAt } }
-                DownloadSort.OLDEST ->
-                    grouped.sortedBy { group -> group.rows.minOf { it.createdAt } }
-                DownloadSort.TITLE ->
-                    grouped.sortedBy { it.title.lowercase() }
-                DownloadSort.PROGRESS ->
-                    grouped.sortedWith(
-                        compareByDescending<DownloadGroup> { it.progress ?: -1 }
-                            .thenBy { it.title.lowercase() }
+            val grouped = rows.groupBy { it.mediaId }
+                .map { (mediaId, items) ->
+                    DownloadGroup(
+                        mediaId = mediaId,
+                        title = items.first().mediaTitle,
+                        rows = items.sortedWith(
+                            compareBy<DownloadEntity> { statusRank(it.status) }
+                                .thenBy { it.queueOrder }
+                                .thenBy { it.createdAt }
+                        )
                     )
-            }
+                }
+            // Groups follow the position of their first queued item, like Komikku's headers.
+            return grouped.sortedWith(
+                compareBy<DownloadGroup> {
+                    it.active.minOfOrNull { row -> row.queueOrder } ?: Long.MAX_VALUE
+                }.thenByDescending { group -> group.rows.maxOf { it.createdAt } }
+            )
         }
+
+    private fun statusRank(status: DownloadStatus): Int = when (status) {
+        DownloadStatus.QUEUED, DownloadStatus.WAITING, DownloadStatus.RUNNING -> 0
+        DownloadStatus.FAILED, DownloadStatus.CANCELED -> 1
+        DownloadStatus.COMPLETED -> 2
+    }
 }
 
 class DownloadsViewModel(private val container: AppContainer) : ViewModel() {
@@ -102,7 +122,8 @@ class DownloadsViewModel(private val container: AppContainer) : ViewModel() {
     private val _messages = Channel<String>(Channel.BUFFERED)
     val messages = _messages.receiveAsFlow()
 
-    private val sort = MutableStateFlow(DownloadSort.NEWEST)
+    /** Set when the user asks to open the title a queue group belongs to. */
+    val openMediaId = MutableStateFlow<String?>(null)
 
     private fun launch(block: suspend () -> Unit) {
         viewModelScope.launch {
@@ -116,14 +137,13 @@ class DownloadsViewModel(private val container: AppContainer) : ViewModel() {
 
     val state: StateFlow<DownloadsUiState> = combine(
         container.downloads.downloads,
-        container.settings.settings,
-        sort
-    ) { rows, settings, order ->
+        container.settings.settings
+    ) { rows, settings ->
         DownloadsUiState(
             rows = rows,
             wifiOnly = settings.downloadWifiOnly,
             concurrent = settings.concurrentDownloads,
-            sort = order
+            paused = settings.downloadQueuePaused
         )
     }.stateIn(
         scope = viewModelScope,
@@ -131,9 +151,53 @@ class DownloadsViewModel(private val container: AppContainer) : ViewModel() {
         initialValue = DownloadsUiState()
     )
 
-    fun setSort(value: DownloadSort) {
-        sort.value = value
+    // ------------------------------------------------------------------ queue control
+
+    /** The floating Resume/Pause button: stops or restarts the whole downloader. */
+    fun toggleQueue() = launch {
+        if (state.value.paused) {
+            container.downloads.startAll()
+            _messages.send("Downloads resumed.")
+        } else {
+            container.downloads.pauseAll()
+            _messages.send("Queue paused. Partial files are kept.")
+        }
     }
+
+    fun sortQueue(order: QueueOrder) = launch {
+        container.downloads.sortQueue(order)
+        _messages.send("Queue ordered: ${order.label.lowercase()}.")
+    }
+
+    fun moveToTop(key: String) = launch { container.downloads.moveToTop(key) }
+
+    fun moveToBottom(key: String) = launch { container.downloads.moveToBottom(key) }
+
+    fun moveGroupToTop(mediaId: String) = launch { container.downloads.moveGroup(mediaId, toTop = true) }
+
+    fun moveGroupToBottom(mediaId: String) = launch { container.downloads.moveGroup(mediaId, toTop = false) }
+
+    /** Komikku's "Cancel all": empties the queue and deletes partial files. */
+    fun clearQueue() = launch {
+        val cancelled = container.downloads.clearQueue()
+        _messages.send(
+            when {
+                cancelled == 0 -> "Nothing in the queue to cancel."
+                cancelled == 1 -> "Cancelled 1 download. Partial files removed."
+                else -> "Cancelled $cancelled downloads. Partial files removed."
+            }
+        )
+    }
+
+    fun openMedia(mediaId: String) {
+        openMediaId.value = mediaId
+    }
+
+    fun clearOpen() {
+        openMediaId.value = null
+    }
+
+    // ------------------------------------------------------------------ one item
 
     fun pause(key: String) = launch {
         container.downloads.pause(key)
@@ -165,6 +229,8 @@ class DownloadsViewModel(private val container: AppContainer) : ViewModel() {
         _messages.send("Finished downloads cleared.")
     }
 
+    // ------------------------------------------------------------------ one group
+
     fun pauseAll(rows: List<DownloadEntity>) = launch {
         val active = rows.filter { it.status.isActive }
         if (active.isEmpty()) {
@@ -176,8 +242,11 @@ class DownloadsViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun resumeAll(rows: List<DownloadEntity>) = launch {
+        // A group resume is also a resume for the queue when the user paused everything.
+        if (state.value.paused) container.downloads.startAll()
         val resumable = rows.filter {
-            it.status == DownloadStatus.WAITING ||
+            it.isPaused ||
+                it.status == DownloadStatus.WAITING ||
                 it.status == DownloadStatus.FAILED ||
                 it.status == DownloadStatus.CANCELED
         }
@@ -199,28 +268,14 @@ class DownloadsViewModel(private val container: AppContainer) : ViewModel() {
         _messages.send("Cancelled ${active.size} ${if (active.size == 1) "download" else "downloads"}.")
     }
 
-    /** The floating Resume button: only real pauses, never Wi-Fi-blocked rows. */
-    fun resumePaused() = launch {
-        val paused = state.value.rows.filter {
-            it.status == DownloadStatus.WAITING && it.note == "Paused"
-        }
-        if (paused.isEmpty()) {
-            _messages.send("Nothing is paused.")
-            return@launch
-        }
-        paused.forEach { container.downloads.resume(it.key) }
-        _messages.send("Resumed ${paused.size} ${if (paused.size == 1) "download" else "downloads"}.")
+    fun setWifiOnly(enabled: Boolean) = launch {
+        container.settings.setDownloadWifiOnly(enabled)
+        container.downloads.kick()
     }
 
-    fun setWifiOnly(enabled: Boolean) {
-        viewModelScope.launch { container.settings.setDownloadWifiOnly(enabled) }
-    }
-
-    fun setConcurrent(value: Int) {
-        viewModelScope.launch {
-            container.settings.setConcurrentDownloads(value)
-            container.downloads.kick()
-        }
+    fun setConcurrent(value: Int) = launch {
+        container.settings.setConcurrentDownloads(value)
+        container.downloads.kick()
     }
 
     fun refresh() {

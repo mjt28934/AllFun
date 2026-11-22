@@ -66,6 +66,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.allfun.data.AppContainer
 import app.allfun.data.db.DownloadEntity
 import app.allfun.data.db.DownloadStatus
+import app.allfun.data.download.QueueOrder
 import app.allfun.ui.components.EmptyState
 import app.allfun.ui.components.rememberViewModel
 import app.allfun.ui.formatBytes
@@ -73,32 +74,42 @@ import java.text.DateFormat
 import java.util.Date
 
 /**
- * Downloads → the live queue.
+ * Downloads → the live queue, with Komikku's behaviour.
  *
- * Grouped by title like Komikku's download queue: each group reports how much of the
- * title is saved and can pause, resume or cancel its own items. Every menu entry maps
- * to a real queue operation; sort order and the Wi-Fi/concurrency rules are handled
- * here instead of a separate settings page.
+ * The queue is explicit and persisted: every item has a position that drag-free menu
+ * actions ("move to top"/"move to bottom"), whole-title moves and the sort menu rewrite.
+ * One floating button pauses or resumes the downloader; the overflow can cancel the whole
+ * queue. Completed downloads stay because they are real files the Library reads offline.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadsScreen(
     container: AppContainer,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenMedia: (String) -> Unit
 ) {
     val vm = rememberViewModel { DownloadsViewModel(container) }
     val state by vm.state.collectAsStateWithLifecycle()
+    val openMediaId by vm.openMediaId.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var pendingCancel by remember { mutableStateOf<DownloadEntity?>(null) }
     var pendingRemove by remember { mutableStateOf<DownloadEntity?>(null) }
     var pendingCancelGroup by remember { mutableStateOf<DownloadGroup?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
+    var confirmClearQueue by remember { mutableStateOf(false) }
     var showConcurrency by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
     var sortOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         vm.messages.collect { snackbar.showSnackbar(it) }
+    }
+
+    LaunchedEffect(openMediaId) {
+        openMediaId?.let { id ->
+            onOpenMedia(id)
+            vm.clearOpen()
+        }
     }
 
     Scaffold(
@@ -131,84 +142,91 @@ fun DownloadsScreen(
                     }
                 },
                 actions = {
-                    Box {
-                        IconButton(onClick = { sortOpen = true }) {
-                            Icon(Icons.Outlined.Sort, contentDescription = "Sort queue")
+                    if (state.rows.isNotEmpty()) {
+                        Box {
+                            IconButton(onClick = { sortOpen = true }) {
+                                Icon(Icons.Outlined.Sort, contentDescription = "Order the queue")
+                            }
+                            DropdownMenu(expanded = sortOpen, onDismissRequest = { sortOpen = false }) {
+                                QueueOrder.entries.forEach { option ->
+                                    DropdownMenuItem(
+                                        text = { Text(option.label) },
+                                        onClick = {
+                                            vm.sortQueue(option)
+                                            sortOpen = false
+                                        }
+                                    )
+                                }
+                            }
                         }
-                        DropdownMenu(expanded = sortOpen, onDismissRequest = { sortOpen = false }) {
-                            DownloadSort.entries.forEach { option ->
+                        Box {
+                            IconButton(onClick = { menuOpen = true }) {
+                                Icon(Icons.Outlined.MoreVert, contentDescription = "Queue options")
+                            }
+                            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                                 DropdownMenuItem(
-                                    text = { Text(option.label) },
-                                    leadingIcon = {
-                                        if (state.sort == option) {
+                                    text = { Text("Cancel all") },
+                                    enabled = state.activeCount > 0,
+                                    onClick = {
+                                        confirmClearQueue = true
+                                        menuOpen = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Download only on Wi-Fi") },
+                                    trailingIcon = {
+                                        if (state.wifiOnly) {
                                             Icon(Icons.Outlined.Check, contentDescription = null)
-                                        } else {
-                                            Spacer(Modifier.size(24.dp))
                                         }
                                     },
                                     onClick = {
-                                        vm.setSort(option)
-                                        sortOpen = false
+                                        vm.setWifiOnly(!state.wifiOnly)
+                                        menuOpen = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Download at the same time: ${state.concurrent}") },
+                                    onClick = {
+                                        showConcurrency = true
+                                        menuOpen = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Refresh queue") },
+                                    onClick = {
+                                        vm.refresh()
+                                        menuOpen = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Clear finished") },
+                                    enabled = state.completed.isNotEmpty() || state.failed.isNotEmpty(),
+                                    onClick = {
+                                        confirmClear = true
+                                        menuOpen = false
                                     }
                                 )
                             }
-                        }
-                    }
-                    Box {
-                        IconButton(onClick = { menuOpen = true }) {
-                            Icon(Icons.Outlined.MoreVert, contentDescription = "Queue options")
-                        }
-                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                            DropdownMenuItem(
-                                text = { Text("Download only on Wi-Fi") },
-                                trailingIcon = {
-                                    if (state.wifiOnly) {
-                                        Icon(Icons.Outlined.Check, contentDescription = null)
-                                    }
-                                },
-                                onClick = {
-                                    vm.setWifiOnly(!state.wifiOnly)
-                                    menuOpen = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Download at the same time: ${state.concurrent}") },
-                                onClick = {
-                                    showConcurrency = true
-                                    menuOpen = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Refresh queue") },
-                                onClick = {
-                                    vm.refresh()
-                                    menuOpen = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Clear finished") },
-                                enabled = state.completed.isNotEmpty() || state.failed.isNotEmpty(),
-                                onClick = {
-                                    confirmClear = true
-                                    menuOpen = false
-                                }
-                            )
                         }
                     }
                 }
             )
         },
         floatingActionButton = {
-            if (state.pausedCount > 0) {
+            if (state.canToggleQueue) {
                 ExtendedFloatingActionButton(
-                    onClick = vm::resumePaused,
+                    onClick = vm::toggleQueue,
                     icon = {
                         Icon(
-                            Icons.Outlined.PlayArrow,
-                            contentDescription = "Resume paused downloads"
+                            imageVector = if (state.paused) {
+                                Icons.Outlined.PlayArrow
+                            } else {
+                                Icons.Outlined.Pause
+                            },
+                            contentDescription = null
                         )
                     },
-                    text = { Text("Resume") }
+                    text = { Text(if (state.paused) "Resume" else "Pause") }
                 )
             }
         }
@@ -231,18 +249,49 @@ fun DownloadsScreen(
                 }
             }
 
+            if (state.paused && state.activeCount > 0) {
+                item("paused-banner") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Pause,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = "Queue paused. Nothing transfers until you tap Resume.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+
             state.groups.forEach { group ->
-                item(key = "group:${group.title}") {
+                item(key = "group:${group.mediaId}") {
                     GroupHeader(
                         group = group,
                         onPauseAll = { vm.pauseAll(group.rows) },
                         onResumeAll = { vm.resumeAll(group.rows) },
-                        onCancelAll = { pendingCancelGroup = group }
+                        onCancelAll = { pendingCancelGroup = group },
+                        onMoveTop = { vm.moveGroupToTop(group.mediaId) },
+                        onMoveBottom = { vm.moveGroupToBottom(group.mediaId) },
+                        onShow = { vm.openMedia(group.mediaId) }
                     )
                 }
                 items(group.rows, key = { it.key }) { row ->
                     DownloadRow(
                         row = row,
+                        onMoveTop = { vm.moveToTop(row.key) },
+                        onMoveBottom = { vm.moveToBottom(row.key) },
+                        onMoveGroupTop = { vm.moveGroupToTop(group.mediaId) },
+                        onMoveGroupBottom = { vm.moveGroupToBottom(group.mediaId) },
+                        onShow = { vm.openMedia(group.mediaId) },
+                        onCancelGroup = { pendingCancelGroup = group },
                         onPause = { vm.pause(row.key) },
                         onResume = { vm.resume(row.key) },
                         onRetry = { vm.retry(row.key) },
@@ -250,7 +299,7 @@ fun DownloadsScreen(
                         onRemove = { pendingRemove = row }
                     )
                 }
-                item(key = "group-divider:${group.title}") {
+                item(key = "group-divider:${group.mediaId}") {
                     HorizontalDivider(
                         modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp)
                     )
@@ -327,7 +376,7 @@ fun DownloadsScreen(
     pendingCancelGroup?.let { group ->
         AlertDialog(
             onDismissRequest = { pendingCancelGroup = null },
-            title = { Text("Cancel this queue group?") },
+            title = { Text("Cancel this title's queue?") },
             text = {
                 Text(
                     "Every active part of \"${group.title}\" stops and its partial files are " +
@@ -372,6 +421,30 @@ fun DownloadsScreen(
         )
     }
 
+    if (confirmClearQueue) {
+        AlertDialog(
+            onDismissRequest = { confirmClearQueue = false },
+            title = { Text("Cancel the whole queue?") },
+            text = {
+                Text(
+                    "Every unfinished download stops and its partial files are deleted. " +
+                        "Completed downloads stay on this device."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        vm.clearQueue()
+                        confirmClearQueue = false
+                    }
+                ) { Text("Cancel all", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClearQueue = false }) { Text("Keep them") }
+            }
+        )
+    }
+
     if (confirmClear) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
@@ -402,7 +475,10 @@ private fun GroupHeader(
     group: DownloadGroup,
     onPauseAll: () -> Unit,
     onResumeAll: () -> Unit,
-    onCancelAll: () -> Unit
+    onCancelAll: () -> Unit,
+    onMoveTop: () -> Unit,
+    onMoveBottom: () -> Unit,
+    onShow: () -> Unit
 ) {
     var menu by remember { mutableStateOf(false) }
     Row(
@@ -431,9 +507,33 @@ private fun GroupHeader(
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(
+                    text = { Text("Move this title to top") },
+                    enabled = group.active.isNotEmpty(),
+                    onClick = {
+                        onMoveTop()
+                        menu = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Move this title to bottom") },
+                    enabled = group.active.isNotEmpty(),
+                    onClick = {
+                        onMoveBottom()
+                        menu = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Open title") },
+                    onClick = {
+                        onShow()
+                        menu = false
+                    }
+                )
+                DropdownMenuItem(
                     text = { Text("Pause all") },
-                    enabled = group.active.any { it.status == DownloadStatus.RUNNING ||
-                        it.status == DownloadStatus.QUEUED },
+                    enabled = group.active.any {
+                        it.status == DownloadStatus.RUNNING || it.status == DownloadStatus.QUEUED
+                    },
                     onClick = {
                         onPauseAll()
                         menu = false
@@ -442,7 +542,8 @@ private fun GroupHeader(
                 DropdownMenuItem(
                     text = { Text("Resume all") },
                     enabled = group.rows.any {
-                        it.status == DownloadStatus.WAITING ||
+                        it.isPaused ||
+                            it.status == DownloadStatus.WAITING ||
                             it.status == DownloadStatus.FAILED ||
                             it.status == DownloadStatus.CANCELED
                     },
@@ -467,6 +568,12 @@ private fun GroupHeader(
 @Composable
 private fun DownloadRow(
     row: DownloadEntity,
+    onMoveTop: () -> Unit,
+    onMoveBottom: () -> Unit,
+    onMoveGroupTop: () -> Unit,
+    onMoveGroupBottom: () -> Unit,
+    onShow: () -> Unit,
+    onCancelGroup: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onRetry: () -> Unit,
@@ -529,7 +636,36 @@ private fun DownloadRow(
                 }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     if (row.status.isActive) {
-                        if (row.status == DownloadStatus.WAITING) {
+                        // Same actions as Komikku's per-download menu.
+                        DropdownMenuItem(
+                            text = { Text("Move to top") },
+                            onClick = {
+                                onMoveTop()
+                                menu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Move this title to top") },
+                            onClick = {
+                                onMoveGroupTop()
+                                menu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Move to bottom") },
+                            onClick = {
+                                onMoveBottom()
+                                menu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Move this title to bottom") },
+                            onClick = {
+                                onMoveGroupBottom()
+                                menu = false
+                            }
+                        )
+                        if (row.isPaused || row.status == DownloadStatus.WAITING) {
                             DropdownMenuItem(
                                 text = { Text("Resume") },
                                 onClick = {
@@ -553,7 +689,21 @@ private fun DownloadRow(
                                 menu = false
                             }
                         )
+                        DropdownMenuItem(
+                            text = { Text("Cancel all for this title") },
+                            onClick = {
+                                onCancelGroup()
+                                menu = false
+                            }
+                        )
                     }
+                    DropdownMenuItem(
+                        text = { Text("Open title") },
+                        onClick = {
+                            onShow()
+                            menu = false
+                        }
+                    )
                     if (row.status == DownloadStatus.FAILED ||
                         row.status == DownloadStatus.CANCELED
                     ) {
@@ -609,32 +759,33 @@ private fun DownloadRow(
     }
 }
 
-private fun groupSummary(group: DownloadGroup): String = buildString {
-    val progress = group.progress
-    val paused = group.active.count {
-        it.status == DownloadStatus.WAITING && it.note == "Paused"
-    }
-    val running = group.active.size - paused
-    when {
-        group.active.isNotEmpty() -> {
-            if (running > 0) append("$running active")
-            if (paused > 0) {
-                if (isNotEmpty()) append(" · ")
-                append("$paused paused")
+private fun groupSummary(group: DownloadGroup): String {
+    if (group.active.isEmpty()) {
+        return when {
+            group.completed.size == group.rows.size -> "${group.completed.size} saved"
+            group.failed.isNotEmpty() -> buildString {
+                append("${group.failed.size} failed")
+                if (group.completed.isNotEmpty()) append(" · ${group.completed.size} saved")
             }
-            if (progress != null) append(" · $progress%")
-            val saved = group.completed.size
-            if (saved > 0) append(" · $saved saved")
+            else -> "${group.rows.size} items"
         }
-        group.completed.size == group.rows.size -> {
-            append("${group.completed.size} saved")
-        }
-        group.failed.isNotEmpty() -> {
-            append("${group.failed.size} failed")
-            if (group.completed.isNotEmpty()) append(" · ${group.completed.size} saved")
-        }
-        else -> append("${group.rows.size} items")
     }
+    val paused = group.active.count { it.isPaused }
+    val downloading = group.active.count { it.status == DownloadStatus.RUNNING }
+    val queued = group.active.count {
+        it.status == DownloadStatus.QUEUED && !it.isPaused
+    }
+    // Anything left is waiting on a condition such as Wi-Fi rather than on the user.
+    val waiting = (group.active.size - paused - downloading - queued).coerceAtLeast(0)
+    val parts = buildList {
+        if (downloading > 0) add("$downloading downloading")
+        if (queued > 0) add("$queued queued")
+        if (paused > 0) add("$paused paused")
+        if (waiting > 0) add("$waiting waiting")
+        group.progress?.let { add("$it%") }
+        if (group.completed.isNotEmpty()) add("${group.completed.size} saved")
+    }
+    return parts.joinToString(" · ")
 }
 
 private fun statusText(row: DownloadEntity): String = when (row.status) {

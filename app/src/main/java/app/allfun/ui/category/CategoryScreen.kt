@@ -244,7 +244,7 @@ fun CategoryScreen(
                 }
             }
 
-            if (state.opening || state.refreshing) {
+            if (state.refreshing) {
                 LinearProgressIndicator(
                     Modifier
                         .fillMaxWidth()

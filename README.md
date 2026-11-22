@@ -45,8 +45,8 @@ Verify the checksum, then open the APK. Releases are signed with one fixed certi
 each version installs over the previous one and keeps the library:
 
 ```powershell
-(Get-FileHash .\AllFun-0.8.0-release.apk -Algorithm SHA256).Hash.ToLower()
-Get-Content .\AllFun-0.8.0-release.apk.sha256
+(Get-FileHash .\AllFun-0.8.1-release.apk -Algorithm SHA256).Hash.ToLower()
+Get-Content .\AllFun-0.8.1-release.apk.sha256
 ```
 
 From inside the app, **Settings → About → App Updates** does the same work without a
@@ -59,14 +59,17 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Check | Result |
 |---|---|
 | `:app:assembleDebug` | **BUILD SUCCESSFUL** |
-| `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking, 61,618,601 bytes |
-| `:app:testDebugUnitTest` | **43 tests pass** — serialization compatibility (generic, polymorphic, defaults, unknown fields), semantic version comparison, release JSON parsing, checksum-file parsing, category/dedupe/format mapping, category sorting, Tachiyomi page conversion, magnet/infohash identity, torrent quality ranking and tracker fallback |
-| APK metadata | `app.allfun`, `versionCode 800`, `versionName 0.8.0`, v2 signature, `CN=AllFun` |
-| Runtime, Android 15 / API 35 (emulator) | Signed 0.8.0 APK installed over 0.7.3 (same signer, library, extensions, sources and downloads kept) → five destinations, compact category toolbars with the extension and quick-add buttons top-right, category-scoped marketplace with focused search, real Weeb Central downloads, offline reading, the grouped download queue, torrent playback with the stream picker, Settings → Downloads, Library download badges and sizes; empty and error states; no crash |
+| `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking, 61,634,989 bytes |
+| `:app:testDebugUnitTest` | **54 tests pass** — serialization compatibility (generic, polymorphic, defaults, unknown fields), semantic version comparison, release JSON parsing, checksum-file parsing, category/dedupe/format mapping, category sorting, Tachiyomi page conversion, magnet/infohash identity, torrent quality ranking and tracker fallback, Stremio resource support, download queue order/pause/grouping |
+| APK metadata | `app.allfun`, `versionCode 801`, `versionName 0.8.1`, v2 signature, `CN=AllFun` |
+| Runtime, Android 15 / API 35 (emulator) | Signed 0.8.1 APK installed over 0.8.0 (same signer, library, extensions, sources and downloads kept) → five destinations, compact category toolbars with the extension and quick-add buttons top-right, category-scoped marketplace with focused search, real Weeb Central downloads, offline reading, the grouped download queue, torrent playback with the stream picker, Settings → Downloads, Library download badges and sizes; empty and error states; no crash |
+| Catalogue-only addons | An addon declaring `resources: ["catalog"]` (Streaming Catalogs shape) renders its shelf, and its titles open with metadata from Cinemeta instead of failing with "returned a web page"; no `meta` request is sent to an addon that does not declare it |
+| Detail pages | Open on the tap frame from a catalogue stub and enrich metadata, sources and episodes in the background; no blocking spinner, and a title with no `meta` provider keeps its stub |
+| Download queue order | Persisted `queueOrder` survives restart; newest chapter first on enqueue; move item/title to top or bottom and the sort menu rewrite the same order |
 | Unified content layer | Three categories are built from every enabled source of the matching kind: staged arrival, round-robin shelves, title dedupe with provider merging, per-request timeouts and a feed budget, provider state reporting with Retry and diagnostics, pagination, global search grouped by category, and a remembered preferred source per title |
 | Manga category, end to end | Weeb Central (real Keiyoushi extension installed from Discover) → Popular shelf with real covers → One Piece detail (1198 chapters, author, genres) → reader loads real page images → progress on the shelf |
 | Offline downloads | Manga chapters saved as page folders + `pages.json`, novels as saved chapter HTML, direct HTTP video streamed with progress; chapter 1055 (11,087,549 bytes) and chapter 24 (4,968,054 bytes) completed, opened with Wi-Fi and mobile data off, and survived a force-stop; HLS/DASH manifests are refused honestly |
-| Download manager | Settings → Downloads: grouped **Download queue** with a count badge and sort order, per-title and per-item menus, real progress, pause/resume/retry/cancel/remove, a floating Resume, clear finished, Wi-Fi-only, concurrency limit, confirmations |
+| Download manager | Settings → Downloads: grouped **Download queue** with a count badge and sort order, per-title and per-item menus, real progress, one **Pause** for the whole engine that survives leaving the screen, resume from the same bytes, three retries with backoff per transfer, cancel/remove, clear finished, Wi-Fi-only, concurrency limit, confirmations |
 | Library | All / Movies / Books / Manga with Everything / Downloaded / Favorites / Recently Added / Recently Opened scopes, download count, size and completion date on the cards, remove-download with confirmation |
 | Extension marketplace | Real Keiyoushi and LNReader indexes; category scopes All / Movies / Books / Manga; Discover / Installed / Updates / Repositories; install, update, update all, enable, disable, uninstall, permissions |
 | Source states | Working, Loading, No content, Temporarily unavailable, Auth required, Invalid response, Disabled and Unsupported, each with Retry and a separate technical-details disclosure; one failing provider does not block the rest |
@@ -80,7 +83,7 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Release (R8) runtime | All paths above re-verified on a signed release build |
 | In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` confirmation |
 | Published release | [v0.8.0](https://github.com/mjt28934/AllFun/releases/tag/v0.8.0) — `AllFun-0.8.0-release.apk`, 61,618,601 bytes, SHA-256 `f456611c24da906b83ca38867359dfb4e816520782850bb85b9c066d127d5ffa`; downloaded back, checksum, package, `versionCode 800` and signer re-checked against the workflow build, and the release is the repository's latest |
-| Version | `0.8.0` (versionCode 800) |
+| Version | `0.8.1` (versionCode 801) |
 | Min SDK | 26 (Android 8.0) |
 | Target SDK | 35 |
 
@@ -211,11 +214,14 @@ Downloads are real files owned by AllFun, not bookmarks:
   manifests (`.m3u8`, `.mpd`) are refused with a plain explanation instead of a fake entry.
   A torrent-only release can be streamed in the player but not saved: the download reports
   that instead of attempting an HTTP request for a magnet.
-- **Queue** — `Settings → Downloads` is a grouped **Download queue**: a count of unfinished
-  items, sort by newest/oldest/title/progress, items grouped under their title with a
-  summary (`2 active · 18%`), pause all / resume / cancel / delete per group, a menu per item
-  with real progress, and a floating **Resume** button when something is paused. The overflow
-  menu holds Wi-Fi-only and the concurrency limit. Removal asks before deleting files.
+- **Queue** — `Settings → Downloads` is a grouped **Download queue** with an explicit order
+  that is saved in the database: a count of unfinished items, sort by newest/oldest/chapter,
+  move an item or a whole title to top/bottom, items grouped under their title with a
+  summary (`2 downloading · 1 paused · 18%`), pause all / resume / cancel / delete per group,
+  a menu per item with real progress, and a floating **Pause** / **Resume** for the whole
+  engine. Pausing is remembered; resuming continues from the same bytes, and failed
+  transfers are retried three times with backoff before they are reported. The overflow menu
+  holds Wi-Fi-only and the concurrency limit. Removal asks before deleting files.
 - **Library** — a completed download appears immediately under **Downloaded** with its size,
   completion date and a badge on the card. Rows and files survive a restart; missing files
   are reported rather than silently listed as available.
@@ -231,7 +237,7 @@ Settings has eleven sections, and every control writes a real preference that th
 | Reading | Manga layout, fit, page order, novel text size, line spacing and theme |
 | Playback | Resume position, subtitle tracks |
 | Extensions | Links to the Extensions screen and a summary of how providers feed the categories |
-| Downloads | The grouped download queue: sort, per-title and per-item actions, progress, pause/resume/retry/cancel/remove, Wi-Fi-only, concurrency, storage use |
+| Downloads | The grouped download queue: persisted order, sort, move item/title, per-title and per-item actions, progress, global pause/resume, retries with backoff, cancel/remove, Wi-Fi-only, concurrency, storage use |
 | Storage | Cache/extension/database sizes, clear cached files, refresh |
 | Network | Timeouts and a real repository connection test |
 | App Updates | GitHub Releases check, download and install |
@@ -581,10 +587,11 @@ Honest list, roughly in priority order:
 5. **Declarative sources** — a JSON extension format (`{ "search": "/s?q={query}",
    "selectors": … }`) for sites that need no code, since `MediaSource` is already the
    boundary.
-6. **UI and instrumentation tests** — 43 JVM unit tests cover version comparison, release
-   parsing, category/dedupe/format mapping, Tachiyomi page conversion and the torrent
-   helpers. Compose/UI tests, Room tests and an on-device instrumentation suite are not
-   written yet; those paths are still verified manually on the emulator.
+6. **UI and instrumentation tests** — 54 JVM unit tests cover version comparison, release
+   parsing, category/dedupe/format mapping, Tachiyomi page conversion, the torrent helpers,
+   Stremio resource support and download queue rules. Compose/UI tests, Room tests and an
+   on-device instrumentation suite are not written yet; those paths are still verified
+   manually on the emulator.
 7. **Immersive player** — playback uses Media3's controller; fullscreen/gesture controls and
    background audio are not implemented.
 

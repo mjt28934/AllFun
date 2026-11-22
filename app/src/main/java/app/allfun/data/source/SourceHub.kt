@@ -9,8 +9,10 @@ import app.allfun.data.db.SourceDao
 import app.allfun.data.db.SourceEntity
 import app.allfun.data.extension.ExtensionManager
 import app.allfun.data.extension.NovelPluginHost
+import app.allfun.data.model.MediaDetails
 import app.allfun.data.model.SourceType
 import app.allfun.data.model.StreamInfo
+import app.allfun.data.model.UnitStub
 import app.allfun.data.net.Http
 import app.allfun.data.net.arr
 import app.allfun.data.net.obj
@@ -33,6 +35,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Creates live [MediaSource] instances from stored rows and installs new sources.
@@ -179,7 +182,8 @@ class SourceHub(
         }.getOrNull() ?: return false
         if (config.str("kind") != "stremio") return false
         val manifest = config.obj("manifest") ?: return false
-        return manifest.arr("catalogs").isNullOrEmpty() && hasStreamResource(manifest)
+        return manifest.arr("catalogs").isNullOrEmpty() &&
+            StremioManifest.supports(manifest, "stream")
     }
 
     /**
@@ -252,14 +256,82 @@ class SourceHub(
         return (direct + torrents).take(MAX_STREAMS)
     }
 
-    private fun hasStreamResource(manifest: JsonObject): Boolean =
-        manifest.arr("resources")?.any { element ->
-            when (element) {
-                is JsonPrimitive -> element.contentOrNull == "stream"
-                is JsonObject -> element.str("name") == "stream"
-                else -> false
-            }
-        } == true
+    // ------------------------------------------------------------------ metadata
+
+    /** A detail page and its chapter/episode list, resolved in one lookup. */
+    data class DetailsBundle(val details: MediaDetails, val units: List<UnitStub>)
+
+    private data class CachedDetails(val value: DetailsBundle, val at: Long)
+    private val detailsCache = ConcurrentHashMap<String, CachedDetails>()
+
+    /**
+     * Loads a title's metadata and units from the source that owns it, fanning out across
+     * every installed Stremio addon that declares the `meta` resource.
+     *
+     * Stremio separates catalogues from metadata. A catalogue-only addon (Netflix, HBO Max
+     * and similar aggregators) answers `catalog` but not `meta`, so asking only the addon
+     * that supplied the card returned an HTML error page. Cinemeta or another meta-capable
+     * addon supplies the real detail page in that case, exactly as Stremio itself does.
+     * Returns null only when no installed addon can answer; callers keep the cached row.
+     */
+    suspend fun detailsWithUnits(sourceId: String, key: String): DetailsBundle? {
+        val cacheKey = "$sourceId|$key"
+        detailsCache[cacheKey]
+            ?.takeIf { System.currentTimeMillis() - it.at <= DETAILS_TTL_MS }
+            ?.let { return it.value }
+
+        val origin = sourceDao.byId(sourceId) ?: return null
+        val source = runCatching { instance(origin) }.getOrNull() ?: return null
+        val bundle = if (source !is StremioSource) {
+            val details = runCatching { source.details(key) }.getOrNull() ?: return null
+            DetailsBundle(details, runCatching { source.units(key) }.getOrDefault(emptyList()))
+        } else {
+            stremioDetails(source, sourceId, key) ?: return null
+        }
+        detailsCache[cacheKey] = CachedDetails(bundle, System.currentTimeMillis())
+        return bundle
+    }
+
+    /** Forgets a cached detail page, e.g. after the user removes the addon that served it. */
+    fun forgetDetails(sourceId: String) {
+        detailsCache.keys.removeAll { it.startsWith("$sourceId|") }
+    }
+
+    private suspend fun stremioDetails(
+        origin: StremioSource,
+        originId: String,
+        key: String
+    ): DetailsBundle? {
+        val type = key.substringBefore('|', "movie")
+        val metaId = key.substringAfter('|', key)
+        val candidates = buildList {
+            if (origin.supportsMeta && origin.acceptsMeta(type, metaId)) add(origin)
+            sourceDao.all()
+                .filter { it.enabled && it.type == SourceType.VIDEO && it.id != originId }
+                .mapNotNull { entity ->
+                    runCatching { instance(entity) }.getOrNull() as? StremioSource
+                }
+                .filter { it.supportsMeta && it.acceptsMeta(type, metaId) }
+                .forEach(::add)
+        }
+        if (candidates.isEmpty()) return null
+
+        val answers = coroutineScope {
+            candidates.map { addon ->
+                async {
+                    withTimeoutOrNull(DETAILS_LOOKUP_TIMEOUT_MS) {
+                        runCatching { addon.metaBundle(key) }.getOrNull()
+                    }
+                }
+            }.awaitAll()
+        }
+        // Prefer an answer with an episode list: a film from Cinemeta always includes its
+        // single video, while a bare stub would leave the detail screen without a player.
+        val best = answers.firstOrNull { it != null && it.hasVideos }
+            ?: answers.firstNotNullOfOrNull { it }
+            ?: return null
+        return DetailsBundle(best.details, best.units)
+    }
 
     private fun streamIdentity(stream: StreamInfo): String {
         val hash = stream.torrent?.magnet
@@ -350,9 +422,10 @@ class SourceHub(
         val name = manifest.str("name") ?: error("That addon has no manifest name")
         val catalogs = manifest.arr("catalogs").orEmpty()
         // Stream-only addons (Torrentio, media fusion) are valid: they answer stream
-        // requests for ids supplied by Cinemeta or another catalog addon. Rejecting them
-        // here was why those addons appeared to install and then vanished.
-        if (catalogs.isEmpty() && !hasStreamResource(manifest)) {
+        // requests for ids supplied by Cinemeta or another catalog addon. Catalog-only
+        // aggregators are valid too: cards open through any installed addon with `meta`.
+        // Rejecting either kind was why those addons appeared to install and then vanished.
+        if (catalogs.isEmpty() && !StremioManifest.supports(manifest, "stream")) {
             error("That addon exposes neither catalogs nor streams")
         }
 
@@ -437,6 +510,7 @@ class SourceHub(
         if (builtIns().any { it.id == sourceId }) return
         val entity = sourceDao.byId(sourceId) ?: return
         sourceDao.delete(sourceId)
+        forgetDetails(sourceId)
         val config = runCatching {
             Json.parseToJsonElement(entity.configJson ?: "{}").jsonObject
         }.getOrNull() ?: return
@@ -466,6 +540,10 @@ class SourceHub(
 
     private companion object {
         const val STREAM_LOOKUP_TIMEOUT_MS = 20_000L
+
+        /** Metadata addons answer in a second or two; do not hold the screen on a dead one. */
+        const val DETAILS_LOOKUP_TIMEOUT_MS = 12_000L
+        const val DETAILS_TTL_MS = 5 * 60_000L
 
         /** Enough alternatives to escape a dead tracker without an endless picker. */
         const val MAX_STREAMS = 60

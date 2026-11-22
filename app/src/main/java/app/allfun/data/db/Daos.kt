@@ -191,10 +191,10 @@ interface DownloadDao {
     @Upsert
     suspend fun upsert(download: DownloadEntity)
 
-    @Query("SELECT * FROM downloads ORDER BY createdAt DESC")
+    @Query("SELECT * FROM downloads ORDER BY queueOrder, createdAt")
     fun observeAll(): Flow<List<DownloadEntity>>
 
-    @Query("SELECT * FROM downloads ORDER BY createdAt DESC")
+    @Query("SELECT * FROM downloads ORDER BY queueOrder, createdAt")
     suspend fun all(): List<DownloadEntity>
 
     @Query("SELECT * FROM downloads WHERE mediaId = :mediaId")
@@ -203,8 +203,14 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE mediaId = :mediaId AND unitId = :unitId")
     suspend fun one(mediaId: String, unitId: String): DownloadEntity?
 
-    @Query("SELECT * FROM downloads WHERE status IN ('QUEUED', 'WAITING', 'RUNNING') ORDER BY createdAt")
+    @Query("SELECT * FROM downloads WHERE status IN ('QUEUED', 'WAITING', 'RUNNING') ORDER BY queueOrder, createdAt")
     suspend fun active(): List<DownloadEntity>
+
+    @Query("SELECT COALESCE(MAX(queueOrder), 0) FROM downloads")
+    suspend fun maxQueueOrder(): Long
+
+    @Query("UPDATE downloads SET queueOrder = :order WHERE key = :key")
+    suspend fun setQueueOrder(key: String, order: Long)
 
     @Query("UPDATE downloads SET status = :status, progress = :progress, downloadedBytes = :bytes, totalBytes = :total, path = :path, error = :error, note = :note, completedAt = :completedAt WHERE key = :key")
     suspend fun update(

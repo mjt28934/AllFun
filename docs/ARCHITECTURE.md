@@ -186,6 +186,14 @@ enabled `sources` rows into what those screens show:
 10. **Page convention.** `MediaSource` pages are 0-based. The Tachiyomi API is 1-based, so
     `KomikkuMediaSource` converts with `tachiyomiPage(page) = page.coerceAtLeast(0) + 1`.
     Mixing the two produced `offset=-20` and HTTP 400 from MangaDex.
+11. **Detail pages open at catalogue speed.** `CategoryViewModel.open` and
+    `GlobalSearchViewModel.open` write a preview row from the catalogue stub
+    (`ContentItem.previewDetails()`), navigate on the same frame, and fetch metadata and
+    units afterwards. The stub only fills what the shelf already showed (title, cover,
+    year, kind); `saveEpisodes` refuses an empty unit list, so an enrichment answer that
+    carries no `videos[]` cannot wipe an existing episode list. The detail screen shows
+    "Looking for … from your add-ons" while the lookup is in flight instead of claiming
+    the title has nothing.
 
 The category screens (`ui/category/`) and global search (`ui/search/`) know nothing about
 extensions: they collect a `CategoryFeed` / `SearchResponse` and render shelves, chips and
@@ -269,6 +277,18 @@ Torrentio and similar answer for ids supplied by another addon. It is accepted a
 time, excluded from category feeds and source counts by `SourceHub.isStreamProviderOnly`, and
 queried whenever a title is played.
 
+Metadata is resolved the same way as streams, by resource rather than by origin.
+`SourceHub.detailsWithUnits` asks the origin addon only when its manifest declares `meta`
+for the id, and then fans out to every other installed video addon that declares `meta` and
+accepts the id, in parallel with a 12 s cap. `StremioManifest` is the single resource test
+shared by this fan-out and `StremioSource`. The rule exists because a catalogue-only addon
+(Streaming Catalogs declares `resources: ["catalog"]`) answers any other request with an
+HTML page — asking it for `meta` was what made its titles fail with
+`InvalidResponseException`. Answers that include `videos[]` win; the bundle is cached for
+five minutes and dropped (`forgetDetails`) when the addon that served it is removed.
+`StremioSource.metaBundle` performs one `meta` request that serves both `details()` and
+`units()`, so the fan-out costs one round trip per addon, not two.
+
 `SourceHub.streamsFor` asks **every** installed Stremio addon that declares the `stream`
 resource and accepts the id, in parallel with a 20 s cap, and merges the answers:
 
@@ -309,6 +329,34 @@ The engine holds one session at a time: opening another episode or leaving the p
 `stop()`, so the app does not seed a video the viewer has left. R8 must keep `org.libtorrent4j`
 and `com.github.se_bastiaan.torrentstream` intact — both are reached through JNI and
 reflection.
+
+## Download queue
+
+The queue is a schedule, not a list of wishes, and it is persisted:
+
+- **Explicit order.** `downloads.queueOrder` holds the position; `DownloadDao` orders every
+  query by `(queueOrder, createdAt)`. Enqueueing appends after the current maximum, with the
+  batch sorted newest chapter first (Komikku's `sortedByDescending(sourceOrder)`), so a
+  freshly queued volume starts with what the reader most likely wants. `reorder`,
+  `moveToTop`, `moveToBottom`, `moveGroup` and `sortQueue` rewrite the column; a restart
+  therefore restores the same order instead of falling back to creation time.
+- **One pause for the whole engine.** `pauseAll` cancels running workers, writes
+  `downloadQueuePaused` to settings and leaves every active row `QUEUED` with the note
+  `Paused`; `pump` refuses to start anything while that flag is set. `startAll` clears the
+  flag, requeues failed rows and lets `pump` continue from the same positions and partial
+  files. A single row pauses as `WAITING`/`Paused` and resumes the same way, so the screen
+  can treat both as "paused by the user" while Wi-Fi blocking (`Waiting for Wi-Fi`) is
+  never mistaken for one.
+- **Retries belong to the transfer.** `retryTransfer` retries a failed transfer three times
+  with 2 s / 4 s / 8 s backoff; cancellation is rethrown, not retried. Metadata fetches and
+  page downloads share the wrapper, so one flaky request no longer fails a whole chapter.
+- **Progress is measured, not assumed.** Group headers average only rows that reported a
+  percentage, and leave the number out when no row has one, so a queue entry that has not
+  started cannot pin the header at 0%.
+- **Grouping by title, not by source.** Rows are grouped under `mediaId` (deliberate
+  divergence from Komikku's per-source headers) so "pause/cancel/move all" maps onto the
+  title the user sees. `clearQueue` deletes unfinished rows and their partial files but
+  keeps completed downloads, because the Library's offline filter depends on those files.
 
 ## Release builds and dynamic code
 
@@ -397,7 +445,8 @@ buffer percentage, peers and speed; only `onReady` hands the pseudo-URL to the p
 - No multi-module split yet: package boundaries already match the future modules.
 - No DRM, no scraping of unlicensed catalogues, no offline torrent storage (torrents stream
   only; direct HTTP files still download).
-- Unit tests cover version comparison, release parsing, mapping helpers and the torrent
-  helpers (`app/src/test/.../`). Room migrations are still covered by real upgrade installs
-  during development, not by instrumentation tests, and the UI is verified manually on the
-  emulator.
+- Unit tests cover version comparison, release parsing, mapping helpers, the torrent helpers,
+  Stremio resource support and the download queue's pure state rules
+  (`app/src/test/.../`). Room migrations are still covered by real upgrade installs during
+  development (including the v5 → v6 download-queue migration), not by instrumentation
+  tests, and the UI is verified manually on the emulator.

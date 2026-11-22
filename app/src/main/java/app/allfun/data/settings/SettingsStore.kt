@@ -71,7 +71,9 @@ data class Settings(
     /** Only download files while connected to Wi-Fi or Ethernet. */
     val downloadWifiOnly: Boolean = true,
     /** How many downloads may transfer at once. */
-    val concurrentDownloads: Int = 2
+    val concurrentDownloads: Int = 2,
+    /** True while the user has paused the whole queue, like Komikku's pause action. */
+    val downloadQueuePaused: Boolean = false
 )
 
 class SettingsStore(private val context: Context) {
@@ -97,6 +99,7 @@ class SettingsStore(private val context: Context) {
         val preferredSources = stringPreferencesKey("preferred_sources")
         val downloadWifiOnly = booleanPreferencesKey("download_wifi_only")
         val concurrentDownloads = intPreferencesKey("concurrent_downloads")
+        val downloadQueuePaused = booleanPreferencesKey("download_queue_paused")
     }
 
     val settings: Flow<Settings> = context.dataStore.data
@@ -122,7 +125,8 @@ class SettingsStore(private val context: Context) {
                 repositories = parseRepositories(prefs[Keys.repositories]),
                 preferredSources = parsePreferredSources(prefs[Keys.preferredSources]),
                 downloadWifiOnly = prefs[Keys.downloadWifiOnly] ?: true,
-                concurrentDownloads = (prefs[Keys.concurrentDownloads] ?: 2).coerceIn(1, 4)
+                concurrentDownloads = (prefs[Keys.concurrentDownloads] ?: 2).coerceIn(1, 4),
+                downloadQueuePaused = prefs[Keys.downloadQueuePaused] ?: false
             )
         }
 
@@ -192,6 +196,11 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setConcurrentDownloads(value: Int) {
         context.dataStore.edit { it[Keys.concurrentDownloads] = value.coerceIn(1, 4) }
+    }
+
+    /** Pausing the queue is persisted, so a restart does not silently resume downloads. */
+    suspend fun setDownloadQueuePaused(paused: Boolean) {
+        context.dataStore.edit { it[Keys.downloadQueuePaused] = paused }
     }
 
     /** Records a completed search; newest first, no duplicates, capped at 8 entries. */

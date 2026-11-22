@@ -415,7 +415,8 @@ fun AllFunRoot(container: AppContainer) {
                 composable(Routes.DOWNLOADS) {
                     DownloadsScreen(
                         container = container,
-                        onBack = { nav.popBackStack() }
+                        onBack = { nav.popBackStack() },
+                        onOpenMedia = { nav.navigate(Routes.detail(it)) }
                     )
                 }
 

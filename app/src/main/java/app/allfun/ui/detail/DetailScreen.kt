@@ -111,6 +111,7 @@ fun DetailScreen(
     val progress by vm.progress.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val canDownload by vm.canDownload.collectAsStateWithLifecycle()
+    val preparing by vm.preparing.collectAsStateWithLifecycle()
     val sourceState by vm.sources.collectAsStateWithLifecycle()
     val switched by vm.switchMediaId.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
@@ -343,13 +344,30 @@ fun DetailScreen(
 
             if (episodes.isEmpty()) {
                 item {
-                    Text(
-                        text = "No ${item.unitLabel.lowercase()}s yet. The source did not return " +
-                            "a ${item.unitLabel.lowercase()} list for this title.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                    )
+                    if (preparing) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                text = "Looking for ${item.unitLabel.lowercase()}s…",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = "No ${item.unitLabel.lowercase()}s yet. The source did not return " +
+                                "a ${item.unitLabel.lowercase()} list for this title.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+                    }
                 }
             } else if (item.kind == MediaKind.SERIES) {
                 episodes.groupBy { it.season }.forEach { (season, list) ->

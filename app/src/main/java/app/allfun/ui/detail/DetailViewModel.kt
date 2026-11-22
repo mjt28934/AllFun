@@ -22,7 +22,6 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
 
 /**
  * Loads one library title, refreshes it from its provider, and discovers which other
@@ -71,6 +70,14 @@ class DetailViewModel(
     /** True only when the installed provider exposes data AllFun can save. */
     val canDownload: StateFlow<Boolean> = _canDownload.asStateFlow()
 
+    /**
+     * True while provider metadata is being fetched for this title. A category result
+     * opens from its catalogue card, so the episode list arrives after the screen does;
+     * the empty state must not claim the provider has no chapters during that window.
+     */
+    private val _preparing = MutableStateFlow(true)
+    val preparing: StateFlow<Boolean> = _preparing.asStateFlow()
+
     private val _sources = MutableStateFlow(SourceState())
     val sources: StateFlow<SourceState> = _sources.asStateFlow()
 
@@ -94,15 +101,30 @@ class DetailViewModel(
 
     /** Pulls fresh metadata and units from the source, silently failing when offline. */
     suspend fun refresh() {
+        _preparing.value = true
         try {
             val media = container.library.media(mediaId) ?: return
             val source = container.sourceHub.sourceFor(media.sourceId) ?: return
-            val details = source.details(media.sourceKey)
-            val units = runCatching { source.units(media.sourceKey) }.getOrDefault(emptyList())
-            container.library.savePreview(media.sourceId, source.type, details, units)
+            val ref = ContentSourceRef(
+                sourceId = media.sourceId,
+                sourceName = source.name,
+                key = media.sourceKey,
+                type = source.type
+            )
+            // Metadata may come from another installed addon when this title's catalogue
+            // addon has none (Stremio separates catalogues from metadata).
+            val bundle = container.content.detailsWithUnits(ref).getOrNull() ?: return
+            container.library.savePreview(
+                sourceId = media.sourceId,
+                sourceType = source.type,
+                details = bundle.details,
+                units = bundle.units
+            )
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
             // Keep whatever is cached in the database.
+        } finally {
+            _preparing.value = false
         }
     }
 
@@ -178,15 +200,12 @@ class DetailViewModel(
                     key = option.key,
                     type = source.type
                 )
-                val details = container.content.detailsFor(ref).getOrThrow()
-                val units = runCatching {
-                    withTimeout(20_000) { source.units(option.key) }
-                }.getOrDefault(emptyList())
+                val bundle = container.content.detailsWithUnits(ref).getOrThrow()
                 val newId = container.library.savePreview(
                     sourceId = option.sourceId,
                     sourceType = source.type,
-                    details = details,
-                    units = units
+                    details = bundle.details,
+                    units = bundle.units
                 )
                 rememberPreferred(item, option.sourceId)
                 switchMediaId.value = newId
