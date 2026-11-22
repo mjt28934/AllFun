@@ -446,7 +446,7 @@ buffer percentage, peers and speed; only `onReady` hands the pseudo-URL to the p
 - No DRM, no scraping of unlicensed catalogues, no offline torrent storage (torrents stream
   only; direct HTTP files still download).
 - Unit tests cover version comparison, release parsing, mapping helpers, the torrent helpers,
-  Stremio resource support and the download queue's pure state rules
+  Stremio resource support, the download queue's pure state rules and chapter sort/filter
   (`app/src/test/.../`). Room migrations are still covered by real upgrade installs during
   development (including the v5 → v6 download-queue migration), not by instrumentation
   tests, and the UI is verified manually on the emulator.

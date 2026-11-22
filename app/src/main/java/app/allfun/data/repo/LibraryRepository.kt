@@ -110,11 +110,17 @@ class LibraryRepository(
 
     suspend fun saveEpisodes(mediaId: String, units: List<UnitStub>) {
         if (units.isEmpty()) return
+        // Refreshes replace rows, so carry the read marker over or every update would
+        // make the whole chapter list unread again.
+        val readIds = episodeDao.forMedia(mediaId)
+            .filter { it.read }
+            .mapTo(mutableSetOf()) { it.id }
         episodeDao.upsertAll(
             units.map { unit ->
+                val episodeId = Ids.episode(mediaId, unit.id)
                 EpisodeEntity(
                     mediaId = mediaId,
-                    id = Ids.episode(mediaId, unit.id),
+                    id = episodeId,
                     orderIndex = unit.index,
                     title = unit.title,
                     season = unit.season,
@@ -124,11 +130,18 @@ class LibraryRepository(
                     durationMs = unit.durationMs,
                     pageCount = unit.pageCount,
                     sourceUnitId = unit.id,
-                    memo = unit.memo
+                    memo = unit.memo,
+                    read = episodeId in readIds
                 )
             }
         )
     }
+
+    suspend fun setEpisodeRead(mediaId: String, episodeId: String, read: Boolean) =
+        episodeDao.setRead(mediaId, episodeId, read)
+
+    suspend fun setAllEpisodesRead(mediaId: String, read: Boolean) =
+        episodeDao.setAllRead(mediaId, read)
 
     suspend fun stubFor(media: MediaEntity) = MediaStub(
         key = media.sourceKey,

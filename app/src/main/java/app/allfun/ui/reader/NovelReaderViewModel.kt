@@ -33,6 +33,8 @@ class NovelReaderViewModel(
         val fontSize: Int = 100,
         val lineSpacing: Float = 1.72f,
         val theme: NovelTheme = NovelTheme.DARK,
+        /** Scroll position within the chapter, 0..1, for the reader's progress bar. */
+        val fraction: Float = 0f,
         val loading: Boolean = true,
         val error: UserError? = null
     )
@@ -44,6 +46,7 @@ class NovelReaderViewModel(
     private var pendingRestore: Float = 0f
 
     private var saveJob: Job? = null
+    private var loadJob: Job? = null
     private var lastFraction: Float = 0f
 
     init {
@@ -95,11 +98,14 @@ class NovelReaderViewModel(
                 chapter = chapter,
                 chapterHtml = null,
                 loading = true,
-                error = null
+                error = null,
+                fraction = restore
             )
         }
+        // Only scroll updates and the final flush write progress. Writing here would
+        // reset the chapter we just left to 0% for anyone who pages through the book.
         container.appScope.launch {
-            container.progress.save(mediaId, chapter.id, (restore * 1000f).toLong(), 1000L)
+            container.library.setEpisodeRead(mediaId, chapter.id, true)
         }
 
         viewModelScope.launch {
@@ -110,6 +116,7 @@ class NovelReaderViewModel(
                 val downloaded = container.downloads.localChapter(mediaId, chapter.id)
                 if (!downloaded.isNullOrBlank()) {
                     val looksLikeMarkup = downloaded.trimStart().startsWith("<")
+                    if (!isCurrent(chapter)) return@launch
                     _state.update {
                         it.copy(
                             chapterHtml = htmlDocument(chapter.title, downloaded, looksLikeMarkup),
@@ -123,6 +130,7 @@ class NovelReaderViewModel(
                     val unitId = chapter.sourceUnitId ?: chapter.id
                     val body = source.chapterBody(item.sourceKey, unitId)
                     val text = body ?: source.chapterText(item.sourceKey, unitId)
+                    if (!isCurrent(chapter)) return@launch
                     if (text.isNullOrBlank()) {
                         error("This chapter returned no text. The site may need a browser.")
                     }
@@ -140,12 +148,20 @@ class NovelReaderViewModel(
                 }
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
+                if (!isCurrent(chapter)) return@launch
                 _state.update {
                     it.copy(loading = false, error = t.toUserError("this chapter"))
                 }
             }
         }
     }
+
+    /**
+     * A fetch for a chapter the reader has already left must not overwrite the current
+     * chapter; fast page-throughs leave several requests in flight.
+     */
+    private fun isCurrent(chapter: EpisodeEntity): Boolean =
+        _state.value.chapter?.id == chapter.id
 
     fun consumeRestore(): Float {
         val value = pendingRestore
@@ -155,7 +171,9 @@ class NovelReaderViewModel(
 
     fun onScroll(fraction: Float) {
         val chapter = _state.value.chapter ?: return
-        lastFraction = fraction.coerceIn(0f, 1f)
+        val clamped = fraction.coerceIn(0f, 1f)
+        lastFraction = clamped
+        _state.update { it.copy(fraction = clamped) }
         saveJob?.cancel()
         saveJob = viewModelScope.launch {
             delay(600)
@@ -170,12 +188,28 @@ class NovelReaderViewModel(
 
     fun nextChapter() {
         val index = _state.value.index
-        if (index + 1 < _state.value.chapters.size) openChapter(index + 1)
+        if (index + 1 < _state.value.chapters.size) goToChapter(index + 1)
     }
 
     fun previousChapter() {
         val index = _state.value.index
-        if (index > 0) openChapter(index - 1)
+        if (index > 0) goToChapter(index - 1)
+    }
+
+    /**
+     * Opens a chapter from the picker or the chapter arrows. Progress is stored once per
+     * title, so a chapter whose saved position is still current resumes where it left off
+     * instead of jumping to the top.
+     */
+    fun goToChapter(index: Int) {
+        val chapter = _state.value.chapters.getOrNull(index) ?: return
+        viewModelScope.launch {
+            val saved = runCatching { container.progress.get(mediaId) }.getOrNull()
+            val fraction = if (saved?.episodeId == chapter.id) {
+                (saved.position.toFloat() / saved.total.coerceAtLeast(1L)).coerceIn(0f, 1f)
+            } else 0f
+            openChapter(index, fraction)
+        }
     }
 
     fun flush() {

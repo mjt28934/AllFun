@@ -71,7 +71,9 @@ data class EpisodeEntity(
     /** The source's own id for this unit, kept so refreshes never orphan progress. */
     val sourceUnitId: String? = null,
     /** Extension-private JSON (SChapter.memo) required to fetch pages. */
-    val memo: String? = null
+    val memo: String? = null,
+    /** Set when the reader opens the chapter; drives the unread markers on the detail page. */
+    val read: Boolean = false
 )
 
 @Entity(

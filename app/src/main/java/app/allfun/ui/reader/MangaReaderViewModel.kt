@@ -83,12 +83,15 @@ class MangaReaderViewModel(
             )
         }
         viewModelScope.launch {
+            // Opening a chapter is what marks it read, like Komikku's chapter list.
+            container.library.setEpisodeRead(mediaId, chapter.id, true)
             try {
                 // Downloads are keyed by the local episode row, which is stable even when
                 // the provider changes its own chapter URL.
                 val local = container.downloads.localPages(mediaId, chapter.id)
                 if (local.isNotEmpty()) {
                     val page = startPage.coerceIn(0, local.lastIndex)
+                    if (!isCurrent(chapter)) return@launch
                     _state.update { it.copy(pages = local, page = page, loading = false) }
                     persist(page, local.size)
                     return@launch
@@ -99,18 +102,27 @@ class MangaReaderViewModel(
                     item.sourceKey,
                     chapter.sourceUnitId ?: chapter.id
                 )
+                if (!isCurrent(chapter)) return@launch
                 if (pages.isEmpty()) error("This source returned no pages for that chapter")
                 val page = startPage.coerceIn(0, pages.lastIndex)
                 _state.update { it.copy(pages = pages, page = page, loading = false) }
                 persist(page, pages.size)
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
+                if (!isCurrent(chapter)) return@launch
                 _state.update {
                     it.copy(loading = false, error = t.toUserError("this chapter"))
                 }
             }
         }
     }
+
+    /**
+     * A fetch for a chapter the reader has already left must not overwrite the current
+     * chapter; fast page-throughs leave several requests in flight.
+     */
+    private fun isCurrent(chapter: EpisodeEntity): Boolean =
+        _state.value.currentEpisode?.id == chapter.id
 
     fun onPageChanged(page: Int) {
         val current = _state.value

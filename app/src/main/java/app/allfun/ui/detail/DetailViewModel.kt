@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -86,6 +87,15 @@ class DetailViewModel(
 
     private val _messages = Channel<String>(Channel.BUFFERED)
     val messages = _messages.receiveAsFlow()
+
+    /** Installed provider's display name, shown under the title like Komikku's source line. */
+    val sourceName = combine(container.sources.observeAll(), media) { sources, item ->
+        sources.firstOrNull { it.id == item?.sourceId }?.name.orEmpty()
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = ""
+    )
 
     private var sourcesJob: Job? = null
 
@@ -278,6 +288,23 @@ class DetailViewModel(
 
     fun retryDownload(key: String) {
         viewModelScope.launch { container.downloads.retry(key) }
+    }
+
+    /** Marks one chapter read or unread from the chapter list or its action sheet. */
+    fun setRead(episodeId: String, read: Boolean) {
+        viewModelScope.launch { container.library.setEpisodeRead(mediaId, episodeId, read) }
+    }
+
+    fun markAllRead() {
+        viewModelScope.launch {
+            container.library.setAllEpisodesRead(mediaId, true)
+            _messages.send("Marked every chapter as read.")
+        }
+    }
+
+    /** Pull-to-refresh equivalent for the toolbar overflow. */
+    fun refreshNow() {
+        viewModelScope.launch { refresh() }
     }
 
     fun clearSwitch() {

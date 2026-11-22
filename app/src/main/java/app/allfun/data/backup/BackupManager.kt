@@ -97,7 +97,9 @@ data class BackupEpisode(
     val durationMs: Long? = null,
     val pageCount: Int? = null,
     val sourceUnitId: String? = null,
-    val memo: String? = null
+    val memo: String? = null,
+    /** Absent in older backups; treated as unread. */
+    val read: Boolean = false
 )
 
 @Serializable
@@ -366,7 +368,8 @@ class BackupManager(
         durationMs = durationMs,
         pageCount = pageCount,
         sourceUnitId = sourceUnitId,
-        memo = memo
+        memo = memo,
+        read = read
     )
 
     private fun BackupEpisode.toEntity() = EpisodeEntity(
@@ -381,7 +384,8 @@ class BackupManager(
         durationMs = durationMs,
         pageCount = pageCount,
         sourceUnitId = sourceUnitId,
-        memo = memo
+        memo = memo,
+        read = read
     )
 
     private fun ProgressEntity.toBackup() = BackupProgress(

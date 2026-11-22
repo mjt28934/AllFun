@@ -131,6 +131,12 @@ interface EpisodeDao {
     @Query("SELECT * FROM episodes WHERE mediaId = :mediaId AND sourceUnitId = :unitId LIMIT 1")
     suspend fun bySourceUnit(mediaId: String, unitId: String): EpisodeEntity?
 
+    @Query("UPDATE episodes SET read = :read WHERE mediaId = :mediaId AND id = :episodeId")
+    suspend fun setRead(mediaId: String, episodeId: String, read: Boolean)
+
+    @Query("UPDATE episodes SET read = :read WHERE mediaId = :mediaId")
+    suspend fun setAllRead(mediaId: String, read: Boolean)
+
     @Query("DELETE FROM episodes WHERE mediaId = :mediaId")
     suspend fun deleteForMedia(mediaId: String)
 

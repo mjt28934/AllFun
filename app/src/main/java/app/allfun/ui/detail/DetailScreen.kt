@@ -92,11 +92,9 @@ import app.allfun.ui.theme.LocalReduceMotion
 import app.allfun.ui.theme.Motion
 
 /**
- * One detail layout for every provider. Movies, books and manga share the hero,
- * actions, source selector, description and unit list; the metadata labels and the
- * reader/player action change with the category.
+ * One detail route for every provider. Movies keep their hero/watchlist layout; manga and
+ * books use the Komikku-style reading page with chapter rows, read markers and sorting.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailScreen(
     container: AppContainer,
@@ -106,6 +104,64 @@ fun DetailScreen(
     onOpen: (mediaId: String, episodeId: String?, kind: MediaKind) -> Unit
 ) {
     val vm = rememberViewModel { DetailViewModel(mediaId, container) }
+    val media by vm.media.collectAsStateWithLifecycle()
+    val item = media
+    if (item == null) {
+        DetailLoading(onBack)
+        return
+    }
+    when (item.kind.category()) {
+        ContentCategory.MOVIES -> MoviesDetailScreen(
+            vm = vm,
+            mediaId = mediaId,
+            onBack = onBack,
+            onSwitchSource = onSwitchSource,
+            onOpen = onOpen
+        )
+        else -> ReadingDetailScreen(
+            vm = vm,
+            media = item,
+            mediaId = mediaId,
+            onBack = onBack,
+            onSwitchSource = onSwitchSource,
+            onOpen = onOpen
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DetailLoading(onBack: () -> Unit) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {},
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentAlignment = Alignment.Center
+        ) { CircularProgressIndicator() }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MoviesDetailScreen(
+    vm: DetailViewModel,
+    mediaId: String,
+    onBack: () -> Unit,
+    onSwitchSource: (String) -> Unit,
+    onOpen: (mediaId: String, episodeId: String?, kind: MediaKind) -> Unit
+) {
     val media by vm.media.collectAsStateWithLifecycle()
     val episodes by vm.episodes.collectAsStateWithLifecycle()
     val progress by vm.progress.collectAsStateWithLifecycle()
@@ -631,7 +687,7 @@ private fun SourceSection(
 }
 
 @Composable
-private fun SourceOptionRow(
+internal fun SourceOptionRow(
     option: SourceOption,
     category: ContentCategory,
     enabled: Boolean,
