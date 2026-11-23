@@ -1,6 +1,7 @@
 package app.allfun.ui.settings
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -19,21 +20,37 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.CollectionsBookmark
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.Save
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.SystemUpdate
+import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
@@ -47,13 +64,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.allfun.BuildConfig
 import app.allfun.data.AppContainer
@@ -63,12 +81,39 @@ import app.allfun.data.settings.MangaFit
 import app.allfun.data.settings.NovelTheme
 import app.allfun.data.settings.ReaderMode
 import app.allfun.data.settings.ReadingDirection
+import app.allfun.data.settings.Settings
 import app.allfun.data.settings.ThemeMode
-import app.allfun.ui.components.NoticeCard
 import app.allfun.ui.components.rememberViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
+
+/**
+ * Settings is a hub, not one long page: each row opens a short screen for one kind of
+ * preference, with the current value as the subtitle. The structure follows Komikku's
+ * settings (category list with icons, subtitle summaries and a search), adapted to the
+ * preferences AllFun actually has.
+ */
+private enum class SettingsPage(val label: String) {
+    APPEARANCE("Appearance"),
+    LIBRARY("Library"),
+    READING("Reading"),
+    PLAYBACK("Playback"),
+    STORAGE("Storage"),
+    NETWORK("Network"),
+    BACKUP("Backup"),
+    ABOUT("About")
+}
+
+private data class SettingsEntry(
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val page: SettingsPage? = null,
+    val action: (() -> Unit)? = null,
+    val keywords: String = ""
+)
 
 @Composable
 fun SettingsScreen(
@@ -83,6 +128,10 @@ fun SettingsScreen(
     val busy by vm.busy.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var pendingImport by remember { mutableStateOf<Uri?>(null) }
+    var page by rememberSaveable { mutableStateOf<SettingsPage?>(null) }
+    // Kept above the hub so coming back from a sub-screen returns to the same row instead
+    // of jumping to the top of the list.
+    val hubState = rememberLazyListState()
 
     LaunchedEffect(Unit) {
         vm.messages.collect { message -> snackbar.showSnackbar(message) }
@@ -98,170 +147,440 @@ fun SettingsScreen(
         ActivityResultContracts.OpenDocument()
     ) { uri -> if (uri != null) pendingImport = uri }
 
+    BackHandler(enabled = page != null) { page = null }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         containerColor = MaterialTheme.colorScheme.background,
         // The root already pads for the bottom bar; insets are applied once, on the list.
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0)
     ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .statusBarsPadding(),
-            contentPadding = PaddingValues(bottom = 32.dp)
-        ) {
-            item {
-                Text(
-                    text = "Settings",
-                    style = MaterialTheme.typography.headlineMedium,
-                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp)
-                )
-                Text(
-                    text = "AllFun ${BuildConfig.VERSION_NAME} · preferences are saved as you change them",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 12.dp)
-                )
-            }
+        if (page == null) {
+            SettingsHub(
+                settings = settings,
+                busy = busy,
+                listState = hubState,
+                onOpenPage = { page = it },
+                onManageExtensions = onManageExtensions,
+                onOpenUpdates = onOpenUpdates,
+                onOpenDownloads = onOpenDownloads,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .statusBarsPadding()
+            )
+        } else {
+            SettingsPageContent(
+                page = page!!,
+                vm = vm,
+                settings = settings,
+                storage = storage,
+                busy = busy,
+                onBack = { page = null },
+                onExport = { exportLauncher.launch(suggestedName) },
+                onImport = {
+                    importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+                },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .statusBarsPadding()
+            )
+        }
+    }
 
-            if (busy != null) {
-                item {
-                    Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
-                        Text(
-                            text = busy.orEmpty(),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.secondary
+    pendingImport?.let { uri ->
+        AlertDialog(
+            onDismissRequest = { pendingImport = null },
+            title = { Text("Restore this backup?") },
+            text = {
+                Text(
+                    "Titles in the file are added, or replaced when they have the same id. " +
+                        "Nothing currently in your library is deleted. Settings and repository " +
+                        "URLs are overwritten by the file's values."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingImport = null
+                    vm.importBackup(uri)
+                }) { Text("Restore") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingImport = null }) { Text("Cancel") }
+            }
+        )
+    }
+}
+
+@Composable
+private fun SettingsHub(
+    settings: Settings,
+    busy: String?,
+    listState: LazyListState,
+    onOpenPage: (SettingsPage) -> Unit,
+    onManageExtensions: () -> Unit,
+    onOpenUpdates: () -> Unit,
+    onOpenDownloads: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val entries = settingsEntries(settings, onManageExtensions, onOpenUpdates, onOpenDownloads)
+    val needle = query.trim().lowercase(Locale.ROOT)
+    val visible = entries.filter { entry ->
+        needle.isBlank() ||
+            entry.title.lowercase(Locale.ROOT).contains(needle) ||
+            entry.subtitle.lowercase(Locale.ROOT).contains(needle) ||
+            entry.keywords.contains(needle)
+    }
+
+    LazyColumn(
+        modifier = modifier,
+        state = listState,
+        contentPadding = PaddingValues(bottom = 32.dp)
+    ) {
+        item {
+            Text(
+                text = "Settings",
+                style = MaterialTheme.typography.headlineMedium,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp)
+            )
+            Text(
+                text = "AllFun ${BuildConfig.VERSION_NAME} · saved as you change them",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 12.dp)
+            )
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                placeholder = { Text("Search settings") },
+                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { query = "" }) {
+                            Icon(Icons.Outlined.Close, contentDescription = "Clear search")
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = CircleShape
+            )
+        }
+
+        if (busy != null) {
+            item { BusyBar(busy) }
+        }
+
+        if (visible.isEmpty()) {
+            item {
+                Column(Modifier.padding(horizontal = 20.dp, vertical = 24.dp)) {
+                    Text("No settings match \"$query\"", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Try a shorter word, such as theme, reader, storage or backup.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else {
+            item {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    shape = MaterialTheme.shapes.large,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Column {
+                        visible.forEachIndexed { index, entry ->
+                            if (index > 0) {
+                                HorizontalDivider(Modifier.padding(start = 56.dp))
+                            }
+                            SettingsEntryRow(
+                                entry = entry,
+                                onClick = {
+                                    entry.page?.let(onOpenPage) ?: entry.action?.invoke()
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsEntryRow(entry: SettingsEntry, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = entry.icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary
+        )
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(entry.title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = entry.subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Icon(
+            imageVector = Icons.Outlined.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+private fun settingsEntries(
+    settings: Settings,
+    onManageExtensions: () -> Unit,
+    onOpenUpdates: () -> Unit,
+    onOpenDownloads: () -> Unit
+): List<SettingsEntry> = listOf(
+    SettingsEntry(
+        title = "Appearance",
+        subtitle = "${settings.themeMode.label()} · " +
+            if (settings.dynamicColor) "Material You" else "Fixed palette",
+        icon = Icons.Outlined.Palette,
+        page = SettingsPage.APPEARANCE,
+        keywords = "theme dark light system colours color wallpaper motion animation"
+    ),
+    SettingsEntry(
+        title = "Library",
+        subtitle = "${settings.libraryView.label()} · ${settings.librarySort.label}",
+        icon = Icons.Outlined.CollectionsBookmark,
+        page = SettingsPage.LIBRARY,
+        keywords = "shelf grid list sort order titles"
+    ),
+    SettingsEntry(
+        title = "Reading",
+        subtitle = "${settings.readerMode.label()} · ${settings.mangaFit.label}",
+        icon = Icons.AutoMirrored.Outlined.MenuBook,
+        page = SettingsPage.READING,
+        keywords = "manga novel reader pages fit direction font line spacing theme"
+    ),
+    SettingsEntry(
+        title = "Playback",
+        subtitle = "Resume ${settings.resumePlayback.onOff()} · " +
+            "Subtitles ${settings.subtitlesEnabled.onOff()}",
+        icon = Icons.Outlined.PlayCircle,
+        page = SettingsPage.PLAYBACK,
+        keywords = "video film episode player subtitles resume"
+    ),
+    SettingsEntry(
+        title = "Downloads",
+        subtitle = "Queue, Wi-Fi rule and offline storage",
+        icon = Icons.Outlined.Download,
+        action = onOpenDownloads,
+        keywords = "offline download queue wifi storage chapters"
+    ),
+    SettingsEntry(
+        title = "Extensions",
+        subtitle = "Sources, add-ons and plugins",
+        icon = Icons.Outlined.Extension,
+        action = onManageExtensions,
+        keywords = "repositories stremio jellyfin source addon plugin install update"
+    ),
+    SettingsEntry(
+        title = "Storage",
+        subtitle = "Cache, extensions and database use",
+        icon = Icons.Outlined.Storage,
+        page = SettingsPage.STORAGE,
+        keywords = "cache clear space bytes database temporary"
+    ),
+    SettingsEntry(
+        title = "Network",
+        subtitle = "Connection test and request timeouts",
+        icon = Icons.Outlined.Wifi,
+        page = SettingsPage.NETWORK,
+        keywords = "connection repository timeout internet proxy"
+    ),
+    SettingsEntry(
+        title = "Backup",
+        subtitle = "Export or restore a JSON backup",
+        icon = Icons.Outlined.Save,
+        page = SettingsPage.BACKUP,
+        keywords = "export import restore json library progress"
+    ),
+    SettingsEntry(
+        title = "App updates",
+        subtitle = "Check GitHub releases for a newer AllFun",
+        icon = Icons.Outlined.SystemUpdate,
+        action = onOpenUpdates,
+        keywords = "update version release apk github"
+    ),
+    SettingsEntry(
+        title = "About",
+        subtitle = "AllFun ${BuildConfig.VERSION_NAME}",
+        icon = Icons.Outlined.Info,
+        page = SettingsPage.ABOUT,
+        keywords = "version credits licenses repositories source code"
+    )
+)
+
+@Composable
+private fun SettingsPageContent(
+    page: SettingsPage,
+    vm: SettingsViewModel,
+    settings: Settings,
+    storage: SettingsViewModel.StorageStats?,
+    busy: String?,
+    onBack: () -> Unit,
+    onExport: () -> Unit,
+    onImport: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(bottom = 32.dp)
+    ) {
+        item {
+            SettingsPageHeader(title = page.label, onBack = onBack)
+        }
+        if (busy != null) {
+            item { BusyBar(busy) }
+        }
+        when (page) {
+            SettingsPage.APPEARANCE -> item {
+                Column {
+                    SettingsSection("Appearance") {
+                        SettingLabel("Theme")
+                        ChoiceChips(
+                            options = ThemeMode.entries.toList(),
+                            selected = settings.themeMode,
+                            label = { it.label() },
+                            onSelect = vm::setTheme
                         )
-                        Spacer(Modifier.height(6.dp))
-                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                        Spacer(Modifier.height(8.dp))
+                        SwitchRow(
+                            title = "Material You colours",
+                            subtitle = "Use the wallpaper palette on Android 12 and later",
+                            checked = settings.dynamicColor,
+                            onChange = vm::setDynamicColor
+                        )
+                    }
+                    SettingsSection("Accessibility") {
+                        SwitchRow(
+                            title = "Reduce motion",
+                            subtitle = "Turns off screen cross-fades and other non-essential animation",
+                            checked = settings.reduceMotion,
+                            onChange = vm::setReduceMotion
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            text = "AllFun follows your system font size. Text wraps instead of " +
+                                "clipping at large sizes, buttons keep at least 48 dp touch " +
+                                "targets, icons have spoken labels, and colour is never the only " +
+                                "way status is shown. Change text size in Android's display " +
+                                "settings.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
 
-            // 1. Appearance
-            item {
-                SettingsSection("Appearance") {
-                    SettingLabel("Theme")
-                    ChoiceChips(
-                        options = ThemeMode.entries.toList(),
-                        selected = settings.themeMode,
-                        label = {
-                            when (it) {
-                                ThemeMode.SYSTEM -> "System"
-                                ThemeMode.DARK -> "Dark"
-                                ThemeMode.LIGHT -> "Light"
-                            }
-                        },
-                        onSelect = vm::setTheme
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    SwitchRow(
-                        title = "Material You colours",
-                        subtitle = "Use the wallpaper palette on Android 12 and later",
-                        checked = settings.dynamicColor,
-                        onChange = vm::setDynamicColor
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    SettingLabel("Library layout")
+            SettingsPage.LIBRARY -> item {
+                SettingsSection("Library") {
+                    SettingLabel("Layout")
                     ChoiceChips(
                         options = LibraryView.entries.toList(),
                         selected = settings.libraryView,
-                        label = { if (it == LibraryView.GRID) "Grid" else "List" },
+                        label = { it.label() },
                         onSelect = vm::setLibraryView
                     )
                     Spacer(Modifier.height(8.dp))
-                    SettingLabel("Library sort")
+                    SettingLabel("Sort order")
                     ChoiceChips(
                         options = LibrarySort.entries.toList(),
                         selected = settings.librarySort,
                         label = { it.label },
                         onSelect = vm::setLibrarySort
                     )
-                }
-            }
-
-            // 2. Accessibility
-            item {
-                SettingsSection("Accessibility") {
-                    SwitchRow(
-                        title = "Reduce motion",
-                        subtitle = "Turns off screen cross-fades and other non-essential animation",
-                        checked = settings.reduceMotion,
-                        onChange = vm::setReduceMotion
-                    )
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        text = "AllFun follows your system font size. Text wraps instead of " +
-                            "clipping at large sizes, buttons keep at least 48 dp touch " +
-                            "targets, icons have spoken labels, and colour is never the only " +
-                            "way status is shown. Change text size in Android's display " +
-                            "settings.",
+                        text = "The Continue row at the top of the shelf always shows the " +
+                            "titles you started but have not finished, newest first.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            // 3. Reading
-            item {
-                SettingsSection("Reading") {
-                    SettingLabel("Manga page layout")
-                    ChoiceChips(
-                        options = ReaderMode.entries.toList(),
-                        selected = settings.readerMode,
-                        label = {
-                            if (it == ReaderMode.VERTICAL) "Vertical scroll" else "Paged"
-                        },
-                        onSelect = vm::setReaderMode
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    SettingLabel("Fit pages")
-                    ChoiceChips(
-                        options = MangaFit.entries.toList(),
-                        selected = settings.mangaFit,
-                        label = { it.label },
-                        onSelect = vm::setMangaFit
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    SettingLabel("Page order")
-                    ChoiceChips(
-                        options = ReadingDirection.entries.toList(),
-                        selected = settings.readingDirection,
-                        label = { if (it == ReadingDirection.LTR) "Left to right" else "Right to left" },
-                        onSelect = vm::setReadingDirection
-                    )
-
-                    SectionDivider()
-
-                    SliderRow(
-                        title = "Novel text size",
-                        valueLabel = "${settings.novelFontSize}%",
-                        value = settings.novelFontSize.toFloat(),
-                        valueRange = 70f..180f,
-                        steps = 21,
-                        onValueChange = { vm.setFontSize(it.toInt()) }
-                    )
-                    SliderRow(
-                        title = "Novel line spacing",
-                        valueLabel = String.format(Locale.US, "%.1f×", settings.novelLineSpacing),
-                        value = settings.novelLineSpacing,
-                        valueRange = 1.2f..2.4f,
-                        steps = 11,
-                        onValueChange = vm::setLineSpacing
-                    )
-                    SettingLabel("Novel theme")
-                    ChoiceChips(
-                        options = NovelTheme.entries.toList(),
-                        selected = settings.novelTheme,
-                        label = { it.label },
-                        onSelect = vm::setNovelTheme
-                    )
+            SettingsPage.READING -> item {
+                Column {
+                    SettingsSection("Manga") {
+                        SettingLabel("Page layout")
+                        ChoiceChips(
+                            options = ReaderMode.entries.toList(),
+                            selected = settings.readerMode,
+                            label = { it.label() },
+                            onSelect = vm::setReaderMode
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        SettingLabel("Fit pages")
+                        ChoiceChips(
+                            options = MangaFit.entries.toList(),
+                            selected = settings.mangaFit,
+                            label = { it.label },
+                            onSelect = vm::setMangaFit
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        SettingLabel("Page order")
+                        ChoiceChips(
+                            options = ReadingDirection.entries.toList(),
+                            selected = settings.readingDirection,
+                            label = {
+                                if (it == ReadingDirection.LTR) "Left to right" else "Right to left"
+                            },
+                            onSelect = vm::setReadingDirection
+                        )
+                    }
+                    SettingsSection("Novels") {
+                        SliderRow(
+                            title = "Text size",
+                            value = settings.novelFontSize.toFloat(),
+                            valueRange = 70f..180f,
+                            valueLabel = { "${it.roundToInt()}%" },
+                            onValueChangeFinished = { vm.setFontSize(it.roundToInt()) }
+                        )
+                        SliderRow(
+                            title = "Line spacing",
+                            value = settings.novelLineSpacing,
+                            valueRange = 1.2f..2.4f,
+                            valueLabel = { String.format(Locale.US, "%.1f×", it) },
+                            onValueChangeFinished = {
+                                vm.setLineSpacing((it * 10f).roundToInt() / 10f)
+                            }
+                        )
+                        SettingLabel("Reader theme")
+                        ChoiceChips(
+                            options = NovelTheme.entries.toList(),
+                            selected = settings.novelTheme,
+                            label = { it.label },
+                            onSelect = vm::setNovelTheme
+                        )
+                    }
                 }
             }
 
-            // 4. Playback
-            item {
+            SettingsPage.PLAYBACK -> item {
                 SettingsSection("Playback") {
                     SwitchRow(
                         title = "Resume where you stopped",
@@ -279,53 +598,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 5. Extensions
-            item {
-                SettingsSection("Extensions") {
-                    Text(
-                        text = "Add a Stremio addon, Jellyfin server, manga extension or novel " +
-                            "plugin from a category's + button, or install them from its " +
-                            "extension button. Every connected extension feeds Movies & Shows, " +
-                            "Books & Novels or Manhwa & Manga automatically; nothing becomes " +
-                            "its own tab.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = onManageExtensions) {
-                            Icon(Icons.Outlined.Extension, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Extensions")
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = "The Extensions screen shows each installed item's version, " +
-                            "content type, repository and status, and lets you update, disable " +
-                            "or remove it without touching your library.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            // 6. Downloads
-            item {
-                SettingsSection("Downloads") {
-                    Text(
-                        text = "Chapters, books and films saved to this device. The queue, " +
-                            "progress, Wi-Fi-only rule and storage use live on their own screen.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Button(onClick = onOpenDownloads) { Text("Manage downloads") }
-                }
-            }
-
-            // 7. Storage
-            item {
+            SettingsPage.STORAGE -> item {
                 SettingsSection("Storage") {
                     val stats = storage
                     if (stats == null) {
@@ -363,8 +636,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 8. Network
-            item {
+            SettingsPage.NETWORK -> item {
                 SettingsSection("Network") {
                     Text(
                         text = "AllFun talks to sources directly from this device; there is no " +
@@ -388,34 +660,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 9. App updates
-            item {
-                SettingsSection("App Updates") {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(onClick = onOpenUpdates)
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Outlined.SystemUpdate, contentDescription = null)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("Check for updates", style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                text = "Read GitHub Releases, download and install a newer " +
-                                    "version of AllFun",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Icon(Icons.Outlined.ChevronRight, contentDescription = null)
-                    }
-                }
-            }
-
-            // 10. Backup
-            item {
+            SettingsPage.BACKUP -> item {
                 SettingsSection("Backup") {
                     Text(
                         text = "A backup is a JSON file with your settings, repository URLs, " +
@@ -433,20 +678,12 @@ fun SettingsScreen(
                     )
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = { exportLauncher.launch(suggestedName) },
-                            enabled = busy == null
-                        ) {
+                        Button(onClick = onExport, enabled = busy == null) {
                             Icon(Icons.Outlined.Save, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text("Export")
                         }
-                        OutlinedButton(
-                            onClick = {
-                                importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
-                            },
-                            enabled = busy == null
-                        ) {
+                        OutlinedButton(onClick = onImport, enabled = busy == null) {
                             Icon(Icons.Outlined.Restore, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text("Restore")
@@ -455,8 +692,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 11. About
-            item {
+            SettingsPage.ABOUT -> item {
                 SettingsSection("About") {
                     Text(
                         text = "AllFun ${BuildConfig.VERSION_NAME}",
@@ -490,28 +726,39 @@ fun SettingsScreen(
             }
         }
     }
+}
 
-    pendingImport?.let { uri ->
-        AlertDialog(
-            onDismissRequest = { pendingImport = null },
-            title = { Text("Restore this backup?") },
-            text = {
-                Text(
-                    "Titles in the file are added, or replaced when they have the same id. " +
-                        "Nothing currently in your library is deleted. Settings and repository " +
-                        "URLs are overwritten by the file's values."
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingImport = null
-                    vm.importBackup(uri)
-                }) { Text("Restore") }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingImport = null }) { Text("Cancel") }
-            }
+@Composable
+private fun SettingsPageHeader(title: String, onBack: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 4.dp, end = 20.dp, top = 8.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back to settings")
+        }
+        Spacer(Modifier.width(4.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.weight(1f)
         )
+    }
+}
+
+@Composable
+private fun BusyBar(label: String) {
+    Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.secondary
+        )
+        Spacer(Modifier.height(6.dp))
+        LinearProgressIndicator(Modifier.fillMaxWidth())
     }
 }
 
@@ -594,12 +841,19 @@ private fun SwitchRow(
 @Composable
 private fun SliderRow(
     title: String,
-    valueLabel: String,
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
-    steps: Int,
-    onValueChange: (Float) -> Unit
+    valueLabel: (Float) -> String,
+    onValueChangeFinished: (Float) -> Unit
 ) {
+    // A continuous track: Material 3 draws a row of tick dots for stepped sliders, which
+    // turned these two settings into a dotted progress bar. The value is rounded by the
+    // callback, and written once the finger lifts instead of on every dragged pixel.
+    var dragged by remember { mutableStateOf<Float?>(null) }
+    // Drop the drag overlay only once the stored value arrives, so the thumb does not
+    // snap back to the old position for a frame while the preference is written.
+    LaunchedEffect(value) { dragged = null }
+    val shown = dragged ?: value
     Column(Modifier.padding(vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -608,16 +862,18 @@ private fun SliderRow(
                 modifier = Modifier.weight(1f)
             )
             Text(
-                text = valueLabel,
+                text = valueLabel(shown),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.secondary
             )
         }
         Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = valueRange,
-            steps = steps
+            value = shown,
+            onValueChange = { dragged = it },
+            onValueChangeFinished = {
+                dragged?.let(onValueChangeFinished)
+            },
+            valueRange = valueRange
         )
     }
 }
@@ -643,7 +899,15 @@ private fun StatRow(label: String, value: String) {
     }
 }
 
-@Composable
-private fun SectionDivider() {
-    HorizontalDivider(Modifier.padding(vertical = 12.dp))
+private fun ThemeMode.label(): String = when (this) {
+    ThemeMode.SYSTEM -> "System theme"
+    ThemeMode.DARK -> "Dark theme"
+    ThemeMode.LIGHT -> "Light theme"
 }
+
+private fun LibraryView.label(): String = if (this == LibraryView.GRID) "Grid" else "List"
+
+private fun ReaderMode.label(): String =
+    if (this == ReaderMode.VERTICAL) "Vertical scroll" else "Paged"
+
+private fun Boolean.onOff(): String = if (this) "on" else "off"

@@ -91,6 +91,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -601,7 +602,11 @@ private fun RowScope.ReadingActionButton(
                 text = title,
                 color = if (enabled) color else color.copy(alpha = 0.38f),
                 fontSize = 12.sp,
-                maxLines = 1,
+                lineHeight = 14.sp,
+                textAlign = TextAlign.Center,
+                // Two lines so "Add to library" is not clipped to "Add to libr…" in a
+                // quarter-width column, and so it still fits at large font sizes.
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
         }

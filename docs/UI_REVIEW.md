@@ -105,6 +105,53 @@ adopted; everything else is listed as backlog rather than imitated.
   markers, and leaves paragraphs intact; both detail screens use it, and
   `ContentModelsTest` covers links, bare URLs, headings and untouched prose.
 
+## 0.9.2 follow-up pass
+
+A focused pass on what the 0.9.1 screens still got in the way of, plus the defects found
+while reading through the app on the emulator.
+
+### Library
+
+- **The scope row is gone.** "Everything / Downloaded / Favorites / Recently added /
+  Recently opened" duplicated the content-group chips and the favorites filter already in
+  the grid. `LibraryScope`, `scopeCounts`, `setScope`, the scope predicates and the
+  scope-specific empty states were deleted rather than hidden, so there is one filter
+  model in `LibraryViewModel` and one chip row in `LibraryScreen`.
+
+### Category headers
+
+- **Five actions, one row.** Search, filter, refresh, extensions and quick-add used to be
+  split between the title row and the tagline row. They now share a single, right-aligned
+  action row under the tagline, each with a 48 dp target, so "Manhwa & Manga" keeps its
+  full width and the controls line up with each other.
+- **Search results keep the browse grid.** Browse used `Adaptive(108.dp)` and search
+  `Adaptive(116.dp)`, which produced three columns while browsing and two oversized ones
+  while searching. `GRID_MIN_CELL` is now shared by the browse grid, the search grid and
+  the loading skeleton, so the column count does not change between states.
+
+### Settings
+
+- **Settings is a hub, not one long scroll.** Eleven rows (Appearance, Library, Reading,
+  Playback, Downloads, Extensions, Storage, Network, Backup, App updates, About) show
+  their current value as a subtitle and open a short dedicated screen, following
+  Komikku's settings structure. A search field filters rows by title, subtitle and
+  keywords. Download queue, extensions and app updates keep their existing screens.
+- **Scroll position survives a sub-screen.** The hub's `LazyListState` is remembered above
+  the page switch, so Back returns to the row you left instead of the top of the list.
+- **The novel sliders are continuous.** Material 3 renders a row of tick dots for stepped
+  sliders, which turned the font-size and line-spacing controls into a dotted progress
+  bar. They are continuous now, the value is rounded by the callback, and it is written
+  once the finger lifts instead of on every dragged pixel.
+- **Library database size is real.** Storage measured `files/databases`, but Room keeps
+  `allfun.db` beside `files/`, so the row always read 0 B. It now measures the directory
+  `getDatabasePath("allfun.db")` reports.
+
+### Detail pages
+
+- **Action labels fit.** "Add to library" was clipped to "Add to libr…" in the
+  quarter-width column of the manga/book action row. Labels wrap to two centred lines at
+  the same 12 sp, which also survives a large system font size.
+
 ## Findings and backlog
 
 ### P0 — correctness and comprehension
@@ -126,7 +173,8 @@ adopted; everything else is listed as backlog rather than imitated.
    the user chooses Popular/Latest, without going back to horizontal rows.
 2. **Continue reading at the top of the library and reading categories.** The library
    already computes progress (`LibraryRow.fraction`). A compact "Continue" strip with
-   the last three unfinished titles would save a search on every open.
+   the last three unfinished titles would save a search on every open. *Done in 0.9.1 for
+   the Library; the category tabs still have no Continue row.*
 3. **Search state in the category header.** The search field is injected between the
    header and the grid, which shifts the content. Reserve its space or open a dedicated
    search surface so the grid does not jump.
@@ -186,6 +234,25 @@ Build `assembleRelease` installed over the previous signed build on Android 15 /
   The buttons sit above the system gesture inset.
 - **Offline badge:** not exercised live, because the test library had no completed
   download at the time; the state is fed by `DownloadStatus.COMPLETED` only.
+
+### 0.9.2 checks
+
+- **Library:** the scope chip row is gone; the content-group chips, Continue strip and
+  grid remain, and both grid and list layouts render.
+- **Category headers:** Movies, Books and Manga each show title and tagline at full width
+  with search / filter / refresh / extensions / add on one row beneath.
+- **Settings:** hub rows show live subtitles ("Grid · Recently updated", "141%"-style
+  reader values are on the Reading page), search filters to Reading for "font", Back
+  returns to the same row, sub-screens render, and Storage reports
+  `1.4 MB` for the database instead of `0 B`.
+- **Novel sliders:** dragging text size moved it from 100% to 141% and the value survived
+  leaving and reopening the page.
+- **Category search:** "one" in Movies returns 38 results in the same three-column grid as
+  browsing, with the loading skeleton in that grid too.
+- **Manga detail:** One Piece renders the hero, action row, prose synopsis with the
+  provider's related-series list, and the Resume/Start floating button.
+- **Not re-checked after the last label change:** the "Add to library" wrap on the manga
+  action row was built and inspected in code only; verify on the next device pass.
 
 ## What to measure next
 

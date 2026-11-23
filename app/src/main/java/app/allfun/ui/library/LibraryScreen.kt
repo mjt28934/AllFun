@@ -22,8 +22,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.CollectionsBookmark
-import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.NewReleases
@@ -208,40 +206,12 @@ fun LibraryScreen(
             }
         }
 
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(LibraryScope.entries) { option ->
-                val count = state.scopeCounts[option] ?: 0
-                FilterChip(
-                    selected = state.scope == option,
-                    onClick = { vm.setScope(option) },
-                    enabled = option == LibraryScope.ALL || count > 0 || state.scope == option,
-                    label = { Text(option.label) },
-                    leadingIcon = when (option) {
-                        LibraryScope.DOWNLOADED -> {
-                            { Icon(Icons.Outlined.Download, contentDescription = null) }
-                        }
-                        LibraryScope.FAVORITES -> {
-                            { Icon(Icons.Outlined.FavoriteBorder, contentDescription = null) }
-                        }
-                        else -> null
-                    }
-                )
-            }
-        }
-
         Box(Modifier.weight(1f)) {
             if (state.items.isEmpty()) {
                 EmptyState(
                     icon = Icons.Outlined.CollectionsBookmark,
                     title = when {
                         state.all.isEmpty() -> "Nothing here yet"
-                        state.scope == LibraryScope.FAVORITES && state.query.isBlank() ->
-                            "No favorites yet"
-                        state.scope == LibraryScope.DOWNLOADED && state.query.isBlank() ->
-                            "No downloads yet"
                         state.query.isNotBlank() -> "No matches"
                         else -> "No ${state.filter.label.lowercase()} yet"
                     },
@@ -249,11 +219,6 @@ fun LibraryScreen(
                         state.all.isEmpty() ->
                             "Titles you save, read or download land on this shelf. Install an " +
                                 "extension to start browsing."
-                        state.scope == LibraryScope.FAVORITES ->
-                            "Open any title and tap the heart to pin it here."
-                        state.scope == LibraryScope.DOWNLOADED ->
-                            "Open a manga chapter, novel chapter or film and tap Download to " +
-                                "keep it on this device. Download settings live in Settings."
                         state.query.isNotBlank() ->
                             "Nothing matches \"${state.query}\". Try a shorter search."
                         else -> "Try another category, or add something new."

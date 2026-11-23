@@ -110,6 +110,12 @@ import app.allfun.ui.theme.Motion
 private const val LIBRARY_PREVIEW = 6
 
 /**
+ * Narrowest poster the grids accept. Browse, search results and their loading skeletons
+ * all use it so the column count never changes between those three states.
+ */
+private val GRID_MIN_CELL = 108.dp
+
+/**
  * The single category browse experience. Movies, books and manga share the same cards,
  * search field, filters, sorting, loading/error handling and source status reporting; the
  * only per-category differences are metadata labels and accent colour.
@@ -428,18 +434,29 @@ private fun CategoryHeader(
             .fillMaxWidth()
             .padding(start = 20.dp, end = 4.dp, top = 10.dp, bottom = 2.dp)
     ) {
-        // Title first, then the three things people do with a catalogue: search it,
-        // narrow it, refresh it. Extensions stay on the tagline row because installing a
-        // source is setup, not browsing.
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = category.label,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
+        // Title and tagline own the full width; the five catalogue actions share one row
+        // below them. Previously search/filter/refresh sat beside the title and
+        // extensions/add on the tagline, so the controls were split across two rows.
+        Text(
+            text = category.label,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = category.tagline,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(end = 4.dp, top = 2.dp)
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             IconButton(onClick = onOpenSearch) {
                 Icon(
                     Icons.Outlined.Search,
@@ -470,18 +487,6 @@ private fun CategoryHeader(
             IconButton(onClick = onRefresh, enabled = !state.refreshing) {
                 Icon(Icons.Outlined.Refresh, contentDescription = "Refresh category")
             }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = category.tagline,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 4.dp)
-            )
             IconButton(onClick = onOpenExtensions) {
                 Icon(
                     Icons.Outlined.Extension,
@@ -524,10 +529,15 @@ private fun CategoryHeader(
 
 /** Skeletons are only shown while a request is genuinely running. */
 @Composable
-private fun LoadingGrid(category: ContentCategory) {
+private fun LoadingGrid(category: ContentCategory, searching: Boolean = false) {
     Column(Modifier.fillMaxSize()) {
-        LoadingState("Reading ${category.label.lowercase()} from your sources")
-        GridSkeleton(count = 9)
+        LoadingState(
+            if (searching) "Searching every ${category.label.lowercase()} source"
+            else "Reading ${category.label.lowercase()} from your sources"
+        )
+        // Same adaptive width as CategorySections, so the placeholders do not jump from
+        // two huge columns to the three real ones when results arrive.
+        GridSkeleton(count = 9, minCellWidth = GRID_MIN_CELL)
     }
 }
 
@@ -557,7 +567,7 @@ private fun CategorySections(
 ) {
     val libraryRows = if (category.isVideo) watchlist else favorites
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 108.dp),
+        columns = GridCells.Adaptive(minSize = GRID_MIN_CELL),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 32.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -757,7 +767,7 @@ private fun SearchGrid(
     onManageExtensions: () -> Unit
 ) {
     when {
-        state.searching -> LoadingGrid(category)
+        state.searching -> LoadingGrid(category, searching = true)
         state.searchError != null -> ErrorState(
             error = state.searchError,
             onRetry = onRetry,
@@ -772,7 +782,9 @@ private fun SearchGrid(
             onAction = onClear
         )
         else -> LazyVerticalGrid(
-            columns = GridCells.Adaptive(116.dp),
+            // Same minimum as the browse grid, so results keep the category's three
+            // columns instead of ballooning into two oversized posters.
+            columns = GridCells.Adaptive(GRID_MIN_CELL),
             contentPadding = PaddingValues(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)

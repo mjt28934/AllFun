@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.allfun.ui.theme.LocalReduceMotion
 import app.allfun.ui.theme.Motion
@@ -208,10 +209,10 @@ fun ShelfSkeleton(
 fun GridSkeleton(
     modifier: Modifier = Modifier,
     count: Int = 9,
-    minCellWidth: Int = 124
+    minCellWidth: Dp = 124.dp
 ) {
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minCellWidth.dp),
+        columns = GridCells.Adaptive(minCellWidth),
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),

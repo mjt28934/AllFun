@@ -252,7 +252,7 @@ fun GlobalSearchScreen(
 
                     state.searching -> Column(Modifier.fillMaxSize()) {
                         LoadingState("Searching your installed sources")
-                        GridSkeleton(count = 9, minCellWidth = 108)
+                        GridSkeleton(count = 9, minCellWidth = 108.dp)
                     }
 
                     state.searched && state.total == 0 -> EmptyState(

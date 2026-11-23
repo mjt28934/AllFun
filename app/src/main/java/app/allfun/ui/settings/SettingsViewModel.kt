@@ -107,7 +107,11 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                 StorageStats(
                     cacheBytes = sizeOf(container.cacheDir),
                     extensionBytes = sizeOf(File(container.filesDir, "extensions")),
-                    databaseBytes = sizeOf(File(container.filesDir, "databases"))
+                    // Room keeps allfun.db beside files/, not inside it, so asking for
+                    // files/databases always reported 0 B. Ask for the real path.
+                    databaseBytes = sizeOf(
+                        container.appContext.getDatabasePath("allfun.db").parentFile
+                    )
                 )
             }
         }

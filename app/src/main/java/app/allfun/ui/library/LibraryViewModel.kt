@@ -37,15 +37,6 @@ enum class LibraryFilter(val label: String) {
     }
 }
 
-/** Quick filters that answer "what do I want to find on this shelf?". */
-enum class LibraryScope(val label: String) {
-    ALL("Everything"),
-    DOWNLOADED("Downloaded"),
-    FAVORITES("Favorites"),
-    RECENTLY_ADDED("Recently added"),
-    RECENTLY_OPENED("Recently opened")
-}
-
 /** Real download facts for one library title, derived from the downloads table. */
 data class LibraryDownload(
     val completed: Int = 0,
@@ -66,15 +57,13 @@ data class LibraryUiState(
     val items: List<LibraryRow> = emptyList(),
     /**
      * Started but unfinished titles, newest first. This is the "pick up where you left
-     * off" row; it respects the selected content group but ignores scopes and search so
-     * it stays stable while the user filters the shelf below.
+     * off" row; it respects the selected content group but ignores search so it stays
+     * stable while the user filters the shelf below.
      */
     val continueReading: List<LibraryRow> = emptyList(),
     val counts: Map<LibraryFilter, Int> = emptyMap(),
-    val scopeCounts: Map<LibraryScope, Int> = emptyMap(),
     val downloads: Map<String, LibraryDownload> = emptyMap(),
     val filter: LibraryFilter = LibraryFilter.ALL,
-    val scope: LibraryScope = LibraryScope.ALL,
     val query: String = "",
     val sort: LibrarySort = LibrarySort.RECENTLY_UPDATED,
     val view: LibraryView = LibraryView.GRID
@@ -83,7 +72,6 @@ data class LibraryUiState(
 class LibraryViewModel(private val container: AppContainer) : ViewModel() {
 
     private val filter = MutableStateFlow(LibraryFilter.ALL)
-    private val scope = MutableStateFlow(LibraryScope.ALL)
     private val query = MutableStateFlow("")
 
     private val settingsFlow = container.settings.settings.stateIn(
@@ -92,8 +80,8 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         initialValue = Settings()
     )
 
-    private val filters = combine(filter, scope, query) { f, s, q ->
-        Triple(f, s, q)
+    private val filters = combine(filter, query) { f, q ->
+        f to q
     }
 
     val state: StateFlow<LibraryUiState> = combine(
@@ -102,20 +90,14 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         filters,
         settingsFlow
     ) { rows, downloadRows, selection, settings ->
-        val (selectedFilter, selectedScope, search) = selection
+        val (selectedFilter, search) = selection
         val downloads = summarise(downloadRows)
         val counts = LibraryFilter.entries.associateWith { option ->
             rows.count { option.matches(it.media) }
         }
-        val scopeCounts = LibraryScope.entries.associateWith { option ->
-            rows.count { row ->
-                selectedFilter.matches(row.media) && option.matches(row.media, downloads)
-            }
-        }
         val needle = search.trim().lowercase(Locale.ROOT)
         val filtered = rows.filter { row ->
             selectedFilter.matches(row.media) &&
-                selectedScope.matches(row.media, downloads) &&
                 (needle.isBlank() || row.media.matches(needle))
         }.sortedWith(settings.librarySort.comparator())
         val inProgress = rows.filter { row ->
@@ -130,10 +112,8 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
             items = filtered,
             continueReading = inProgress,
             counts = counts,
-            scopeCounts = scopeCounts,
             downloads = downloads,
             filter = selectedFilter,
-            scope = selectedScope,
             query = search,
             sort = settings.librarySort,
             view = settings.libraryView
@@ -146,17 +126,6 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setFilter(value: LibraryFilter) {
         filter.value = value
-        // A scope that no longer has anything in the selected group would show an empty
-        // shelf for no reason, so fall back to Everything when that happens.
-        if (scope.value != LibraryScope.ALL &&
-            (state.value.scopeCounts[scope.value] ?: 0) == 0
-        ) {
-            scope.value = LibraryScope.ALL
-        }
-    }
-
-    fun setScope(value: LibraryScope) {
-        scope.value = if (scope.value == value) LibraryScope.ALL else value
     }
 
     fun setQuery(value: String) {
@@ -207,20 +176,6 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
             )
         }
 
-    private fun LibraryScope.matches(
-        media: MediaEntity,
-        downloads: Map<String, LibraryDownload>
-    ): Boolean = when (this) {
-        LibraryScope.ALL -> true
-        LibraryScope.DOWNLOADED ->
-            (downloads[media.id]?.completed ?: 0) > 0 ||
-                (downloads[media.id]?.active ?: 0) > 0
-        LibraryScope.FAVORITES -> media.favorite
-        LibraryScope.RECENTLY_ADDED ->
-            media.addedAt >= System.currentTimeMillis() - RECENT_WINDOW_MS
-        LibraryScope.RECENTLY_OPENED -> media.lastOpenedAt != null
-    }
-
     private fun MediaEntity.matches(needle: String): Boolean =
         title.lowercase(Locale.ROOT).contains(needle) ||
             author?.lowercase(Locale.ROOT)?.contains(needle) == true ||
@@ -232,9 +187,5 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         LibrarySort.RECENTLY_OPENED -> compareByDescending { it.media.lastOpenedAt ?: 0L }
         LibrarySort.TITLE -> compareBy { it.media.title.lowercase(Locale.ROOT) }
         LibrarySort.AUTHOR -> compareBy { it.media.author?.lowercase(Locale.ROOT) ?: "\uFFFF" }
-    }
-
-    private companion object {
-        const val RECENT_WINDOW_MS = 30L * 24L * 60L * 60L * 1000L
     }
 }
