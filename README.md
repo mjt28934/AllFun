@@ -45,8 +45,8 @@ Verify the checksum, then open the APK. Releases are signed with one fixed certi
 each version installs over the previous one and keeps the library:
 
 ```powershell
-(Get-FileHash .\AllFun-0.9.0-release.apk -Algorithm SHA256).Hash.ToLower()
-Get-Content .\AllFun-0.9.0-release.apk.sha256
+(Get-FileHash .\AllFun-0.9.1-release.apk -Algorithm SHA256).Hash.ToLower()
+Get-Content .\AllFun-0.9.1-release.apk.sha256
 ```
 
 From inside the app, **Settings → About → App Updates** does the same work without a
@@ -61,7 +61,7 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | `:app:assembleDebug` | **BUILD SUCCESSFUL** |
 | `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking, 61,667,753 bytes |
 | `:app:testDebugUnitTest` | **65 tests pass** — serialization compatibility (generic, polymorphic, defaults, unknown fields), semantic version comparison, release JSON parsing, checksum-file parsing, category/dedupe/format mapping, category sorting, provider-description Markdown flattening, Tachiyomi page conversion, magnet/infohash identity, torrent quality ranking and tracker fallback, Stremio resource support, download queue order/pause/grouping, chapter sort/filter |
-| APK metadata | `app.allfun`, `versionCode 900`, `versionName 0.9.0`, v2 signature, `CN=AllFun` |
+| APK metadata | `app.allfun`, `versionCode 901`, `versionName 0.9.1`, v2 signature, `CN=AllFun` |
 | Runtime, Android 15 / API 35 (emulator) | Signed 0.8.1 APK installed over 0.8.0 (same signer, library, extensions, sources and downloads kept) → five destinations, compact category toolbars with the extension and quick-add buttons top-right, category-scoped marketplace with focused search, real Weeb Central downloads, offline reading, the grouped download queue, torrent playback with the stream picker, Settings → Downloads, Library download badges and sizes; empty and error states; no crash |
 | Catalogue-only addons | An addon declaring `resources: ["catalog"]` (Streaming Catalogs shape) renders its shelf, and its titles open with metadata from Cinemeta instead of failing with "returned a web page"; no `meta` request is sent to an addon that does not declare it |
 | Category screens | Movies, Books and Manga render one vertical adaptive grid (no horizontal shelves or separate "see all" screen); the chip row offers Popular, Latest, A–Z and By source; the header shows title/source/issue counts; filters, favorites and load-more stay in place |
@@ -84,8 +84,8 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Settings maintenance | Storage stats, clear cached files without touching the library, repository connection test (1,710 extensions in 1,194 ms) |
 | Release (R8) runtime | All paths above re-verified on a signed release build |
 | In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` confirmation |
-| Published release | [v0.9.0](https://github.com/mjt28934/AllFun/releases/tag/v0.9.0) — Komikku-style manga and book detail pages |
-| Version | `0.9.0` (versionCode 900) |
+| Published release | [v0.9.1](https://github.com/mjt28934/AllFun/releases/tag/v0.9.1) — vertical catalogue, Popular/Latest sorting, calm reader chrome |
+| Version | `0.9.1` (versionCode 901) |
 | Min SDK | 26 (Android 8.0) |
 | Target SDK | 35 |
 
