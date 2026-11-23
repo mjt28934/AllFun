@@ -84,7 +84,7 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Settings maintenance | Hub of Appearance, Library, Reading, Playback, Downloads, Extensions, Storage, Network, Backup, App updates and About with live subtitles and a settings search; Storage stats, clear cached files without touching the library, repository connection test (1,710 extensions in 1,194 ms) |
 | Release (R8) runtime | All paths above re-verified on a signed release build |
 | In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` confirmation |
-| Published release | [v0.9.2](https://github.com/mjt28934/AllFun/releases/tag/v0.9.2) — quieter Library, Settings hub, one catalogue action row |
+| Published release | [v0.9.2](https://github.com/mjt28934/AllFun/releases/tag/v0.9.2) — `AllFun-0.9.2-release.apk`, 61,684,137 bytes, SHA-256 `8b77c618d42b4be9be0e356a1d9b1c3c1be15910530bb593e041e41d6a675e79`; the workflow re-downloaded the checksum asset and compared it, verified the package, `versionCode 902` and signer, and GitHub reports it as the latest |
 | Version | `0.9.2` (versionCode 902) |
 | Min SDK | 26 (Android 8.0) |
 | Target SDK | 35 |
