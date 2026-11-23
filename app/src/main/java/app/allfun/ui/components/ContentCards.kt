@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -76,7 +77,9 @@ fun ContentCard(
     progress: Float? = null,
     details: MediaDetails? = null,
     width: Int = 136,
-    fillWidth: Boolean = false
+    fillWidth: Boolean = false,
+    /** Shown over the cover when the title has finished downloads, e.g. "Offline". */
+    downloadLabel: String? = null
 ) {
     val interaction = remember { MutableInteractionSource() }
     val format = item.format(details)
@@ -152,6 +155,31 @@ fun ContentCard(
                         .background(Color.Black.copy(alpha = 0.46f))
                         .padding(horizontal = 7.dp, vertical = 3.dp)
                 )
+            }
+            if (downloadLabel != null) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 8.dp, end = 8.dp, bottom = 11.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.Black.copy(alpha = 0.66f))
+                        .padding(horizontal = 7.dp, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Outlined.Download,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = downloadLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        maxLines = 1
+                    )
+                }
             }
             if (progress != null && progress > 0f) {
                 Box(

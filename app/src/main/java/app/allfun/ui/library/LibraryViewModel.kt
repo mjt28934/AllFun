@@ -19,6 +19,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Locale
 
+/** How many in-progress titles the Continue row shows before the shelf takes over. */
+private const val CONTINUE_LIMIT = 8
+
 /** The four content groups the Library offers. */
 enum class LibraryFilter(val label: String) {
     ALL("All"),
@@ -61,6 +64,12 @@ data class LibraryDownload(
 data class LibraryUiState(
     val all: List<LibraryRow> = emptyList(),
     val items: List<LibraryRow> = emptyList(),
+    /**
+     * Started but unfinished titles, newest first. This is the "pick up where you left
+     * off" row; it respects the selected content group but ignores scopes and search so
+     * it stays stable while the user filters the shelf below.
+     */
+    val continueReading: List<LibraryRow> = emptyList(),
     val counts: Map<LibraryFilter, Int> = emptyMap(),
     val scopeCounts: Map<LibraryScope, Int> = emptyMap(),
     val downloads: Map<String, LibraryDownload> = emptyMap(),
@@ -109,9 +118,17 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
                 selectedScope.matches(row.media, downloads) &&
                 (needle.isBlank() || row.media.matches(needle))
         }.sortedWith(settings.librarySort.comparator())
+        val inProgress = rows.filter { row ->
+            selectedFilter.matches(row.media) &&
+                row.progressEpisodeId != null &&
+                (row.fraction ?: 0f) > 0.01f &&
+                (row.fraction ?: 0f) < 0.995f
+        }.sortedByDescending { it.media.lastOpenedAt ?: it.media.updatedAt }
+            .take(CONTINUE_LIMIT)
         LibraryUiState(
             all = rows,
             items = filtered,
+            continueReading = inProgress,
             counts = counts,
             scopeCounts = scopeCounts,
             downloads = downloads,

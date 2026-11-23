@@ -21,6 +21,41 @@ not been built yet.
 4. Kept what already worked: the 0.9.0 detail pages, the bottom bar, the download queue
    and the 0.7.3–0.8.1 behaviour.
 
+## Reference-driven pass
+
+The second pass took patterns from the apps below. Only what fits AllFun's structure was
+adopted; everything else is listed as backlog rather than imitated.
+
+| Reference | Pattern taken | Where |
+| --- | --- | --- |
+| namida, Aves, Chocola, Symphonica | A compact "Continue" strip of in-progress titles at the top of the library, with progress on the artwork instead of a separate queue screen | `LibraryScreen.kt`, `LibraryViewModel.kt` |
+| komikku | The end of a chapter is an explicit boundary with the next chapter one tap away, not a silent stop at the last image | `MangaReaderScreen.kt` (`ChapterEndCard`) |
+| mpvEx, mpvFlux, Flux | Playback and reading are foreground activities: the screen stays awake while the reader is open, and chrome stays out of the content | `MangaReaderScreen.kt`, `NovelReaderScreen.kt` |
+| MaterialFiles | Dense, honest rows: catalogue cards say "Offline" when files are actually on the device, instead of leaving the user to guess | `ContentCards.kt`, `CategoryViewModel.downloadedMedia` |
+| nowinandroid, Jetchat, compose-samples | State-driven screens with explicit loading / empty / error states, and one source of truth per surface | existing screens, unchanged conventions |
+| WallFlow, Syncara, WizeStream | Material 3 colour roles and dynamic colour carried through every new surface, including reader chrome and cards | theme usage in the new components |
+
+### Added in this pass
+
+- **Continue row in the Library.** Started-but-unfinished titles, newest first, capped at
+  eight, respecting the selected content group. It is the first item of the shelf, so it
+  scrolls away with the grid; it is hidden while searching and the search field sits above
+  it, so the field does not move when the first character hides the row.
+- **End-of-chapter card** at the bottom of a manga chapter in vertical mode, with the
+  chapter title, "Chapter N of M", Previous and Next chapter. It clears the system
+  navigation inset, so the buttons are not under the gesture bar.
+- **Keep screen on** while either reader is open.
+- **"Offline" badge** on catalogue and search cards for titles with completed downloads.
+
+### Deliberately not copied
+
+- **Two-pane adaptive detail** (nowinandroid/Jetchat): worth doing, but it changes
+  navigation and both detail layouts, so it belongs in its own change.
+- **Player overlay redesign** (mpvEx/mpvFlux): the video player already has a working
+  control surface; re-skinning it is a separate, testable piece of work.
+- **Pull-to-refresh on the catalogue**: the refresh action and its progress line already
+  exist; adding a second gesture for the same command needs device testing first.
+
 ## What changed in this pass
 
 ### Category screens (Movies, Books, Manga)
@@ -98,11 +133,10 @@ not been built yet.
 4. **Filter sheet summary.** Show the number of matches next to "Show results" and keep
    the sheet open while metadata streams in; today the count is only on the screen
    behind it.
-5. **Reader: page-number jump and chapter edges.** The progress bar is display-only.
-   Let a drag on it seek, and show a short "End of chapter — next: …" card at the last
-   page in paged mode.
-6. **Download state on category cards.** Downloaded titles show no badge in the
-   catalogue; the library does. Reuse the download lookup already used by the library.
+5. **Reader: chapter edges.** Done for vertical manga (`ChapterEndCard`). Paged mode still
+   needs the same boundary card at the last page; the chrome slider already seeks.
+6. **Download state on category cards.** Done: `CategoryViewModel.downloadedMedia` feeds
+   an "Offline" badge on catalogue and search cards.
 7. **Large-screen layout.** The adaptive grid handles tablets, but the detail pages and
    readers stay single-column. Add a two-pane detail layout above 840 dp
    (`WindowSizeClass`) and cap reader line length.
@@ -144,6 +178,14 @@ Build `assembleRelease` installed over the previous signed build on Android 15 /
   installed novel sources returned an empty chapter list on this machine on 2026-11-23
   (the detail screen said so honestly), so there was nothing to scroll. Re-run this check
   when a novel source responds.
+- **Continue strip:** the Library showed "2 in progress" with 36% and 2% on the artwork;
+  the strip scrolled away with the grid, and typing in the search field did not move the
+  field when the strip hid.
+- **End-of-chapter card:** reached the bottom of One Piece chapter 3 in vertical mode with
+  the chrome hidden, then tapped **Next chapter** once and landed at the top of chapter 4.
+  The buttons sit above the system gesture inset.
+- **Offline badge:** not exercised live, because the test library had no completed
+  download at the time; the state is fed by `DownloadStatus.COMPLETED` only.
 
 ## What to measure next
 

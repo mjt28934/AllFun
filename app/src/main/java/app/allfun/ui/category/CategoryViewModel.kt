@@ -12,6 +12,7 @@ import app.allfun.data.content.matchesFormat
 import app.allfun.data.content.previewDetails
 import app.allfun.data.content.refId
 import app.allfun.data.content.titleKey
+import app.allfun.data.db.DownloadStatus
 import app.allfun.data.db.LibraryRow
 import app.allfun.data.model.MediaDetails
 import app.allfun.data.net.UserError
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -184,6 +186,18 @@ class CategoryViewModel(
 
     val libraryRows: StateFlow<List<LibraryRow>> = container.library.observeLibraryWithProgress()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Media ids with at least one finished download. Catalogue cards use this to say
+     * "Offline" without a per-card database query; a failed or running download does not
+     * claim to be available offline.
+     */
+    val downloadedMedia: StateFlow<Set<String>> = container.downloads.downloads
+        .map { rows ->
+            rows.filter { it.status == DownloadStatus.COMPLETED }
+                .mapTo(HashSet()) { it.mediaId }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
     val openMediaId = MutableStateFlow<String?>(null)
 

@@ -65,6 +65,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -99,6 +100,14 @@ fun NovelReaderScreen(
     var showSettings by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    // Reading is a foreground activity; the screen should not dim mid-chapter.
+    val rootView = LocalView.current
+    DisposableEffect(rootView) {
+        val previous = rootView.keepScreenOn
+        rootView.keepScreenOn = true
+        onDispose { rootView.keepScreenOn = previous }
+    }
 
     val palette = paletteFor(state.theme)
 

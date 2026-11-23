@@ -36,6 +36,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
@@ -85,7 +86,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -127,6 +130,14 @@ fun MangaReaderScreen(
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
     LaunchedEffect(state.currentEpisode?.id) { seekRequest = null }
+
+    // Reading is a foreground activity; the screen should not dim mid-chapter.
+    val view = LocalView.current
+    DisposableEffect(view) {
+        val previous = view.keepScreenOn
+        view.keepScreenOn = true
+        onDispose { view.keepScreenOn = previous }
+    }
 
     // Komikku-style volume-key page turning (works in both reading modes).
     fun turnPage(direction: Int) {
@@ -178,7 +189,14 @@ fun MangaReaderScreen(
                         onSeekHandled = { seekRequest = null },
                         onPageChanged = vm::onPageChanged,
                         onTap = { chrome = !chrome },
-                        onScrollStarted = { chrome = false }
+                        onScrollStarted = { chrome = false },
+                        chapterTitle = state.currentEpisode?.title.orEmpty(),
+                        chapterIndex = state.episodeIndex,
+                        chapterCount = state.episodes.size,
+                        hasPrevious = state.episodeIndex > 0,
+                        hasNext = state.episodeIndex < state.episodes.lastIndex,
+                        onPreviousChapter = vm::previousChapter,
+                        onNextChapter = vm::nextChapter
                     )
                 } else {
                     PagedPages(
@@ -597,7 +615,14 @@ private fun VerticalPages(
     onSeekHandled: () -> Unit,
     onPageChanged: (Int) -> Unit,
     onTap: () -> Unit,
-    onScrollStarted: () -> Unit
+    onScrollStarted: () -> Unit,
+    chapterTitle: String,
+    chapterIndex: Int,
+    chapterCount: Int,
+    hasPrevious: Boolean,
+    hasNext: Boolean,
+    onPreviousChapter: () -> Unit,
+    onNextChapter: () -> Unit
 ) {
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = startPage)
     var lastScrollEnd by remember { mutableLongStateOf(0L) }
@@ -646,6 +671,93 @@ private fun VerticalPages(
                 loading = { MangaPagePlaceholder(index + 1) },
                 error = { MangaPagePlaceholder(index + 1) }
             )
+        }
+        item(key = "chapter-end") {
+            ChapterEndCard(
+                chapterTitle = chapterTitle,
+                chapterIndex = chapterIndex,
+                chapterCount = chapterCount,
+                hasPrevious = hasPrevious,
+                hasNext = hasNext,
+                onPrevious = onPreviousChapter,
+                onNext = onNextChapter
+            )
+        }
+    }
+}
+
+/**
+ * Komikku-style chapter footer: the end of a chapter is a real boundary, so the reader
+ * says so and offers the next one instead of silently stopping at the last image.
+ */
+@Composable
+private fun ChapterEndCard(
+    chapterTitle: String,
+    chapterIndex: Int,
+    chapterCount: Int,
+    hasPrevious: Boolean,
+    hasNext: Boolean,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.Black)
+            .navigationBarsPadding()
+            .padding(horizontal = 24.dp, vertical = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "End of chapter",
+            style = MaterialTheme.typography.titleMedium,
+            color = Color.White
+        )
+        if (chapterTitle.isNotBlank()) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = chapterTitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.7f),
+                textAlign = TextAlign.Center
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "Chapter ${chapterIndex + 1} of $chapterCount",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White.copy(alpha = 0.55f)
+        )
+        Spacer(Modifier.height(20.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (hasPrevious) {
+                OutlinedButton(onClick = onPrevious) {
+                    Icon(
+                        Icons.AutoMirrored.Outlined.ArrowBack,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("Previous")
+                }
+            }
+            if (hasNext) {
+                Button(onClick = onNext) {
+                    Text("Next chapter")
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        Icons.AutoMirrored.Outlined.ArrowForward,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            } else {
+                Text(
+                    text = "You are up to date",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White.copy(alpha = 0.6f)
+                )
+            }
         }
     }
 }

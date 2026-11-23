@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
@@ -48,9 +50,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.allfun.data.AppContainer
+import app.allfun.data.db.LibraryRow
 import app.allfun.data.settings.LibrarySort
 import app.allfun.data.settings.LibraryView
 import app.allfun.ui.components.EmptyState
@@ -263,6 +268,17 @@ fun LibraryScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(18.dp)
                 ) {
+                    // First item of the shelf, so it scrolls away with the grid and the
+                    // search field above it never moves when a query hides the strip.
+                    if (state.continueReading.isNotEmpty() && state.query.isBlank()) {
+                        item(span = { GridItemSpan(maxLineSpan) }, key = "continue") {
+                            ContinueReadingRow(
+                                rows = state.continueReading,
+                                onOpen = onOpenMedia,
+                                horizontalPadding = 0.dp
+                            )
+                        }
+                    }
                     items(state.items, key = { it.media.id }) { row ->
                         MediaCard(
                             media = row.media,
@@ -277,6 +293,14 @@ fun LibraryScreen(
                 }
             } else {
                 LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+                    if (state.continueReading.isNotEmpty() && state.query.isBlank()) {
+                        item(key = "continue") {
+                            ContinueReadingRow(
+                                rows = state.continueReading,
+                                onOpen = onOpenMedia
+                            )
+                        }
+                    }
                     items(state.items, key = { it.media.id }) { row ->
                         val download = state.downloads[row.media.id]
                         MediaListRow(
@@ -320,6 +344,54 @@ fun LibraryScreen(
                 TextButton(onClick = { pendingRemove = null }) { Text("Cancel") }
             }
         )
+    }
+}
+
+/**
+ * "Pick up where you left off": the last in-progress titles, newest first. A compact
+ * strip, not a second shelf — the library grid below still holds everything, and the row
+ * respects the selected content group (Movies / Books / Manga).
+ */
+@Composable
+private fun ContinueReadingRow(
+    rows: List<LibraryRow>,
+    onOpen: (String) -> Unit,
+    horizontalPadding: Dp = 20.dp
+) {
+    Column(Modifier.padding(top = 4.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = horizontalPadding),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Continue",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = if (rows.size == 1) "1 in progress" else "${rows.size} in progress",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = horizontalPadding),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(rows, key = { it.media.id }) { row ->
+                MediaCard(
+                    media = row.media,
+                    progress = row.fraction,
+                    width = 104,
+                    showType = false,
+                    onClick = { onOpen(row.media.id) }
+                )
+            }
+        }
     }
 }
 

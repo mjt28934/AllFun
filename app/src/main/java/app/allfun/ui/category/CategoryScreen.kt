@@ -87,6 +87,7 @@ import app.allfun.data.content.ContentCategory
 import app.allfun.data.content.ContentItem
 import app.allfun.data.content.ProviderStatus
 import app.allfun.data.content.category
+import app.allfun.data.content.refId
 import app.allfun.data.db.LibraryRow
 import app.allfun.ui.components.ContentCard
 import app.allfun.ui.components.EmptyState
@@ -125,6 +126,7 @@ fun CategoryScreen(
     val vm = rememberViewModel(key = category.name) { CategoryViewModel(category, container) }
     val state by vm.state.collectAsStateWithLifecycle()
     val libraryRows by vm.libraryRows.collectAsStateWithLifecycle()
+    val downloadedMedia by vm.downloadedMedia.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val focus = LocalFocusManager.current
     val searchFocus = remember { FocusRequester() }
@@ -268,6 +270,7 @@ fun CategoryScreen(
                         state = state,
                         category = category,
                         items = searchResults,
+                        downloadedMedia = downloadedMedia,
                         onOpen = vm::open,
                         onRetry = { vm.setQuery(state.query) },
                         onClear = vm::clearSearch,
@@ -297,6 +300,7 @@ fun CategoryScreen(
                         favorites = favorites,
                         watchlist = watchlist,
                         visibleItems = visibleItems,
+                        downloadedMedia = downloadedMedia,
                         unmatched = issues,
                         statusExpanded = statusExpanded,
                         onToggleStatuses = { statusExpanded = !statusExpanded },
@@ -539,6 +543,7 @@ private fun CategorySections(
     favorites: List<LibraryRow>,
     watchlist: List<LibraryRow>,
     visibleItems: List<ContentItem>,
+    downloadedMedia: Set<String>,
     unmatched: List<ProviderStatus>,
     statusExpanded: Boolean,
     onToggleStatuses: () -> Unit,
@@ -637,7 +642,8 @@ private fun CategorySections(
                     item = item,
                     details = state.detailsFor(item),
                     onClick = { onOpen(item) },
-                    fillWidth = true
+                    fillWidth = true,
+                    downloadLabel = if (refId(item.primary) in downloadedMedia) "Offline" else null
                 )
             }
         }
@@ -744,6 +750,7 @@ private fun SearchGrid(
     state: CategoryViewModel.UiState,
     category: ContentCategory,
     items: List<ContentItem>,
+    downloadedMedia: Set<String>,
     onOpen: (ContentItem) -> Unit,
     onRetry: () -> Unit,
     onClear: () -> Unit,
@@ -785,7 +792,8 @@ private fun SearchGrid(
                     item = item,
                     details = state.detailsFor(item),
                     onClick = { onOpen(item) },
-                    fillWidth = true
+                    fillWidth = true,
+                    downloadLabel = if (refId(item.primary) in downloadedMedia) "Offline" else null
                 )
             }
         }
