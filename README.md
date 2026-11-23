@@ -45,8 +45,8 @@ Verify the checksum, then open the APK. Releases are signed with one fixed certi
 each version installs over the previous one and keeps the library:
 
 ```powershell
-(Get-FileHash .\AllFun-0.9.1-release.apk -Algorithm SHA256).Hash.ToLower()
-Get-Content .\AllFun-0.9.1-release.apk.sha256
+(Get-FileHash .\AllFun-0.9.2-release.apk -Algorithm SHA256).Hash.ToLower()
+Get-Content .\AllFun-0.9.2-release.apk.sha256
 ```
 
 From inside the app, **Settings → About → App Updates** does the same work without a
@@ -59,10 +59,10 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Check | Result |
 |---|---|
 | `:app:assembleDebug` | **BUILD SUCCESSFUL** |
-| `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking, 61,667,753 bytes |
+| `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking |
 | `:app:testDebugUnitTest` | **65 tests pass** — serialization compatibility (generic, polymorphic, defaults, unknown fields), semantic version comparison, release JSON parsing, checksum-file parsing, category/dedupe/format mapping, category sorting, provider-description Markdown flattening, Tachiyomi page conversion, magnet/infohash identity, torrent quality ranking and tracker fallback, Stremio resource support, download queue order/pause/grouping, chapter sort/filter |
-| APK metadata | `app.allfun`, `versionCode 901`, `versionName 0.9.1`, v2 signature, `CN=AllFun` |
-| Runtime, Android 15 / API 35 (emulator) | Signed 0.8.1 APK installed over 0.8.0 (same signer, library, extensions, sources and downloads kept) → five destinations, compact category toolbars with the extension and quick-add buttons top-right, category-scoped marketplace with focused search, real Weeb Central downloads, offline reading, the grouped download queue, torrent playback with the stream picker, Settings → Downloads, Library download badges and sizes; empty and error states; no crash |
+| APK metadata | `app.allfun`, `versionCode 902`, `versionName 0.9.2`, v2 signature, `CN=AllFun` |
+| Runtime, Android 15 / API 35 (emulator) | Signed builds installed over the previous release on the same signer with the library, extensions and settings kept → five destinations, the Library without a scope row, five catalogue actions on one header row, Settings as a hub with working sub-screens and search, three-column search results; empty and error states; no crash |
 | Catalogue-only addons | An addon declaring `resources: ["catalog"]` (Streaming Catalogs shape) renders its shelf, and its titles open with metadata from Cinemeta instead of failing with "returned a web page"; no `meta` request is sent to an addon that does not declare it |
 | Category screens | Movies, Books and Manga render one vertical adaptive grid (no horizontal shelves or separate "see all" screen); the chip row offers Popular, Latest, A–Z and By source; the header shows title/source/issue counts; filters, favorites and load-more stay in place |
 | Reader chrome | Manga vertical mode keeps the bars hidden while scrolling and toggles them only on a real tap (180 ms grace after a scroll); the novel reader reports taps from inside the document and ignores taps that stop a scroll |
@@ -72,7 +72,7 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Manga category, end to end | Weeb Central (real Keiyoushi extension installed from Discover) → Popular shelf with real covers → One Piece detail (1198 chapters, author, genres) → reader loads real page images → progress on the shelf |
 | Offline downloads | Manga chapters saved as page folders + `pages.json`, novels as saved chapter HTML, direct HTTP video streamed with progress; chapter 1055 (11,087,549 bytes) and chapter 24 (4,968,054 bytes) completed, opened with Wi-Fi and mobile data off, and survived a force-stop; HLS/DASH manifests are refused honestly |
 | Download manager | Settings → Downloads: grouped **Download queue** with a count badge and sort order, per-title and per-item menus, real progress, one **Pause** for the whole engine that survives leaving the screen, resume from the same bytes, three retries with backoff per transfer, cancel/remove, clear finished, Wi-Fi-only, concurrency limit, confirmations |
-| Library | All / Movies / Books / Manga with Everything / Downloaded / Favorites / Recently Added / Recently Opened scopes, download count, size and completion date on the cards, remove-download with confirmation |
+| Library | All / Movies / Books / Manga with the Continue strip for unfinished titles, download count, size and completion date on the cards, remove-download with confirmation |
 | Extension marketplace | Real Keiyoushi and LNReader indexes; category scopes All / Movies / Books / Manga; Discover / Installed / Updates / Repositories; install, update, update all, enable, disable, uninstall, permissions |
 | Source states | Working, Loading, No content, Temporarily unavailable, Auth required, Invalid response, Disabled and Unsupported, each with Retry and a separate technical-details disclosure; one failing provider does not block the rest |
 | Cross-source search | "Lantern" returns 3 grouped results across Movies & Shows, Books & Novels and Manhwa & Manga with provider chips and source filters; "one piece" returns real manga results from the installed extension |
@@ -81,11 +81,11 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Stremio addon, end to end | Manifest → catalogue → details → direct HTTP stream with proxy headers → sidecar subtitles → season/episode mapping |
 | Torrent addons, end to end | Torrent-only addon installs and answers: metadata → file selection → sequential download → playback (Big Buck Bunny, 43 seeds, ~1.5 MB/s) with seeking and progress saving; a stale infohash fails with a readable message and the picker offers the remaining releases |
 | Backup and restore | 371 KB JSON export → restore reported 5 titles, 927 chapters/episodes, 5 progress entries and settings; a non-backup file is refused with a readable message |
-| Settings maintenance | Storage stats, clear cached files without touching the library, repository connection test (1,710 extensions in 1,194 ms) |
+| Settings maintenance | Hub of Appearance, Library, Reading, Playback, Downloads, Extensions, Storage, Network, Backup, App updates and About with live subtitles and a settings search; Storage stats, clear cached files without touching the library, repository connection test (1,710 extensions in 1,194 ms) |
 | Release (R8) runtime | All paths above re-verified on a signed release build |
 | In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` confirmation |
-| Published release | [v0.9.1](https://github.com/mjt28934/AllFun/releases/tag/v0.9.1) — vertical catalogue, Popular/Latest sorting, calm reader chrome |
-| Version | `0.9.1` (versionCode 901) |
+| Published release | [v0.9.2](https://github.com/mjt28934/AllFun/releases/tag/v0.9.2) — quieter Library, Settings hub, one catalogue action row |
+| Version | `0.9.2` (versionCode 902) |
 | Min SDK | 26 (Android 8.0) |
 | Target SDK | 35 |
 
