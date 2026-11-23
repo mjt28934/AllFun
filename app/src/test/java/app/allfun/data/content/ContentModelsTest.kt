@@ -183,4 +183,42 @@ class ContentModelsTest {
         assertEquals(1, merged.alternateCount)
         assertEquals("Source", merged.sourceLabel)
     }
+
+    @Test
+    fun `display description renders provider markdown as prose`() {
+        val raw = """
+            As a child, Monkey D. Luffy dreamed of becoming the King of the Pirates.
+
+            Related Series(s):
+            - [Wanted!](https://weebcentral.com/series/01J76) (Alternate Story)
+            - [One Piece - Ace's Story](https://weebcentral.com/series/01J77) (Side Story)
+            ## Notes
+            **Read** the *manga* first.
+        """.trimIndent()
+
+        val text = raw.displayDescription()
+
+        assertFalse(text.contains("](http"))
+        assertFalse(text.contains("##"))
+        assertFalse(text.contains("**"))
+        assertTrue(text.contains("Wanted! (Alternate Story)"))
+        assertTrue(text.contains("One Piece - Ace's Story (Side Story)"))
+        assertTrue(text.contains("Read the manga first."))
+        assertTrue(text.contains("Related Series(s):"))
+    }
+
+    @Test
+    fun `display description drops bare links and keeps paragraphs`() {
+        val text = "Part one.\n\n\n\nhttps://example.com/page\n\nPart two."
+            .displayDescription()
+
+        assertFalse(text.contains("example.com"))
+        assertEquals("Part one.\n\nPart two.", text)
+    }
+
+    @Test
+    fun `display description leaves ordinary prose alone`() {
+        val prose = "A gate opened ten years ago. Hunters fight monsters."
+        assertEquals(prose, prose.displayDescription())
+    }
 }

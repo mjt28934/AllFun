@@ -101,6 +101,7 @@ import app.allfun.data.db.EpisodeEntity
 import app.allfun.data.db.MediaEntity
 import app.allfun.data.db.ProgressEntity
 import app.allfun.data.content.category
+import app.allfun.data.content.displayDescription
 import app.allfun.data.model.MediaKind
 import app.allfun.ui.components.CoverImage
 import app.allfun.ui.components.SectionHeader
@@ -615,7 +616,7 @@ private fun ReadingDescription(
     expanded: Boolean,
     onToggle: () -> Unit
 ) {
-    val text = description?.takeIf { it.isNotBlank() }
+    val text = description?.displayDescription()?.takeIf { it.isNotBlank() }
     if (text == null && genres.isEmpty()) return
     val reduceMotion = LocalReduceMotion.current
     Column(

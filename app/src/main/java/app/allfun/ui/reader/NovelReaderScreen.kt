@@ -11,7 +11,6 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -66,7 +65,6 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -151,7 +149,11 @@ fun NovelReaderScreen(
                         }
                     }
                     addJavascriptInterface(
-                        ScrollBridge { fraction -> vm.onScroll(fraction) },
+                        ScrollBridge(
+                            scrollHandler = { fraction -> vm.onScroll(fraction) },
+                            tapHandler = { scope.launch { chrome = !chrome } },
+                            scrollingHandler = { scope.launch { chrome = false } }
+                        ),
                         "AllFun"
                     )
                     webView = this
@@ -185,9 +187,7 @@ fun NovelReaderScreen(
                     }
                 }
             },
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) { detectTapGestures(onTap = { chrome = !chrome }) }
+            modifier = Modifier.fillMaxSize()
         )
 
         LaunchedEffect(state.fontSize, state.lineSpacing, state.theme) {
@@ -537,11 +537,21 @@ private fun ChapterError(error: UserError, onBack: () -> Unit, onRetry: () -> Un
     }
 }
 
-private class ScrollBridge(private val onScroll: (Float) -> Unit) {
+private class ScrollBridge(
+    private val scrollHandler: (Float) -> Unit,
+    private val tapHandler: () -> Unit,
+    private val scrollingHandler: () -> Unit
+) {
     @JavascriptInterface
     fun onScroll(fraction: String) {
-        onScroll(fraction.toFloatOrNull() ?: 0f)
+        scrollHandler(fraction.toFloatOrNull() ?: 0f)
     }
+
+    @JavascriptInterface
+    fun onTap() = tapHandler()
+
+    @JavascriptInterface
+    fun onScrolling() = scrollingHandler()
 }
 
 private data class ReaderPalette(
@@ -622,10 +632,45 @@ private fun injectReaderTheme(
           if (max > 0 && $restore > 0) { window.scrollTo(0, max * $restore); }
           if (!window.allfunHooked) {
             window.allfunHooked = true;
+            var scrollTimer = null;
+            var lastScroll = 0;
             window.addEventListener('scroll', function() {
               var m = document.documentElement.scrollHeight - window.innerHeight;
               var f = m > 0 ? (window.scrollY / m) : 0;
               if (window.AllFun) { window.AllFun.onScroll(String(f)); }
+              lastScroll = Date.now();
+              // Only a real finger scroll hides the bars; the restore scroll above and
+              // chapter loads must not make the chrome flash away on open.
+              if (window.allfunUserTouched && !window.allfunScrolling) {
+                window.allfunScrolling = true;
+                if (window.AllFun) { window.AllFun.onScrolling(); }
+              }
+              clearTimeout(scrollTimer);
+              scrollTimer = setTimeout(function(){ window.allfunScrolling = false; }, 450);
+            }, { passive: true });
+
+            var sx = 0, sy = 0, st = 0, moved = false;
+            window.addEventListener('touchstart', function(e) {
+              window.allfunUserTouched = true;
+              if (e.touches.length !== 1) { st = 0; return; }
+              var t = e.touches[0];
+              sx = t.clientX; sy = t.clientY; st = Date.now(); moved = false;
+            }, { passive: true });
+            window.addEventListener('touchmove', function(e) {
+              if (e.touches.length !== 1) return;
+              var t = e.touches[0];
+              if (Math.abs(t.clientX - sx) > 12 || Math.abs(t.clientY - sy) > 12) {
+                moved = true;
+              }
+            }, { passive: true });
+            window.addEventListener('touchend', function(e) {
+              var wasTap = st > 0 && !moved && Date.now() - st < 350 &&
+                Date.now() - lastScroll > 300;
+              st = 0;
+              if (!wasTap) return;
+              var target = e.target;
+              if (target && target.closest && target.closest('a')) return;
+              if (window.AllFun) { window.AllFun.onTap(); }
             }, { passive: true });
           }
         })();

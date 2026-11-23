@@ -5,13 +5,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -25,8 +23,13 @@ import androidx.compose.material.icons.outlined.CollectionsBookmark
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.NewReleases
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.automirrored.outlined.Sort
+import androidx.compose.material.icons.outlined.SortByAlpha
+import androidx.compose.material.icons.outlined.Update
 import androidx.compose.material.icons.outlined.ViewAgenda
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -140,15 +143,24 @@ fun LibraryScreen(
                                 vm.setSort(option)
                             },
                             leadingIcon = {
-                                if (option == state.sort) {
-                                    Icon(
-                                        Icons.Outlined.CollectionsBookmark,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                } else {
-                                    Spacer(Modifier.width(24.dp))
-                                }
+                                // Each order gets its own glyph so the menu is readable
+                                // without reading the whole list; the selected row is the
+                                // only one tinted with the accent.
+                                Icon(
+                                    imageVector = when (option) {
+                                        LibrarySort.RECENTLY_UPDATED -> Icons.Outlined.Update
+                                        LibrarySort.RECENTLY_ADDED -> Icons.Outlined.NewReleases
+                                        LibrarySort.RECENTLY_OPENED -> Icons.Outlined.History
+                                        LibrarySort.TITLE -> Icons.Outlined.SortByAlpha
+                                        LibrarySort.AUTHOR -> Icons.Outlined.Person
+                                    },
+                                    contentDescription = null,
+                                    tint = if (option == state.sort) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                )
                             }
                         )
                     }

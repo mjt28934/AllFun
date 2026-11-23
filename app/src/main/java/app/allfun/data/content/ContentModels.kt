@@ -282,3 +282,34 @@ fun ContentItem.matchesFormat(format: String?, details: MediaDetails?): Boolean 
     val actual = this.format(details) ?: return false
     return actual.equals(format, ignoreCase = true)
 }
+
+private val mdLink = Regex("""\[([^\]]*)\]\((?:[^()\s]*)\)""")
+private val mdUrlInAngle = Regex("""<(https?://[^>\s]+)>""")
+private val mdBareUrl = Regex("""(?<![\w(])(https?://\S+)""")
+private val mdEmphasis = Regex("""(\*\*\*|\*\*|__|~~|\*|_)(?=\S)(.*?\S)\1""")
+private val mdHeading = Regex("""(?m)^\s{0,3}#{1,6}\s*""")
+private val mdBullet = Regex("""(?m)^\s*[-*•]\s+""")
+
+/**
+ * Provider descriptions arrive as Markdown often enough (Weeb Central writes
+ * `[Wanted!](https://…)` for sequels) that showing the raw text looks broken. This turns
+ * the common inline syntax into plain prose: links keep their label, emphasis markers
+ * and heading hashes disappear, and bare URLs are dropped because the screen has no way
+ * to open them. Line structure is preserved so paragraphs still read as paragraphs.
+ */
+fun String.displayDescription(): String {
+    var text = replace(mdLink, "$1")
+    text = text.replace(mdUrlInAngle, "")
+    text = text.replace(mdBareUrl, "")
+    text = text.replace(mdHeading, "")
+    text = text.replace(mdBullet, "")
+    text = text.replace(mdEmphasis, "$2")
+    text = text.replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+    return text.lines()
+        .joinToString("\n") { it.trimEnd() }
+        .replace(Regex("""\n{3,}"""), "\n\n")
+        .trim()
+}

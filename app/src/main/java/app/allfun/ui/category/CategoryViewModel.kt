@@ -31,14 +31,18 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * Sort orders offered on every category screen. They apply to real provider results and
- * to library shelves alike; nothing is re-ranked by a hidden heuristic.
+ * Sort orders offered on every category screen. [POPULAR] and [LATEST] use the shelves
+ * the providers themselves returned (popular/top catalogues, latest/updated catalogues);
+ * a title that appeared in both keeps its strongest shelf. Nothing is re-ranked by a
+ * hidden heuristic, and titles missing from those shelves simply follow in source order.
  */
-enum class CategorySort(val label: String) {
-    FEATURED("Source order"),
-    TITLE_ASC("Title A–Z"),
-    TITLE_DESC("Title Z–A"),
-    SOURCE("By source")
+enum class CategorySort(val label: String, val shortLabel: String) {
+    POPULAR("Popular", "Popular"),
+    LATEST("Latest", "Latest"),
+    TITLE_ASC("Title A–Z", "A–Z"),
+    SOURCE("By source", "Source");
+
+    val quick: Boolean get() = this == POPULAR || this == LATEST
 }
 
 /**
@@ -66,11 +70,10 @@ class CategoryViewModel(
         val genreFilter: String? = null,
         val yearFilter: Int? = null,
         val authorFilter: String? = null,
-        val sort: CategorySort = CategorySort.FEATURED,
+        val sort: CategorySort = CategorySort.POPULAR,
         val enrichment: Map<String, MediaDetails?> = emptyMap(),
         val enriching: Boolean = false,
         val filtersOpen: Boolean = false,
-        val browseAll: Boolean = false,
         val extraItems: List<ContentItem> = emptyList(),
         val loadingMore: Boolean = false,
         val canLoadMore: Boolean = false,
@@ -84,17 +87,42 @@ class CategoryViewModel(
 
         /** Applies filters, then the user's sort order, keeping provider order otherwise. */
         fun sorted(items: List<ContentItem>): List<ContentItem> = when (sort) {
-            CategorySort.FEATURED -> items
+            CategorySort.POPULAR -> orderedByLane(
+                items,
+                listOf("POPULAR", "TRENDING", "RECENT", "LATEST", "OTHER")
+            )
+            CategorySort.LATEST -> orderedByLane(
+                items,
+                listOf("LATEST", "RECENT", "TRENDING", "POPULAR", "OTHER")
+            )
             CategorySort.TITLE_ASC -> items.sortedWith(
                 compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
-            )
-            CategorySort.TITLE_DESC -> items.sortedWith(
-                compareByDescending(String.CASE_INSENSITIVE_ORDER) { it.title }
             )
             CategorySort.SOURCE -> items.sortedWith(
                 compareBy<ContentItem, String>(String.CASE_INSENSITIVE_ORDER) { it.sourceLabel }
                     .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
             )
+        }
+
+        /**
+         * Orders real provider results by the lane they came from. The rank is built once
+         * per call from the feed's shelves, so ten titles that were on the "Popular" shelf
+         * stay ahead of the ones only found on "Latest".
+         */
+        private fun orderedByLane(
+            items: List<ContentItem>,
+            priority: List<String>
+        ): List<ContentItem> {
+            val shelves = feed?.shelves.orEmpty()
+            val rank = HashMap<String, Int>(shelves.size * 8)
+            var index = 0
+            priority.forEach { lane ->
+                shelves.firstOrNull { it.id.endsWith(":$lane") }?.items?.forEach { item ->
+                    rank.putIfAbsent(titleKey(item.title), index++)
+                }
+            }
+            if (rank.isEmpty()) return items
+            return items.sortedBy { rank[titleKey(it.title)] ?: Int.MAX_VALUE }
         }
 
         fun filtered(items: List<ContentItem>): List<ContentItem> = items.mapNotNull { item ->
@@ -464,11 +492,6 @@ class CategoryViewModel(
                 _state.update { it.copy(enriching = false) }
             }
         }
-    }
-
-    fun setBrowseAll(enabled: Boolean) {
-        _state.update { it.copy(browseAll = enabled) }
-        if (enabled) prepareFilters()
     }
 
     private companion object {

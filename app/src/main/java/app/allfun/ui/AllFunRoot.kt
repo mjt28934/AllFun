@@ -34,10 +34,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.CollectionsBookmark
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.AutoStories
@@ -135,7 +135,12 @@ private data class Tab(
  */
 private val tabs = listOf(
     Tab(Routes.MOVIES, "Movies", Icons.Outlined.Movie, Icons.Filled.Movie),
-    Tab(Routes.BOOKS, "Books", Icons.AutoMirrored.Outlined.MenuBook, Icons.Filled.MenuBook),
+    Tab(
+        Routes.BOOKS,
+        "Books",
+        Icons.AutoMirrored.Outlined.MenuBook,
+        Icons.AutoMirrored.Filled.MenuBook
+    ),
     Tab(Routes.MANGA, "Manga", Icons.Outlined.AutoStories, Icons.Filled.AutoStories),
     Tab(
         Routes.LIBRARY,
@@ -274,6 +279,15 @@ fun AllFunRoot(container: AppContainer) {
         val currentRoute = backStackEntry?.destination?.route
         val showBar = tabs.any { it.route == currentRoute }
         val reduceMotion = LocalReduceMotion.current
+        // Section shortcuts on the category screens jump to the Library tab with the same
+        // state behaviour as the bottom bar, so they never stack duplicate destinations.
+        val openLibrary: () -> Unit = {
+            nav.navigate(Routes.LIBRARY) {
+                popUpTo(Routes.MOVIES) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
 
         val enterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
             when {
@@ -335,7 +349,8 @@ fun AllFunRoot(container: AppContainer) {
                         container = container,
                         category = ContentCategory.MOVIES,
                         onOpenMedia = { nav.navigate(Routes.detail(it)) },
-                        onOpenExtensions = { nav.navigate(Routes.extensions(ContentCategory.MOVIES)) }
+                        onOpenExtensions = { nav.navigate(Routes.extensions(ContentCategory.MOVIES)) },
+                        onOpenLibrary = openLibrary
                     )
                 }
 
@@ -344,7 +359,8 @@ fun AllFunRoot(container: AppContainer) {
                         container = container,
                         category = ContentCategory.BOOKS,
                         onOpenMedia = { nav.navigate(Routes.detail(it)) },
-                        onOpenExtensions = { nav.navigate(Routes.extensions(ContentCategory.BOOKS)) }
+                        onOpenExtensions = { nav.navigate(Routes.extensions(ContentCategory.BOOKS)) },
+                        onOpenLibrary = openLibrary
                     )
                 }
 
@@ -353,7 +369,8 @@ fun AllFunRoot(container: AppContainer) {
                         container = container,
                         category = ContentCategory.MANGA,
                         onOpenMedia = { nav.navigate(Routes.detail(it)) },
-                        onOpenExtensions = { nav.navigate(Routes.extensions(ContentCategory.MANGA)) }
+                        onOpenExtensions = { nav.navigate(Routes.extensions(ContentCategory.MANGA)) },
+                        onOpenLibrary = openLibrary
                     )
                 }
 

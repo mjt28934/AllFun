@@ -1,5 +1,6 @@
 package app.allfun.ui.reader
 
+import android.os.SystemClock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -12,6 +13,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,6 +62,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -100,6 +103,9 @@ import coil.request.ImageRequest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+
+/** A tap this soon after scrolling stops is treated as the finger that stopped it. */
+private const val TAP_GRACE_MS = 180L
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -171,7 +177,8 @@ fun MangaReaderScreen(
                         seekRequest = seekRequest,
                         onSeekHandled = { seekRequest = null },
                         onPageChanged = vm::onPageChanged,
-                        onTap = { chrome = !chrome }
+                        onTap = { chrome = !chrome },
+                        onScrollStarted = { chrome = false }
                     )
                 } else {
                     PagedPages(
@@ -589,13 +596,23 @@ private fun VerticalPages(
     seekRequest: Int?,
     onSeekHandled: () -> Unit,
     onPageChanged: (Int) -> Unit,
-    onTap: () -> Unit
+    onTap: () -> Unit,
+    onScrollStarted: () -> Unit
 ) {
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = startPage)
+    var lastScrollEnd by remember { mutableLongStateOf(0L) }
     LaunchedEffect(listState) {
         snapshotFlow { listState.firstVisibleItemIndex }
             .distinctUntilChanged()
             .collect { onPageChanged(it) }
+    }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collect { scrolling ->
+                if (scrolling) onScrollStarted()
+                else lastScrollEnd = SystemClock.uptimeMillis()
+            }
     }
     LaunchedEffect(seekRequest) {
         val target = seekRequest ?: return@LaunchedEffect
@@ -606,11 +623,15 @@ private fun VerticalPages(
         state = listState,
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
-                awaitEachGesture {
-                    awaitFirstDown()
-                    onTap()
-                }
+            // Chrome is toggled by a real tap only. Dragging to read must never flash the
+            // bars, and a tap that merely stops a fling is ignored for a moment after.
+            .pointerInput(listState) {
+                detectTapGestures(
+                    onTap = {
+                        val sinceScroll = SystemClock.uptimeMillis() - lastScrollEnd
+                        if (!listState.isScrollInProgress && sinceScroll > TAP_GRACE_MS) onTap()
+                    }
+                )
             }
     ) {
         items(pages.size) { index ->

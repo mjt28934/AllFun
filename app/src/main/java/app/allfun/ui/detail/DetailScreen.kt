@@ -74,6 +74,7 @@ import app.allfun.data.AppContainer
 import app.allfun.data.content.ContentCategory
 import app.allfun.data.content.SourceOption
 import app.allfun.data.content.category
+import app.allfun.data.content.displayDescription
 import app.allfun.data.db.EpisodeEntity
 import app.allfun.data.db.DownloadEntity
 import app.allfun.data.db.DownloadStatus
@@ -333,6 +334,9 @@ private fun MoviesDetailScreen(
             if (!item.description.isNullOrBlank()) {
                 item {
                     val reduceMotion = LocalReduceMotion.current
+                    val description = item.description.orEmpty().displayDescription()
+                    // A description that was nothing but tracking links has no prose left.
+                    if (description.isBlank()) return@item
                     Column(
                         modifier = Modifier
                             .padding(horizontal = 16.dp)
@@ -345,12 +349,12 @@ private fun MoviesDetailScreen(
                             )
                     ) {
                         Text(
-                            text = item.description.orEmpty(),
+                            text = description,
                             style = MaterialTheme.typography.bodyMedium,
                             maxLines = if (expanded) Int.MAX_VALUE else 5,
                             overflow = TextOverflow.Ellipsis
                         )
-                        if ((item.description?.length ?: 0) > 260) {
+                        if (description.length > 260) {
                             TextButton(
                                 onClick = { expanded = !expanded },
                                 modifier = Modifier.semantics {

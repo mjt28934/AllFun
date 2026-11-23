@@ -24,8 +24,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -38,18 +36,16 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Sort
-import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -59,6 +55,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -92,11 +89,9 @@ import app.allfun.data.content.ProviderStatus
 import app.allfun.data.content.category
 import app.allfun.data.db.LibraryRow
 import app.allfun.ui.components.ContentCard
-import app.allfun.ui.components.ContentReveal
 import app.allfun.ui.components.EmptyState
 import app.allfun.ui.components.ErrorState
 import app.allfun.ui.components.GridSkeleton
-import app.allfun.ui.components.IconBadge
 import app.allfun.ui.components.LoadingState
 import app.allfun.ui.components.MediaCard
 import app.allfun.ui.components.NoticeCard
@@ -110,6 +105,9 @@ import app.allfun.ui.components.rememberViewModel
 import app.allfun.ui.theme.LocalReduceMotion
 import app.allfun.ui.theme.Motion
 
+/** Favorites/watchlist preview rows; the Library owns the full list. */
+private const val LIBRARY_PREVIEW = 6
+
 /**
  * The single category browse experience. Movies, books and manga share the same cards,
  * search field, filters, sorting, loading/error handling and source status reporting; the
@@ -121,7 +119,8 @@ fun CategoryScreen(
     container: AppContainer,
     category: ContentCategory,
     onOpenMedia: (String) -> Unit,
-    onOpenExtensions: () -> Unit
+    onOpenExtensions: () -> Unit,
+    onOpenLibrary: () -> Unit
 ) {
     val vm = rememberViewModel(key = category.name) { CategoryViewModel(category, container) }
     val state by vm.state.collectAsStateWithLifecycle()
@@ -162,7 +161,6 @@ fun CategoryScreen(
         state.feed?.sources?.isEmpty() == true &&
             libraryForCategory.isEmpty() -> CategoryPhase.NO_SOURCES
         state.error != null && state.allItems.isEmpty() -> CategoryPhase.ERROR
-        state.browseAll -> CategoryPhase.BROWSE
         else -> CategoryPhase.SECTIONS
     }
 
@@ -183,6 +181,7 @@ fun CategoryScreen(
                 state = state,
                 sourceCount = state.feed?.sources.orEmpty().size,
                 issueCount = issues.size,
+                titleCount = visibleItems.size,
                 searchOpen = searchOpen,
                 onOpenSearch = {
                     searchOpen = true
@@ -191,6 +190,13 @@ fun CategoryScreen(
                 onRefresh = vm::refresh,
                 onOpenExtensions = onOpenExtensions
             )
+
+            if (phase == CategoryPhase.SECTIONS) {
+                CategorySortBar(
+                    sort = state.sort,
+                    onSort = vm::selectSort
+                )
+            }
 
             if (searchOpen || state.query.isNotEmpty()) {
                 OutlinedTextField(
@@ -285,16 +291,6 @@ fun CategoryScreen(
                         secondary = "Manage extensions" to onOpenExtensions
                     )
 
-                    CategoryPhase.BROWSE -> BrowseAllGrid(
-                        category = category,
-                        state = state,
-                        items = visibleItems,
-                        onOpen = vm::open,
-                        onLoadMore = vm::loadMore,
-                        onClearFilters = vm::clearFilters,
-                        onBack = { vm.setBrowseAll(false) }
-                    )
-
                     CategoryPhase.SECTIONS -> CategorySections(
                         category = category,
                         state = state,
@@ -305,8 +301,10 @@ fun CategoryScreen(
                         statusExpanded = statusExpanded,
                         onToggleStatuses = { statusExpanded = !statusExpanded },
                         onOpenLibraryMedia = onOpenMedia,
+                        onOpenLibrary = onOpenLibrary,
                         onOpen = vm::open,
-                        onSeeAll = { vm.setBrowseAll(true) },
+                        onLoadMore = vm::loadMore,
+                        onClearFilters = vm::clearFilters,
                         onRetry = vm::refresh,
                         onManageExtensions = onOpenExtensions
                     )
@@ -333,7 +331,7 @@ fun CategoryScreen(
     }
 }
 
-private enum class CategoryPhase { SEARCH, LOADING, NO_SOURCES, ERROR, BROWSE, SECTIONS }
+private enum class CategoryPhase { SEARCH, LOADING, NO_SOURCES, ERROR, SECTIONS }
 
 /**
  * Fade/slide between the category's phases. When motion is reduced the content simply
@@ -366,6 +364,45 @@ private fun AnimatedPhase(
     }
 }
 
+/**
+ * The two orders readers actually ask for (Popular / Latest) plus the two structural ones,
+ * one tap away from the grid. Short labels keep all four on one line at phone widths.
+ */
+@Composable
+private fun CategorySortBar(
+    sort: CategorySort,
+    onSort: (CategorySort) -> Unit
+) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        items(CategorySort.entries) { option ->
+            FilterChip(
+                selected = sort == option,
+                onClick = { onSort(option) },
+                label = { Text(option.shortLabel) },
+                leadingIcon = when (option) {
+                    CategorySort.POPULAR -> {
+                        {
+                            Icon(
+                                Icons.AutoMirrored.Outlined.TrendingUp,
+                                contentDescription = null
+                            )
+                        }
+                    }
+                    CategorySort.LATEST -> {
+                        { Icon(Icons.Outlined.Schedule, contentDescription = null) }
+                    }
+                    else -> null
+                }
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CategoryHeader(
@@ -375,6 +412,7 @@ private fun CategoryHeader(
     state: CategoryViewModel.UiState,
     sourceCount: Int,
     issueCount: Int,
+    titleCount: Int,
     searchOpen: Boolean,
     onOpenSearch: () -> Unit,
     onOpenFilters: () -> Unit,
@@ -384,39 +422,19 @@ private fun CategoryHeader(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, end = 4.dp, top = 8.dp, bottom = 2.dp)
+            .padding(start = 20.dp, end = 4.dp, top = 10.dp, bottom = 2.dp)
     ) {
-        // The category name owns the first row; the marketplace entry sits at its end so
-        // every category screen opens extensions the same way.
+        // Title first, then the three things people do with a catalogue: search it,
+        // narrow it, refresh it. Extensions stay on the tagline row because installing a
+        // source is setup, not browsing.
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = category.label,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
-            )
-            IconButton(onClick = onOpenExtensions) {
-                Icon(
-                    Icons.Outlined.Extension,
-                    contentDescription = "Extensions for ${category.label}"
-                )
-            }
-            // Quick add sits beside the Extensions entry: add-ons and plugins are installed
-            // from here, while repositories and updates stay on the Extensions screen.
-            QuickAddButton(container = container, snackbar = snackbar)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = category.tagline,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 4.dp)
             )
             IconButton(onClick = onOpenSearch) {
                 Icon(
@@ -450,6 +468,34 @@ private fun CategoryHeader(
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = category.tagline,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 4.dp)
+            )
+            IconButton(onClick = onOpenExtensions) {
+                Icon(
+                    Icons.Outlined.Extension,
+                    contentDescription = "Extensions for ${category.label}"
+                )
+            }
+            // Quick add sits beside the Extensions entry: add-ons and plugins are installed
+            // from here, while repositories and updates stay on the Extensions screen.
+            QuickAddButton(container = container, snackbar = snackbar)
+        }
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            StatusPill(
+                text = if (titleCount == 1) "1 title" else "$titleCount titles",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             StatusPill(
                 text = when (sourceCount) {
                     0 -> "No source"
@@ -459,13 +505,11 @@ private fun CategoryHeader(
                 tint = if (sourceCount == 0) MaterialTheme.colorScheme.onSurfaceVariant
                 else MaterialTheme.colorScheme.secondary
             )
-            Spacer(Modifier.width(6.dp))
             if (issueCount > 0) {
                 StatusPill(
                     text = if (issueCount == 1) "1 issue" else "$issueCount issues",
                     tint = MaterialTheme.colorScheme.error
                 )
-                Spacer(Modifier.width(6.dp))
             }
             if (state.hasActiveFilters) {
                 StatusPill(text = "Filtered", tint = category.accent())
@@ -483,6 +527,11 @@ private fun LoadingGrid(category: ContentCategory) {
     }
 }
 
+/**
+ * One vertical grid for the whole category. Everything the providers returned — and the
+ * user's own favorites/watchlist — is laid out top to bottom in the order chosen in
+ * [CategorySortBar]; there are no sideways carousels left to swipe through.
+ */
 @Composable
 private fun CategorySections(
     category: ContentCategory,
@@ -494,15 +543,23 @@ private fun CategorySections(
     statusExpanded: Boolean,
     onToggleStatuses: () -> Unit,
     onOpenLibraryMedia: (String) -> Unit,
+    onOpenLibrary: () -> Unit,
     onOpen: (ContentItem) -> Unit,
-    onSeeAll: () -> Unit,
+    onLoadMore: () -> Unit,
+    onClearFilters: () -> Unit,
     onRetry: () -> Unit,
     onManageExtensions: () -> Unit
 ) {
-    LazyColumn(contentPadding = PaddingValues(bottom = 32.dp)) {
+    val libraryRows = if (category.isVideo) watchlist else favorites
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 108.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 32.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
         if (state.feed?.sources.isNullOrEmpty()) {
-            item {
-                Column(Modifier.padding(top = 8.dp, bottom = 4.dp)) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Column {
                     NoticeCard(
                         text = "No ${category.shortLabel.lowercase()} source is connected. " +
                             "Your saved titles stay available below; connect a source to " +
@@ -516,150 +573,168 @@ private fun CategorySections(
             }
         }
 
-        if (category.isVideo) {
-            if (watchlist.isNotEmpty()) {
-                item("watchlist-header") {
-                    SectionHeader(title = "Watchlist", subtitle = "Saved movies and shows")
-                }
-                item("watchlist-row") {
-                    LibraryRowCarousel(watchlist, onOpenLibraryMedia)
-                }
-            }
-        } else if (favorites.isNotEmpty()) {
-            item("favorites-header") {
-                SectionHeader(title = "Favorites", subtitle = "Pinned across every source")
-            }
-            item("favorites-row") {
-                LibraryRowCarousel(favorites, onOpenLibraryMedia)
-            }
-        }
-
-        state.feed?.shelves.orEmpty().forEach { shelf ->
-            val shelfItems = state.sorted(state.filtered(shelf.items))
-            if (shelfItems.isEmpty()) return@forEach
-            item("shelf-${shelf.id}") {
-                SectionHeader(title = shelf.title)
-            }
-            item("shelf-row-${shelf.id}") {
-                ContentReveal {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(
-                            shelfItems,
-                            key = { it.primary.sourceId + "|" + it.primary.key }
-                        ) { item ->
-                            ContentCard(
-                                item = item,
-                                details = state.detailsFor(item),
-                                onClick = { onOpen(item) }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        if (visibleItems.isNotEmpty()) {
-            item("all-header") {
+        if (libraryRows.isNotEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }, key = "library-header") {
+                val extra = (libraryRows.size - LIBRARY_PREVIEW).coerceAtLeast(0)
                 SectionHeader(
-                    title = "All from your sources",
-                    subtitle = "${visibleItems.size} titles · ${state.sort.label}",
-                    actionLabel = "See all",
-                    onAction = onSeeAll
+                    title = if (category.isVideo) "Watchlist" else "Favorites",
+                    subtitle = if (extra > 0) {
+                        "$extra more in your library"
+                    } else if (category.isVideo) {
+                        "Saved movies and shows"
+                    } else {
+                        "Pinned across every source"
+                    },
+                    actionLabel = "Library",
+                    onAction = onOpenLibrary
                 )
             }
-            item("all-row") {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(
-                        visibleItems.take(20),
-                        key = { it.primary.sourceId + "|" + it.primary.key }
-                    ) { item ->
-                        ContentCard(
-                            item = item,
-                            details = state.detailsFor(item),
-                            onClick = { onOpen(item) }
-                        )
-                    }
-                }
+            items(libraryRows.take(LIBRARY_PREVIEW), key = { "library:" + it.media.id }) { row ->
+                MediaCard(
+                    media = row.media,
+                    progress = row.fraction,
+                    onClick = { onOpenLibraryMedia(row.media.id) },
+                    fillWidth = true
+                )
             }
         }
 
-        if (state.feed?.items.isNullOrEmpty() && visibleItems.isEmpty()) {
-            item("category-empty") {
+        if (visibleItems.isEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 EmptyState(
-                    icon = Icons.Outlined.Extension,
-                    title = "Nothing to show yet",
-                    message = if (unmatched.any { !it.available }) {
-                        "Your sources could not be reached. The status below shows which one " +
-                            "failed; the rest of the app keeps working."
+                    icon = if (state.allItems.isEmpty()) {
+                        Icons.Outlined.Extension
                     } else {
-                        "Your sources returned no titles for this category. Try refreshing " +
-                            "or adding another source."
+                        Icons.Outlined.FilterList
                     },
-                    actionLabel = "Refresh",
-                    onAction = onRetry
+                    title = if (state.allItems.isEmpty()) {
+                        "Nothing to show yet"
+                    } else {
+                        "No titles match these filters"
+                    },
+                    message = if (state.allItems.isEmpty()) {
+                        if (unmatched.any { !it.available }) {
+                            "Your sources could not be reached. The statuses below show " +
+                                "which one failed; the rest of the app keeps working."
+                        } else {
+                            "Your sources returned no titles for this category. Try " +
+                                "refreshing or adding another source."
+                        }
+                    } else {
+                        "Clear a filter or refresh the category to see the provider " +
+                            "results again."
+                    },
+                    actionLabel = if (state.allItems.isEmpty()) "Refresh" else "Clear filters",
+                    onAction = if (state.allItems.isEmpty()) onRetry else onClearFilters
                 )
             }
+        } else {
+            items(
+                visibleItems,
+                key = { it.primary.sourceId + "|" + it.primary.key }
+            ) { item ->
+                ContentCard(
+                    item = item,
+                    details = state.detailsFor(item),
+                    onClick = { onOpen(item) },
+                    fillWidth = true
+                )
+            }
+        }
+
+        item(span = { GridItemSpan(maxLineSpan) }, key = "footer") {
+            CategoryGridFooter(category, state, onLoadMore)
         }
 
         if (unmatched.isNotEmpty()) {
-            item("issues") {
-                HorizontalDivider(
-                    modifier = Modifier.padding(top = 12.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+            item(span = { GridItemSpan(maxLineSpan) }, key = "issues") {
+                ProviderIssueSection(
+                    unmatched = unmatched,
+                    expanded = statusExpanded,
+                    onToggle = onToggleStatuses,
+                    onRetry = onRetry,
+                    onManageExtensions = onManageExtensions
                 )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "${unmatched.size} source" +
-                            (if (unmatched.size == 1) "" else "s") +
-                            " reported an issue",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f)
-                    )
-                    TextButton(onClick = onToggleStatuses) {
-                        Text(if (statusExpanded) "Hide" else "Details")
-                    }
-                }
-                if (statusExpanded) {
-                    Column(Modifier.padding(bottom = 8.dp)) {
-                        unmatched.forEach { ProviderStatusLine(it, onRetry) }
-                        TextButton(
-                            onClick = onManageExtensions,
-                            modifier = Modifier.padding(start = 8.dp)
-                        ) { Text("Manage extensions") }
-                    }
-                }
             }
         }
     }
 }
 
 @Composable
-private fun LibraryRowCarousel(
-    rows: List<LibraryRow>,
-    onOpen: (String) -> Unit
+private fun CategoryGridFooter(
+    category: ContentCategory,
+    state: CategoryViewModel.UiState,
+    onLoadMore: () -> Unit
 ) {
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(rows, key = { it.media.id }) { row ->
-            MediaCard(
-                media = row.media,
-                progress = row.fraction,
-                onClick = { onOpen(row.media.id) }
+    Column(Modifier.fillMaxWidth()) {
+        state.loadMoreError?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error
             )
+        }
+        when {
+            state.loadingMore -> Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+            }
+            state.canLoadMore -> OutlinedButton(
+                onClick = onLoadMore,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+            ) { Text("Load more titles") }
+        }
+        Text(
+            text = "Titles come from your installed ${category.shortLabel.lowercase()} sources.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+    }
+}
+
+@Composable
+private fun ProviderIssueSection(
+    unmatched: List<ProviderStatus>,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onRetry: () -> Unit,
+    onManageExtensions: () -> Unit
+) {
+    Column(Modifier.fillMaxWidth()) {
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "${unmatched.size} source" +
+                    (if (unmatched.size == 1) "" else "s") +
+                    " reported an issue",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onToggle) {
+                Text(if (expanded) "Hide" else "Details")
+            }
+        }
+        if (expanded) {
+            Column {
+                unmatched.forEach { ProviderStatusLine(it, onRetry) }
+                TextButton(
+                    onClick = onManageExtensions,
+                    modifier = Modifier.padding(start = 8.dp)
+                ) { Text("Manage extensions") }
+            }
         }
     }
 }
@@ -677,7 +752,7 @@ private fun SearchGrid(
     when {
         state.searching -> LoadingGrid(category)
         state.searchError != null -> ErrorState(
-            error = state.searchError!!,
+            error = state.searchError,
             onRetry = onRetry,
             secondary = "Manage extensions" to onManageExtensions
         )
@@ -723,6 +798,8 @@ private fun SearchSummary(
     query: String,
     statuses: List<ProviderStatus>
 ) {
+    var showIssues by remember { mutableStateOf(false) }
+    val failed = statuses.filter { !it.available }
     Column(Modifier.padding(bottom = 4.dp)) {
         Text(
             text = "$count ${if (count == 1) "result" else "results"} for \"$query\"",
@@ -731,92 +808,21 @@ private fun SearchSummary(
                 contentDescription = "$count results for $query"
             }
         )
-        statuses.filter { !it.available }.take(3).forEach { status ->
-            Text(
-                text = "${status.sourceName}: ${status.message.orEmpty()}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.error
-            )
-        }
-    }
-}
-
-@Composable
-private fun BrowseAllGrid(
-    category: ContentCategory,
-    state: CategoryViewModel.UiState,
-    items: List<ContentItem>,
-    onOpen: (ContentItem) -> Unit,
-    onLoadMore: () -> Unit,
-    onClearFilters: () -> Unit,
-    onBack: () -> Unit
-) {
-    Column(Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "${items.size} titles · ${state.sort.label}",
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.weight(1f)
-            )
-            TextButton(onClick = onBack) { Text("Back to shelves") }
-        }
-        if (items.isEmpty()) {
-            EmptyState(
-                icon = Icons.Outlined.FilterList,
-                title = "No titles match these filters",
-                message = "Clear a filter or refresh the category to see the provider results again.",
-                actionLabel = "Clear filters",
-                onAction = onClearFilters
-            )
-            return@Column
-        }
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(116.dp),
-            contentPadding = PaddingValues(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-            modifier = Modifier.weight(1f)
-        ) {
-            items(items, key = { it.primary.sourceId + "|" + it.primary.key }) { item ->
-                ContentCard(
-                    item = item,
-                    details = state.detailsFor(item),
-                    onClick = { onOpen(item) },
-                    fillWidth = true
+        if (failed.isNotEmpty()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "${failed.size} source" +
+                        (if (failed.size == 1) "" else "s") + " could not be searched",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.weight(1f)
                 )
-            }
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Column(Modifier.fillMaxWidth()) {
-                    state.loadMoreError?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (state.loadingMore) {
-                            CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
-                        } else if (state.canLoadMore) {
-                            Button(onClick = onLoadMore) { Text("Load more") }
-                        }
-                    }
-                    Text(
-                        text = "Titles come from your installed ${category.shortLabel.lowercase()} sources.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                TextButton(onClick = { showIssues = !showIssues }) {
+                    Text(if (showIssues) "Hide" else "Details")
                 }
+            }
+            if (showIssues) {
+                failed.forEach { ProviderStatusLine(it) }
             }
         }
     }
