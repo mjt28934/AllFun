@@ -33,6 +33,8 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.Movie
+import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
@@ -367,6 +369,7 @@ fun ExtensionsScreen(
                             vm.clearStremioError()
                             showAddStremio = true
                         },
+                        onInstallFeatured = vm::installFeaturedAddon,
                         onManageRepositories = { tab = TAB_REPOSITORIES }
                     )
 
@@ -657,6 +660,7 @@ private fun DiscoverTab(
     onInstall: (RepoExtension) -> Unit,
     onOpenInstalled: (InstalledExtension) -> Unit,
     onAddStremio: () -> Unit,
+    onInstallFeatured: (String, String) -> Unit,
     onManageRepositories: () -> Unit
 ) {
     val filterKind = kindFilter?.let { name ->
@@ -683,6 +687,7 @@ private fun DiscoverTab(
         VideoDiscover(
             state = state,
             onAddStremio = onAddStremio,
+            onInstallFeatured = onInstallFeatured,
             onOpenInstalled = onOpenInstalled
         )
         return
@@ -801,10 +806,72 @@ private fun DiscoverTab(
     }
 }
 
+/**
+ * A browsable list of addons that really answer today, so installing one does not
+ * require finding and pasting a manifest URL. Cinemeta comes first because catalogue
+ * addons often have no `meta` resource, and without it their detail pages cannot list
+ * episodes.
+ */
+private enum class AddonRole(val label: String) {
+    METADATA("Metadata"),
+    STREAMS("Streams"),
+    SUBTITLES("Subtitles")
+}
+
+private data class FeaturedAddon(
+    val name: String,
+    val description: String,
+    val url: String,
+    val role: AddonRole
+) {
+    val baseUrl: String get() = url.removeSuffix("/manifest.json").trimEnd('/')
+}
+
+private val featuredAddons = listOf(
+    FeaturedAddon(
+        name = "Cinemeta",
+        description = "Metadata for films and series. Install it first: catalogue addons " +
+            "rely on it to list episodes and runtime.",
+        url = "https://v3-cinemeta.strem.io/manifest.json",
+        role = AddonRole.METADATA
+    ),
+    FeaturedAddon(
+        name = "Torrentio",
+        description = "Streams from public torrent indexes, with quality and seed labels.",
+        url = "https://torrentio.strem.fun/manifest.json",
+        role = AddonRole.STREAMS
+    ),
+    FeaturedAddon(
+        name = "Comet",
+        description = "ElfHosted's stream addon, ranked by quality and availability.",
+        url = "https://comet.elfhosted.com/manifest.json",
+        role = AddonRole.STREAMS
+    ),
+    FeaturedAddon(
+        name = "MediaFusion",
+        description = "ElfHosted's catalogues, metadata and streams in one addon.",
+        url = "https://mediafusion.elfhosted.com/manifest.json",
+        role = AddonRole.STREAMS
+    ),
+    FeaturedAddon(
+        name = "OpenSubtitles v3",
+        description = "Subtitle tracks for films and episodes in many languages.",
+        url = "https://opensubtitles-v3.strem.io/manifest.json",
+        role = AddonRole.SUBTITLES
+    ),
+    FeaturedAddon(
+        name = "WatchHub",
+        description = "Official streaming-service links for a title, where available.",
+        url = "https://watchhub.strem.io/manifest.json",
+        role = AddonRole.STREAMS
+    )
+)
+
 @Composable
 private fun VideoDiscover(
     state: ExtensionsViewModel.UiState,
     onAddStremio: () -> Unit,
+    onInstallFeatured: (String, String) -> Unit,
     onOpenInstalled: (InstalledExtension) -> Unit
 ) {
     val addons = state.installed.filter { it.kind == ExtensionKind.STREMIO }
@@ -815,6 +882,31 @@ private fun VideoDiscover(
     LazyColumn(contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp)) {
         item(key = "stremio-hero") {
             StremioInstallCard(installedCount = addons.size, onAdd = onAddStremio)
+        }
+        item(key = "directory-header") {
+            Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 2.dp)) {
+                Text(
+                    text = "Addon directory",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                Text(
+                    text = "One tap installs the addon. Nothing is uploaded; AllFun only " +
+                        "asks the addon for its manifest.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        items(featuredAddons, key = { "featured:" + it.baseUrl }) { addon ->
+            val installed = addons.any { it.location?.trimEnd('/') == addon.baseUrl }
+            FeaturedAddonRow(
+                addon = addon,
+                installed = installed,
+                installing = state.featuredInstalling == addon.baseUrl,
+                enabled = !state.addingStremio,
+                onInstall = { onInstallFeatured(addon.name, addon.url) }
+            )
         }
         if (addons.isNotEmpty()) {
             item(key = "addons-header") { DiscoverGroupHeader("Installed addons", addons.size) }
@@ -904,6 +996,76 @@ private fun StremioInstallCard(installedCount: Int, onAdd: () -> Unit) {
                 Icon(Icons.Outlined.Add, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text("Install Stremio addon")
+            }
+        }
+    }
+}
+
+@Composable
+private fun FeaturedAddonRow(
+    addon: FeaturedAddon,
+    installed: Boolean,
+    installing: Boolean,
+    enabled: Boolean,
+    onInstall: () -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconBadge(
+                icon = when (addon.role) {
+                    AddonRole.METADATA -> Icons.Outlined.Movie
+                    AddonRole.STREAMS -> Icons.Outlined.PlayCircle
+                    AddonRole.SUBTITLES -> Icons.Outlined.Extension
+                },
+                tint = MaterialTheme.colorScheme.primary,
+                size = 36
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = addon.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = addon.role.label,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
+                Text(
+                    text = addon.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            when {
+                installing -> CircularProgressIndicator(
+                    modifier = Modifier.size(22.dp),
+                    strokeWidth = 2.dp
+                )
+                installed -> Icon(
+                    imageVector = Icons.Outlined.CheckCircle,
+                    contentDescription = "Installed",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                else -> Button(onClick = onInstall, enabled = enabled) {
+                    Text("Install")
+                }
             }
         }
     }

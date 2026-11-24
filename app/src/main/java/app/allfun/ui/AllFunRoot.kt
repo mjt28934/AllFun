@@ -178,7 +178,7 @@ private fun AllFunBottomBar(currentRoute: String?, onSelect: (Tab) -> Unit) {
             val offset by animateDpAsState(
                 targetValue = target,
                 animationSpec = if (reduceMotion) snap()
-                else tween(Motion.SLOW, easing = Motion.EaseInOut),
+                else Motion.settle(),
                 label = "tabPill"
             )
             // The indicator sits behind the icon only: the label stays outside it, so a
@@ -226,7 +226,7 @@ private fun RowScope.TabItem(
     )
     val scale by animateFloatAsState(
         targetValue = if (selected && !reduceMotion) 1.08f else 1f,
-        animationSpec = tween(Motion.FAST, easing = Motion.EaseOut),
+        animationSpec = if (reduceMotion) snap() else Motion.bounce(),
         label = "tabScale"
     )
     // Tabs show no ripple/hover rectangle: the moving ring is the only selection

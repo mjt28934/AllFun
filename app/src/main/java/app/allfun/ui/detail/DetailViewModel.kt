@@ -127,7 +127,13 @@ class DetailViewModel(
             )
             // Metadata may come from another installed addon when this title's catalogue
             // addon has none (Stremio separates catalogues from metadata).
-            val bundle = container.content.detailsWithUnits(ref).getOrNull() ?: return
+            val bundle = container.content.detailsWithUnits(ref).getOrNull()
+            if (bundle == null) {
+                // Nothing can answer `meta`, but a film is still playable from the id its
+                // catalogue card carried, so keep one unit instead of an empty list.
+                container.library.ensurePlayableUnit(mediaId)
+                return
+            }
             container.library.savePreview(
                 sourceId = media.sourceId,
                 sourceType = source.type,

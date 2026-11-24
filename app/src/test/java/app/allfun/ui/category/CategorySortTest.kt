@@ -72,11 +72,26 @@ class CategorySortTest {
     }
 
     @Test
-    fun laneSortKeepsProviderOrderWithoutShelves() {
+    fun latestWithoutShelvesOrdersByReleaseYearThenTitle() {
         val state = CategoryViewModel.UiState(sort = CategorySort.LATEST)
         assertEquals(
-            listOf("zeta", "Alpha", "beta"),
+            listOf("Alpha", "beta", "zeta"),
             state.sorted(items).map { it.title }
+        )
+    }
+
+    @Test
+    fun latestWithoutShelvesPutsTheNewestYearFirst() {
+        val older = item("Older", "MangaDex").let {
+            it.copy(stub = it.stub.copy(subtitle = "2021 · Ongoing"))
+        }
+        val newest = item("Newest", "MangaDex").let {
+            it.copy(stub = it.stub.copy(subtitle = "2025 · Ongoing"))
+        }
+        val state = CategoryViewModel.UiState(sort = CategorySort.LATEST)
+        assertEquals(
+            listOf("Newest", "Older", "Alpha", "beta", "zeta"),
+            state.sorted(items + older + newest).map { it.title }
         )
     }
 

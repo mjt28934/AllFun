@@ -75,6 +75,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.allfun.BuildConfig
 import app.allfun.data.AppContainer
+import app.allfun.data.settings.AccentPalette
+import app.allfun.data.settings.AppTextSize
+import app.allfun.data.settings.CornerStyle
 import app.allfun.data.settings.LibraryGrid
 import app.allfun.data.settings.LibrarySort
 import app.allfun.data.settings.LibraryView
@@ -357,10 +360,12 @@ private fun settingsEntries(
     SettingsEntry(
         title = "Appearance",
         subtitle = "${settings.themeMode.label()} · " +
-            if (settings.dynamicColor) "Material You" else "Fixed palette",
+            (if (settings.dynamicColor) "Material You" else settings.accent.label) +
+            " · ${settings.cornerStyle.label}",
         icon = Icons.Outlined.Palette,
         page = SettingsPage.APPEARANCE,
-        keywords = "theme dark light system colours color wallpaper motion animation"
+        keywords = "theme dark light system colours color accent wallpaper motion animation " +
+            "corners shape text size"
     ),
     SettingsEntry(
         title = "Library",
@@ -484,6 +489,48 @@ private fun SettingsPageContent(
                             subtitle = "Draw dark screens on OLED black. Light theme is unaffected.",
                             checked = settings.amoledBlack,
                             onChange = vm::setAmoledBlack
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        SettingLabel("Accent colour")
+                        ChoiceChips(
+                            options = AccentPalette.entries.toList(),
+                            selected = settings.accent,
+                            label = { it.label },
+                            onSelect = vm::setAccent
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = if (settings.dynamicColor) {
+                                "Material You is on, so the wallpaper palette wins. Turn it off " +
+                                    "above to use this accent."
+                            } else {
+                                "Tints buttons, highlights and the navigation indicator."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        SettingLabel("Corner style")
+                        ChoiceChips(
+                            options = CornerStyle.entries.toList(),
+                            selected = settings.cornerStyle,
+                            label = { it.label },
+                            onSelect = vm::setCornerStyle
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        SettingLabel("Text size")
+                        ChoiceChips(
+                            options = AppTextSize.entries.toList(),
+                            selected = settings.appTextSize,
+                            label = { it.label },
+                            onSelect = vm::setAppTextSize
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "Scales the app's text on top of Android's own font size. " +
+                                "System keeps whatever you set in display settings.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     SettingsSection("Accessibility") {

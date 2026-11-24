@@ -3,6 +3,7 @@ package app.allfun.ui.theme
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -15,11 +16,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.allfun.data.settings.AccentPalette
+import app.allfun.data.settings.CornerStyle
 import app.allfun.data.settings.Settings
 import app.allfun.data.settings.ThemeMode
 
@@ -180,6 +185,97 @@ private val AppShapes = Shapes(
     extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
 )
 
+/** One accent reads as a family: primary trio plus the matching secondary tone. */
+private data class Accent(
+    val primary: Color,
+    val onPrimary: Color,
+    val primaryContainer: Color,
+    val onPrimaryContainer: Color,
+    val secondary: Color
+)
+
+private fun accentFor(palette: AccentPalette, dark: Boolean): Accent = when (palette) {
+    AccentPalette.VIOLET -> if (dark) {
+        Accent(Violet, Color(0xFF130E26), Color(0xFF2C2354), Color(0xFFE9E3FF), Cyan)
+    } else {
+        Accent(
+            Color(0xFF5B3FE0), Color.White, Color(0xFFE7E0FF), Color(0xFF1D0F5C),
+            Color(0xFF0E7490)
+        )
+    }
+    AccentPalette.OCEAN -> if (dark) {
+        Accent(
+            Color(0xFF63B3FF), Color(0xFF04121F), Color(0xFF10314D), Color(0xFFD8EDFF),
+            Color(0xFF4FD1C5)
+        )
+    } else {
+        Accent(
+            Color(0xFF0B63B7), Color.White, Color(0xFFD7EAFF), Color(0xFF04264A),
+            Color(0xFF0F766E)
+        )
+    }
+    AccentPalette.EMERALD -> if (dark) {
+        Accent(
+            Color(0xFF4ADE9A), Color(0xFF04241A), Color(0xFF0D3A28), Color(0xFFD2FBE5),
+            Color(0xFF6EE7F9)
+        )
+    } else {
+        Accent(
+            Color(0xFF0F7A4D), Color.White, Color(0xFFD3F5E4), Color(0xFF03301C),
+            Color(0xFF0E7490)
+        )
+    }
+    AccentPalette.AMBER -> if (dark) {
+        Accent(
+            Color(0xFFF5B44C), Color(0xFF2A1A00), Color(0xFF3D2A08), Color(0xFFFFE7C2),
+            Color(0xFFF59E7C)
+        )
+    } else {
+        Accent(
+            Color(0xFF8A5A00), Color.White, Color(0xFFFFEBC7), Color(0xFF2C1A00),
+            Color(0xFFB45309)
+        )
+    }
+    AccentPalette.ROSE -> if (dark) {
+        Accent(
+            Color(0xFFF472B6), Color(0xFF2A0719), Color(0xFF43122A), Color(0xFFFFD9E8),
+            Color(0xFFA78BFA)
+        )
+    } else {
+        Accent(
+            Color(0xFFBE185D), Color.White, Color(0xFFFFD9E5), Color(0xFF3F0018),
+            Color(0xFF7C3AED)
+        )
+    }
+}
+
+private fun ColorScheme.withAccent(accent: Accent): ColorScheme = copy(
+    primary = accent.primary,
+    onPrimary = accent.onPrimary,
+    primaryContainer = accent.primaryContainer,
+    onPrimaryContainer = accent.onPrimaryContainer,
+    secondary = accent.secondary
+)
+
+/** Corner style changes only the radius scale, so every screen follows the same look. */
+private fun shapesFor(style: CornerStyle): Shapes = when (style) {
+    CornerStyle.ROUNDED -> AppShapes
+    CornerStyle.SOFT -> Shapes(
+        extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(5.dp),
+        small = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+        medium = androidx.compose.foundation.shape.RoundedCornerShape(11.dp),
+        large = androidx.compose.foundation.shape.RoundedCornerShape(15.dp),
+        extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(19.dp)
+    )
+    CornerStyle.SHARP -> Shapes(
+        extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(2.dp),
+        small = androidx.compose.foundation.shape.RoundedCornerShape(3.dp),
+        medium = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
+        large = androidx.compose.foundation.shape.RoundedCornerShape(6.dp),
+        extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+    )
+}
+
 /**
  * The user's explicit setting or the platform's "remove animations" developer option.
  * Android exposes that as an animator duration scale of zero.
@@ -210,8 +306,8 @@ fun AllFunTheme(settings: Settings, content: @Composable () -> Unit) {
         settings.dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val base = when {
         useDynamic -> if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        dark -> DarkScheme
-        else -> LightScheme
+        dark -> DarkScheme.withAccent(accentFor(settings.accent, dark = true))
+        else -> LightScheme.withAccent(accentFor(settings.accent, dark = false))
     }
     // OLED mode only removes the layers that would otherwise glow: the wallpaper-derived
     // containers stay as they are when Material You is on, so text keeps its contrast.
@@ -229,11 +325,17 @@ fun AllFunTheme(settings: Settings, content: @Composable () -> Unit) {
         base
     }
     val reduceMotion = settings.reduceMotion || systemReduceMotion()
-    CompositionLocalProvider(LocalReduceMotion provides reduceMotion) {
+    val density = LocalDensity.current
+    val fontScale = settings.appTextSize.scale
+    CompositionLocalProvider(
+        LocalReduceMotion provides reduceMotion,
+        LocalDensity provides if (fontScale == 1f) density
+        else Density(density.density, density.fontScale * fontScale)
+    ) {
         MaterialTheme(
             colorScheme = scheme,
             typography = AppTypography,
-            shapes = AppShapes,
+            shapes = shapesFor(settings.cornerStyle),
             content = content
         )
     }

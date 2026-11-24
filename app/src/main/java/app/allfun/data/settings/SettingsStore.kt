@@ -21,6 +21,30 @@ enum class ReaderMode { VERTICAL, PAGED }
 enum class ThemeMode { SYSTEM, DARK, LIGHT }
 enum class LibraryView { GRID, LIST }
 
+/** Accent used when Material You colour extraction is off. */
+enum class AccentPalette(val label: String) {
+    VIOLET("Violet"),
+    OCEAN("Ocean"),
+    EMERALD("Emerald"),
+    AMBER("Amber"),
+    ROSE("Rose")
+}
+
+/** Corner radius scale shared by cards, sheets, buttons and dialogs. */
+enum class CornerStyle(val label: String) {
+    ROUNDED("Rounded"),
+    SOFT("Soft"),
+    SHARP("Sharp")
+}
+
+/** App text scale applied on top of the system font size. */
+enum class AppTextSize(val label: String, val scale: Float) {
+    SYSTEM("System", 1f),
+    COMPACT("Compact", 0.92f),
+    LARGE("Large", 1.12f),
+    EXTRA_LARGE("Extra large", 1.25f)
+}
+
 /** How wide each library poster is; the grid keeps its adaptive column count. */
 enum class LibraryGrid(val label: String, val minWidth: Int) {
     COMPACT("Compact", 104),
@@ -71,6 +95,9 @@ data class Settings(
     val themeMode: ThemeMode = ThemeMode.DARK,
     /** True-black backgrounds and cards for OLED displays. */
     val amoledBlack: Boolean = false,
+    val accent: AccentPalette = AccentPalette.VIOLET,
+    val cornerStyle: CornerStyle = CornerStyle.ROUNDED,
+    val appTextSize: AppTextSize = AppTextSize.SYSTEM,
     val libraryView: LibraryView = LibraryView.GRID,
     val libraryGrid: LibraryGrid = LibraryGrid.COMFORTABLE,
     val librarySort: LibrarySort = LibrarySort.RECENTLY_UPDATED,
@@ -109,6 +136,9 @@ class SettingsStore(private val context: Context) {
         val dynamicColor = booleanPreferencesKey("dynamic_color")
         val themeMode = stringPreferencesKey("theme_mode")
         val amoledBlack = booleanPreferencesKey("amoled_black")
+        val accent = stringPreferencesKey("accent_palette")
+        val cornerStyle = stringPreferencesKey("corner_style")
+        val appTextSize = stringPreferencesKey("app_text_size")
         val libraryView = stringPreferencesKey("library_view")
         val libraryGrid = stringPreferencesKey("library_grid")
         val librarySort = stringPreferencesKey("library_sort")
@@ -141,6 +171,9 @@ class SettingsStore(private val context: Context) {
                 dynamicColor = prefs[Keys.dynamicColor] ?: true,
                 themeMode = prefs[Keys.themeMode].toEnum(ThemeMode.DARK),
                 amoledBlack = prefs[Keys.amoledBlack] ?: false,
+                accent = prefs[Keys.accent].toEnum(AccentPalette.VIOLET),
+                cornerStyle = prefs[Keys.cornerStyle].toEnum(CornerStyle.ROUNDED),
+                appTextSize = prefs[Keys.appTextSize].toEnum(AppTextSize.SYSTEM),
                 libraryView = prefs[Keys.libraryView].toEnum(LibraryView.GRID),
                 libraryGrid = prefs[Keys.libraryGrid].toEnum(LibraryGrid.COMFORTABLE),
                 librarySort = prefs[Keys.librarySort].toEnum(LibrarySort.RECENTLY_UPDATED),
@@ -189,6 +222,18 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setAmoledBlack(enabled: Boolean) {
         context.dataStore.edit { it[Keys.amoledBlack] = enabled }
+    }
+
+    suspend fun setAccent(palette: AccentPalette) {
+        context.dataStore.edit { it[Keys.accent] = palette.name }
+    }
+
+    suspend fun setCornerStyle(style: CornerStyle) {
+        context.dataStore.edit { it[Keys.cornerStyle] = style.name }
+    }
+
+    suspend fun setAppTextSize(size: AppTextSize) {
+        context.dataStore.edit { it[Keys.appTextSize] = size.name }
     }
 
     suspend fun setLibraryView(view: LibraryView) {
@@ -308,6 +353,9 @@ class SettingsStore(private val context: Context) {
             prefs[Keys.dynamicColor] = settings.dynamicColor
             prefs[Keys.themeMode] = settings.themeMode.name
             prefs[Keys.amoledBlack] = settings.amoledBlack
+            prefs[Keys.accent] = settings.accent.name
+            prefs[Keys.cornerStyle] = settings.cornerStyle.name
+            prefs[Keys.appTextSize] = settings.appTextSize.name
             prefs[Keys.libraryView] = settings.libraryView.name
             prefs[Keys.libraryGrid] = settings.libraryGrid.name
             prefs[Keys.librarySort] = settings.librarySort.name

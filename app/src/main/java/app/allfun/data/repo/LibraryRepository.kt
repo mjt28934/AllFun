@@ -79,6 +79,15 @@ class LibraryRepository(
             SourceType.VIDEO -> MediaKind.MOVIE
         }
 
+        // Catalogue-only addons declare `catalog` but not `meta`, so a film opened from
+        // their card arrives with no unit. A movie is playable from its own id, so keep
+        // one unit instead of leaving the detail page with a disabled Play button.
+        val playableUnits = if (units.isEmpty() && kind == MediaKind.MOVIE) {
+            listOfNotNull(fallbackMovieUnit(details))
+        } else {
+            units
+        }
+
         val media = MediaEntity(
             id = mediaId,
             kind = kind,
@@ -94,7 +103,8 @@ class LibraryRepository(
             year = details.year ?: existing?.year,
             genres = details.genres.takeIf { it.isNotEmpty() }?.joinToString(", ") ?: existing?.genres.orEmpty(),
             cast = details.cast.takeIf { it.isNotEmpty() }?.joinToString(", ") ?: existing?.cast.orEmpty(),
-            totalUnits = units.size.coerceAtLeast(details.totalUnits ?: existing?.totalUnits ?: 0),
+            totalUnits = playableUnits.size
+                .coerceAtLeast(details.totalUnits ?: existing?.totalUnits ?: 0),
             unitLabel = details.unitLabel ?: kind.unit,
             inLibrary = existing?.inLibrary ?: false,
             favorite = existing?.favorite ?: false,
@@ -104,8 +114,38 @@ class LibraryRepository(
             memo = details.sourceMemo ?: existing?.memo
         )
         mediaDao.upsert(media)
-        saveEpisodes(mediaId, units)
+        saveEpisodes(mediaId, playableUnits)
         return mediaId
+    }
+
+    /**
+     * Guarantees a playable unit for a film whose catalogue addon cannot answer `meta`.
+     * Returns false for anything else, so series still need a real episode list.
+     */
+    suspend fun ensurePlayableUnit(mediaId: String): Boolean {
+        val media = mediaDao.byId(mediaId) ?: return false
+        if (media.kind != MediaKind.MOVIE) return false
+        if (episodeDao.forMedia(mediaId).isNotEmpty()) return false
+        val unit = fallbackMovieUnit(
+            MediaDetails(key = media.sourceKey, title = media.title)
+        ) ?: return false
+        saveEpisodes(mediaId, listOf(unit))
+        mediaDao.upsert(
+            media.copy(totalUnits = 1, unitLabel = media.kind.unit)
+        )
+        return true
+    }
+
+    /** The catalogue id is also the stream id for a film (`movie|tt…` → `tt…`). */
+    private fun fallbackMovieUnit(details: MediaDetails): UnitStub? {
+        val streamId = details.key.substringAfter('|', details.key).trim()
+        if (streamId.isBlank()) return null
+        return UnitStub(
+            id = streamId,
+            index = 0,
+            title = details.title.ifBlank { "Feature" },
+            url = streamId
+        )
     }
 
     suspend fun saveEpisodes(mediaId: String, units: List<UnitStub>) {

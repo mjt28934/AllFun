@@ -107,6 +107,8 @@ import app.allfun.data.model.MediaKind
 import app.allfun.ui.components.CoverImage
 import app.allfun.ui.components.SectionHeader
 import app.allfun.ui.components.accent
+import app.allfun.ui.formatDuration
+import app.allfun.ui.formatNumber
 import app.allfun.ui.theme.LocalReduceMotion
 import app.allfun.ui.theme.Motion
 
@@ -759,7 +761,7 @@ private fun ReadingChapterRow(
                     )
                 }
                 Text(
-                    text = chapter.title.ifBlank { "${kind.unit} ${chapter.number}" },
+                    text = chapterLabel(chapter, kind),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(
                         alpha = if (read) 0.5f else 1f
@@ -855,16 +857,33 @@ private fun ChapterDownloadIndicator(
     }
 }
 
+/**
+ * Providers that expose no numbering send -1.0. Printing that as "Chapter -1.0" told the
+ * reader nothing, so the row describes the chapter instead: its real page count, its
+ * duration for text chapters, or a plain label when the provider sent no size at all.
+ */
 private fun chapterSubtitle(chapter: EpisodeEntity, status: DownloadStatus?): String = when (status) {
     DownloadStatus.COMPLETED -> "Downloaded"
     DownloadStatus.RUNNING -> "Downloading"
     DownloadStatus.QUEUED, DownloadStatus.WAITING -> "Queued"
     DownloadStatus.FAILED -> "Download failed"
     DownloadStatus.CANCELED -> "Download cancelled"
-    null -> chapter.pageCount?.let { "$it ${if (it == 1) "page" else "pages"}" }
-        ?: chapter.durationMs?.let { "${it / 60_000} min" }
-        ?: "Chapter ${chapter.number}"
+    null -> when {
+        chapter.pageCount != null && chapter.pageCount > 0 ->
+            "$chapter.pageCount ${if (chapter.pageCount == 1) "page" else "pages"}"
+        chapter.durationMs != null && chapter.durationMs > 0 ->
+            formatDuration(chapter.durationMs).ifBlank { "Ready to read" }
+        chapter.number > 0 ->
+            "Chapter ${formatNumber(chapter.number)}"
+        else -> "Ready to read"
+    }
 }
+
+/** Falls back to the provider's numbering only when it is a real, positive number. */
+private fun chapterLabel(chapter: EpisodeEntity, kind: MediaKind): String =
+    chapter.title.ifBlank {
+        if (chapter.number > 0) "${kind.unit} ${formatNumber(chapter.number)}" else kind.unit
+    }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1016,7 +1035,7 @@ private fun ChapterActionSheet(
         Column(Modifier.padding(bottom = 24.dp)) {
             Column(Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
                 Text(
-                    text = chapter.title.ifBlank { "${kind.unit} ${chapter.number}" },
+                    text = chapterLabel(chapter, kind),
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis

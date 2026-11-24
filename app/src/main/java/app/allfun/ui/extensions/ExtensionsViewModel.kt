@@ -98,7 +98,9 @@ class ExtensionsViewModel(private val container: AppContainer) : ViewModel() {
         val repositoryAddTicket: Int = 0,
         val addingStremio: Boolean = false,
         val stremioError: UserError? = null,
-        val stremioAddTicket: Int = 0
+        val stremioAddTicket: Int = 0,
+        /** Base URL of the directory addon currently installing, for its row spinner. */
+        val featuredInstalling: String? = null
     ) {
         /** Every entry from every repository that loaded, first repository wins. */
         val discover: List<RepoExtension>
@@ -462,6 +464,37 @@ class ExtensionsViewModel(private val container: AppContainer) : ViewModel() {
                         stremioAddTicket = it.stremioAddTicket + 1
                     )
                 }
+            }
+        }
+    }
+
+    /**
+     * One-tap install from the built-in addon directory. Unlike the paste dialog this
+     * reports a failure in the snackbar, because no dialog is open to show it.
+     */
+    fun installFeaturedAddon(name: String, url: String) {
+        if (_state.value.addingStremio) return
+        viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    addingStremio = true,
+                    stremioError = null,
+                    featuredInstalling = url.removeSuffix("/manifest.json").trimEnd('/')
+                )
+            }
+            val result = container.sourceHub.addStremio(url)
+            val entity = result.getOrNull()
+            if (entity == null) {
+                _messages.send(
+                    "Could not install $name: " +
+                        (result.exceptionOrNull()?.userMessage("the addon") ?: "the addon did not answer")
+                )
+            } else {
+                refreshInstalled()
+                _messages.send("Installed ${entity.name}")
+            }
+            _state.update {
+                it.copy(addingStremio = false, stremioError = null, featuredInstalling = null)
             }
         }
     }

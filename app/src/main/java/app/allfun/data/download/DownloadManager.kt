@@ -18,6 +18,7 @@ import app.allfun.data.source.SourceHub
 import eu.kanade.tachiyomi.HostServices
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
@@ -488,9 +489,19 @@ class DownloadManager(
                 }
                 .take(capacity)
                 .forEach { row ->
-                    val job = scope.launch { run(row) }
+                    // Start lazily so the job is in the map before it can possibly finish.
+                    // Without this, a fast failure could complete before the assignment and
+                    // leave a dead job counted against the concurrency limit forever.
+                    val job = scope.launch(start = CoroutineStart.LAZY) { run(row) }
                     running[row.key] = job
-                    job.invokeOnCompletion { running.remove(row.key) }
+                    job.invokeOnCompletion {
+                        running.remove(row.key)
+                        // A finished worker frees a slot. Re-pumping here is what keeps a
+                        // queue of more than `concurrentDownloads` rows moving; before, only
+                        // enqueue/network events called pump(), so the fifth row never started.
+                        scope.launch { pump() }
+                    }
+                    job.start()
                 }
         }
     }

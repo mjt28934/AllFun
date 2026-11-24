@@ -8,6 +8,9 @@ import app.allfun.data.AppContainer
 import app.allfun.data.backup.BackupFormatException
 import app.allfun.data.extension.ExtensionRepository
 import app.allfun.data.net.toUserError
+import app.allfun.data.settings.AccentPalette
+import app.allfun.data.settings.AppTextSize
+import app.allfun.data.settings.CornerStyle
 import app.allfun.data.settings.LibraryGrid
 import app.allfun.data.settings.LibrarySort
 import app.allfun.data.settings.LibraryView
@@ -73,6 +76,12 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun setDynamicColor(enabled: Boolean) = launchSettings { setDynamicColor(enabled) }
 
     fun setAmoledBlack(enabled: Boolean) = launchSettings { setAmoledBlack(enabled) }
+
+    fun setAccent(palette: AccentPalette) = launchSettings { setAccent(palette) }
+
+    fun setCornerStyle(style: CornerStyle) = launchSettings { setCornerStyle(style) }
+
+    fun setAppTextSize(size: AppTextSize) = launchSettings { setAppTextSize(size) }
 
     fun setReduceMotion(enabled: Boolean) = launchSettings { setReduceMotion(enabled) }
 

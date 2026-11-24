@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
@@ -68,7 +69,7 @@ fun Modifier.pressScale(
     val reduceMotion = LocalReduceMotion.current
     val scale by animateFloatAsState(
         targetValue = if (pressed && !reduceMotion) pressedScale else 1f,
-        animationSpec = tween(Motion.FAST, easing = Motion.EaseOut),
+        animationSpec = if (reduceMotion) snap() else Motion.settle(),
         label = "pressScale"
     )
     return this.graphicsLayer {

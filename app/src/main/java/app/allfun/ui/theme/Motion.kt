@@ -3,6 +3,8 @@ package app.allfun.ui.theme
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 
 /**
@@ -32,4 +34,15 @@ object Motion {
     fun <T> medium(): FiniteAnimationSpec<T> = tween(MEDIUM, easing = EaseOut)
 
     fun <T> slow(): FiniteAnimationSpec<T> = tween(SLOW, easing = EaseInOut)
+
+    /**
+     * Critically damped settle for anything that changes size or position: it keeps the
+     * speed of a tween but arrives without the slight stop-start a fixed duration has.
+     */
+    fun <T> settle(): FiniteAnimationSpec<T> =
+        spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow)
+
+    /** Same settle with a little give, for selection changes that should feel physical. */
+    fun <T> bounce(): FiniteAnimationSpec<T> =
+        spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium)
 }

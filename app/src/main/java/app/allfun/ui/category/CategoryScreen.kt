@@ -170,8 +170,15 @@ fun CategoryScreen(
     val libraryForCategory = libraryRows.filter { it.media.kind.category() == category }
     val favorites = libraryForCategory.filter { it.media.favorite }
     val watchlist = libraryForCategory.sortedByDescending { it.media.addedAt }
-    val visibleItems = state.sorted(state.filtered(state.allItems))
-    val searchResults = state.sorted(state.filtered(state.searchResults))
+    // Sorting and filtering thousands of accumulated cards on every frame is what made
+    // scrolling after several "Load more" taps stutter. Keep the result until the state
+    // (feed, filters, sort, page) actually changes.
+    val visibleItems = remember(state) {
+        state.sorted(state.filtered(state.allItems))
+    }
+    val searchResults = remember(state) {
+        state.sorted(state.filtered(state.searchResults))
+    }
     val statuses = state.feed?.statuses.orEmpty()
     val issues = statuses.filter { !it.available || it.message != null }
 

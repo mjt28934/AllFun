@@ -47,6 +47,16 @@ enum class CategorySort(val label: String, val shortLabel: String) {
     val quick: Boolean get() = this == POPULAR || this == LATEST
 }
 
+/** Four-digit year in a provider's card subtitle, e.g. Cinemeta's "2010–2015". */
+private val CARD_YEAR = Regex("""\b(19|20)\d{2}\b""")
+
+/**
+ * Hard ceiling on accumulated "Load more" results. Every page is a real provider round
+ * trip, so without a limit a long session could hold tens of thousands of cards and
+ * eventually run the app out of memory.
+ */
+private const val MAX_EXTRA_ITEMS = 3_000
+
 /**
  * One ViewModel drives all three category screens. The only differences between them
  * are the category passed in and the filters the UI offers; aggregation, deduping,
@@ -93,10 +103,7 @@ class CategoryViewModel(
                 items,
                 listOf("POPULAR", "TRENDING", "RECENT", "LATEST", "OTHER")
             )
-            CategorySort.LATEST -> orderedByLane(
-                items,
-                listOf("LATEST", "RECENT", "TRENDING", "POPULAR", "OTHER")
-            )
+            CategorySort.LATEST -> latestOrder(items)
             CategorySort.TITLE_ASC -> items.sortedWith(
                 compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
             )
@@ -126,6 +133,31 @@ class CategoryViewModel(
             if (rank.isEmpty()) return items
             return items.sortedBy { rank[titleKey(it.title)] ?: Int.MAX_VALUE }
         }
+
+        /**
+         * Latest uses the provider's own latest/updated shelf when there is one. Many
+         * addons publish a single catalogue, so every title landed in the same lane and
+         * Popular and Latest looked identical. In that case order by the release year the
+         * provider printed on the card (Cinemeta includes it), so the newest titles lead.
+         */
+        private fun latestOrder(items: List<ContentItem>): List<ContentItem> {
+            val hasLatestShelf = feed?.shelves.orEmpty().any { shelf ->
+                shelf.id.endsWith(":LATEST") || shelf.id.endsWith(":RECENT")
+            }
+            val byLane = orderedByLane(
+                items,
+                listOf("LATEST", "RECENT", "TRENDING", "POPULAR", "OTHER")
+            )
+            if (hasLatestShelf) return byLane
+            return byLane.sortedWith(
+                compareByDescending<ContentItem> { releaseYear(it) ?: Int.MIN_VALUE }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+            )
+        }
+
+        private fun releaseYear(item: ContentItem): Int? =
+            detailsFor(item)?.year
+                ?: CARD_YEAR.find(item.stub.subtitle.orEmpty())?.value?.toIntOrNull()
 
         fun filtered(items: List<ContentItem>): List<ContentItem> = items.mapNotNull { item ->
             val details = detailsFor(item)
@@ -355,24 +387,14 @@ class CategoryViewModel(
             try {
                 val page = container.content.loadMore(category, nextPage)
                 _state.update { state ->
-                    val merged = LinkedHashMap<String, ContentItem>()
-                    (state.extraItems + page.items).forEach { item ->
-                        val key = titleKey(item.title).ifBlank { item.primary.key }
-                        val existing = merged[key]
-                        merged[key] = if (existing == null) {
-                            item
-                        } else {
-                            existing.copy(
-                                sources = (existing.sources + item.sources)
-                                    .distinctBy { it.sourceId to it.key }
-                            )
-                        }
-                    }
+                    val merged = mergeMore(state, page.items)
                     state.copy(
                         loadingMore = false,
                         page = nextPage,
-                        extraItems = merged.values.toList(),
-                        canLoadMore = page.hasMore,
+                        extraItems = merged,
+                        // Stop asking for pages once the ceiling is reached; otherwise the
+                        // button would fetch rows that can no longer be shown.
+                        canLoadMore = page.hasMore && merged.size < MAX_EXTRA_ITEMS,
                         loadMoreError = page.statuses
                             .firstOrNull { !it.available }
                             ?.let { status -> "${status.sourceName}: ${status.message.orEmpty()}" }
@@ -386,6 +408,49 @@ class CategoryViewModel(
             }
         }
     }
+
+    /**
+     * Merges one page into the accumulated results. The grid keys every card by source
+     * and provider key, so dedupe on exactly that: a title that came back from a second
+     * lane under a different display name used to keep both cards, and LazyVerticalGrid
+     * throws when two items share a key. Titles already in the first feed page are
+     * skipped so the two lists cannot collide either.
+     */
+    private fun mergeMore(state: UiState, incoming: List<ContentItem>): List<ContentItem> {
+        val feedItems = state.feed?.items.orEmpty()
+        val feedRefs = feedItems.mapTo(HashSet(feedItems.size)) { refKey(it) }
+        val feedTitles = feedItems.mapTo(HashSet(feedItems.size)) { titleKey(it.title) }
+        val merged = LinkedHashMap<String, ContentItem>()
+        val refOwner = HashMap<String, String>()
+
+        fun add(item: ContentItem) {
+            val ref = refKey(item)
+            val title = titleKey(item.title).ifBlank { item.primary.key }
+            val key = refOwner[ref] ?: title
+            val existing = merged[key]
+            if (existing == null) {
+                if (merged.size >= MAX_EXTRA_ITEMS) return
+                merged[key] = item
+            } else {
+                merged[key] = existing.copy(
+                    sources = (existing.sources + item.sources)
+                        .distinctBy { it.sourceId to it.key }
+                )
+            }
+            refOwner[ref] = key
+        }
+
+        state.extraItems.forEach(::add)
+        incoming.forEach { item ->
+            if (refKey(item) in feedRefs) return@forEach
+            if (titleKey(item.title) in feedTitles) return@forEach
+            add(item)
+        }
+        return merged.values.toList()
+    }
+
+    private fun refKey(item: ContentItem): String =
+        item.primary.sourceId + "|" + item.primary.key
 
     /**
      * Opens a category result the same way Library opens a saved title: the local row is
