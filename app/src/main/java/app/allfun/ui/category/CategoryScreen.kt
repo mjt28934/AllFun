@@ -1,12 +1,16 @@
 package app.allfun.ui.category
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +25,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -36,6 +41,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Extension
@@ -55,10 +61,12 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -70,18 +78,22 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 import app.allfun.data.AppContainer
 import app.allfun.data.content.ContentCategory
 import app.allfun.data.content.ContentItem
@@ -127,14 +139,14 @@ fun CategoryScreen(
     category: ContentCategory,
     onOpenMedia: (String) -> Unit,
     onOpenExtensions: () -> Unit,
-    onOpenLibrary: () -> Unit
+    onOpenLibrary: () -> Unit,
+    onOpenGlobalSearch: () -> Unit
 ) {
     val vm = rememberViewModel(key = category.name) { CategoryViewModel(category, container) }
     val state by vm.state.collectAsStateWithLifecycle()
     val libraryRows by vm.libraryRows.collectAsStateWithLifecycle()
     val downloadedMedia by vm.downloadedMedia.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
-    val focus = LocalFocusManager.current
     val searchFocus = remember { FocusRequester() }
     var statusExpanded by rememberSaveable { mutableStateOf(false) }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
@@ -164,7 +176,6 @@ fun CategoryScreen(
     val issues = statuses.filter { !it.available || it.message != null }
 
     val phase = when {
-        state.query.isNotBlank() -> CategoryPhase.SEARCH
         state.loading && state.feed == null -> CategoryPhase.LOADING
         state.feed?.sources?.isEmpty() == true &&
             libraryForCategory.isEmpty() -> CategoryPhase.NO_SOURCES
@@ -172,16 +183,33 @@ fun CategoryScreen(
         else -> CategoryPhase.SECTIONS
     }
 
+    val searchVisible = searchOpen || state.query.isNotEmpty()
+    val reduceMotion = LocalReduceMotion.current
+    val searchBlur by animateDpAsState(
+        targetValue = if (searchVisible) 18.dp else 0.dp,
+        animationSpec = tween(if (reduceMotion) 0 else Motion.MEDIUM),
+        label = "searchBlur"
+    )
+
+    BackHandler(enabled = searchVisible) {
+        if (state.query.isNotEmpty()) vm.clearSearch() else searchOpen = false
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .statusBarsPadding()
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(searchBlur)
+            ) {
             CategoryHeader(
                 container = container,
                 snackbar = snackbar,
@@ -190,7 +218,7 @@ fun CategoryScreen(
                 sourceCount = state.feed?.sources.orEmpty().size,
                 issueCount = issues.size,
                 titleCount = visibleItems.size,
-                searchOpen = searchOpen,
+                searchOpen = searchVisible,
                 onOpenSearch = {
                     searchOpen = true
                 },
@@ -204,39 +232,6 @@ fun CategoryScreen(
                     sort = state.sort,
                     onSort = vm::selectSort
                 )
-            }
-
-            if (searchOpen || state.query.isNotEmpty()) {
-                OutlinedTextField(
-                    value = state.query,
-                    onValueChange = vm::setQuery,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
-                        .focusRequester(searchFocus),
-                    placeholder = { Text("Search ${category.label.lowercase()}") },
-                    leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                    trailingIcon = {
-                        IconButton(
-                            onClick = {
-                                if (state.query.isEmpty()) {
-                                    searchOpen = false
-                                } else {
-                                    vm.clearSearch()
-                                }
-                            }
-                        ) {
-                            Icon(Icons.Outlined.Close, contentDescription = "Close search")
-                        }
-                    },
-                    singleLine = true,
-                    shape = CircleShape,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() })
-                )
-                LaunchedEffect(searchOpen) {
-                    if (searchOpen) searchFocus.requestFocus()
-                }
             }
 
             if (state.hasActiveFilters) {
@@ -272,17 +267,6 @@ fun CategoryScreen(
                 modifier = Modifier.weight(1f)
             ) {
                 when (it) {
-                    CategoryPhase.SEARCH -> SearchGrid(
-                        state = state,
-                        category = category,
-                        items = searchResults,
-                        downloadedMedia = downloadedMedia,
-                        onOpen = vm::open,
-                        onRetry = { vm.setQuery(state.query) },
-                        onClear = vm::clearSearch,
-                        onManageExtensions = onOpenExtensions
-                    )
-
                     CategoryPhase.LOADING -> LoadingGrid(category)
 
                     CategoryPhase.NO_SOURCES -> EmptyState(
@@ -320,6 +304,29 @@ fun CategoryScreen(
                     )
                 }
             }
+            }
+
+            CategorySearchOverlay(
+                visible = searchVisible,
+                category = category,
+                state = state,
+                items = searchResults,
+                downloadedMedia = downloadedMedia,
+                searchFocus = searchFocus,
+                onQuery = vm::setQuery,
+                onOpen = vm::open,
+                onRetry = { vm.setQuery(state.query) },
+                onManageExtensions = onOpenExtensions,
+                onOpenGlobalSearch = {
+                    searchOpen = false
+                    vm.clearSearch()
+                    onOpenGlobalSearch()
+                },
+                onClose = {
+                    searchOpen = false
+                    vm.clearSearch()
+                }
+            )
         }
     }
 
@@ -341,7 +348,7 @@ fun CategoryScreen(
     }
 }
 
-private enum class CategoryPhase { SEARCH, LOADING, NO_SOURCES, ERROR, SECTIONS }
+private enum class CategoryPhase { LOADING, NO_SOURCES, ERROR, SECTIONS }
 
 /**
  * Fade/slide between the category's phases. When motion is reduced the content simply
@@ -371,6 +378,156 @@ private fun AnimatedPhase(
         label = "categoryPhase"
     ) { target ->
         Box(Modifier.fillMaxSize()) { content(target) }
+    }
+}
+
+/**
+ * Search as a floating section rather than a route: the category keeps running behind a
+ * blurred, dimmed backdrop while the field and results animate in over it. Dismissing it
+ * returns the reader to the same scroll position instead of rebuilding the screen.
+ */
+@Composable
+private fun CategorySearchOverlay(
+    visible: Boolean,
+    category: ContentCategory,
+    state: CategoryViewModel.UiState,
+    items: List<ContentItem>,
+    downloadedMedia: Set<String>,
+    searchFocus: FocusRequester,
+    onQuery: (String) -> Unit,
+    onOpen: (ContentItem) -> Unit,
+    onRetry: () -> Unit,
+    onManageExtensions: () -> Unit,
+    onOpenGlobalSearch: () -> Unit,
+    onClose: () -> Unit
+) {
+    val reduceMotion = LocalReduceMotion.current
+    val focus = LocalFocusManager.current
+    val enter = if (reduceMotion) {
+        fadeIn(tween(0))
+    } else {
+        fadeIn(tween(Motion.MEDIUM, easing = Motion.EaseOut)) +
+            slideInVertically(tween(Motion.SLOW, easing = Motion.EaseOut)) { -it / 9 } +
+            scaleIn(tween(Motion.SLOW, easing = Motion.EaseOut), initialScale = 0.96f)
+    }
+    val exit = fadeOut(tween(if (reduceMotion) 0 else Motion.FAST)) +
+        slideOutVertically(tween(if (reduceMotion) 0 else Motion.MEDIUM)) { -it / 14 }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = enter,
+        exit = exit,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.82f))
+                .navigationBarsPadding()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 4.dp, end = 14.dp, top = 6.dp, bottom = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onClose) {
+                    Icon(
+                        Icons.AutoMirrored.Outlined.ArrowBack,
+                        contentDescription = "Close search"
+                    )
+                }
+                OutlinedTextField(
+                    value = state.query,
+                    onValueChange = onQuery,
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(searchFocus),
+                    placeholder = { Text("Search ${category.label.lowercase()}") },
+                    leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (state.query.isNotEmpty()) {
+                            IconButton(onClick = { onQuery("") }) {
+                                Icon(Icons.Outlined.Close, contentDescription = "Clear search")
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = CircleShape,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        focusedBorderColor = category.accent(),
+                        unfocusedBorderColor = Color.Transparent
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() })
+                )
+            }
+
+            if (state.query.isBlank()) {
+                SearchHint(category, onOpenGlobalSearch)
+            } else {
+                SearchGrid(
+                    state = state,
+                    category = category,
+                    items = items,
+                    downloadedMedia = downloadedMedia,
+                    onOpen = onOpen,
+                    onRetry = onRetry,
+                    onClear = { onQuery("") },
+                    onManageExtensions = onManageExtensions
+                )
+            }
+        }
+    }
+
+    LaunchedEffect(visible) {
+        if (visible) searchFocus.requestFocus()
+    }
+}
+
+@Composable
+private fun SearchHint(category: ContentCategory, onOpenGlobalSearch: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 36.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .clip(CircleShape)
+                .background(category.accent().copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Outlined.Search,
+                contentDescription = null,
+                tint = category.accent(),
+                modifier = Modifier.size(28.dp)
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = "Search ${category.label.lowercase()}",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "Every installed source is asked at once. Results appear here without " +
+                "leaving the category.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(14.dp))
+        TextButton(onClick = onOpenGlobalSearch) {
+            Text("Search every category instead")
+        }
     }
 }
 

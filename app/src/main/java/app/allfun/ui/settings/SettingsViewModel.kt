@@ -8,6 +8,7 @@ import app.allfun.data.AppContainer
 import app.allfun.data.backup.BackupFormatException
 import app.allfun.data.extension.ExtensionRepository
 import app.allfun.data.net.toUserError
+import app.allfun.data.settings.LibraryGrid
 import app.allfun.data.settings.LibrarySort
 import app.allfun.data.settings.LibraryView
 import app.allfun.data.settings.MangaFit
@@ -15,6 +16,7 @@ import app.allfun.data.settings.NovelTheme
 import app.allfun.data.settings.ReaderMode
 import app.allfun.data.settings.ReadingDirection
 import app.allfun.data.settings.RepositoryKind
+import app.allfun.data.settings.SeekStep
 import app.allfun.data.settings.Settings
 import app.allfun.data.settings.ThemeMode
 import kotlinx.coroutines.Dispatchers
@@ -70,7 +72,11 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setDynamicColor(enabled: Boolean) = launchSettings { setDynamicColor(enabled) }
 
+    fun setAmoledBlack(enabled: Boolean) = launchSettings { setAmoledBlack(enabled) }
+
     fun setReduceMotion(enabled: Boolean) = launchSettings { setReduceMotion(enabled) }
+
+    fun setReaderKeepScreenOn(enabled: Boolean) = launchSettings { setReaderKeepScreenOn(enabled) }
 
     // ---- Reading ----------------------------------------------------------------------
 
@@ -91,6 +97,8 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setLibraryView(view: LibraryView) = launchSettings { setLibraryView(view) }
 
+    fun setLibraryGrid(grid: LibraryGrid) = launchSettings { setLibraryGrid(grid) }
+
     fun setLibrarySort(sort: LibrarySort) = launchSettings { setLibrarySort(sort) }
 
     // ---- Playback ---------------------------------------------------------------------
@@ -98,6 +106,27 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun setResumePlayback(enabled: Boolean) = launchSettings { setResumePlayback(enabled) }
 
     fun setSubtitlesEnabled(enabled: Boolean) = launchSettings { setSubtitlesEnabled(enabled) }
+
+    fun setAutoPlayNext(enabled: Boolean) = launchSettings { setAutoPlayNext(enabled) }
+
+    fun setSeekStep(step: SeekStep) = launchSettings { setSeekStep(step) }
+
+    // ---- Downloads --------------------------------------------------------------------
+
+    /** Saving the Wi-Fi rule kicks the queue so waiting rows can start or stop at once. */
+    fun setDownloadWifiOnly(enabled: Boolean) {
+        viewModelScope.launch {
+            container.settings.setDownloadWifiOnly(enabled)
+            container.downloads.kick()
+        }
+    }
+
+    fun setConcurrentDownloads(value: Int) {
+        viewModelScope.launch {
+            container.settings.setConcurrentDownloads(value)
+            container.downloads.kick()
+        }
+    }
 
     // ---- Storage ----------------------------------------------------------------------
 

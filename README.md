@@ -11,15 +11,13 @@ Movies    ─ films, series, catalogues, compact toolbar, filters in a sheet
 Books     ─ novels, light novels, authors, catalogues
 Manga     ─ manga, manhwa, manhua, comics, chapters
 Library   ─ All · Movies · Books · Manga
-            Everything · Downloaded · Favorites · Recently Added · Recently Opened
-Settings  ─ Appearance · Accessibility · Reading · Playback · Extensions ·
-            Downloads (queue and storage) · Storage · Network · App Updates · Backup ·
-            About
-Detail    ─ metadata, source selector, favourite, chapter/episode list, resume,
+Settings  ─ Appearance · Library · Reading · Playback · Downloads (queue and storage) ·
+            Extensions · Storage · Network · App Updates · Backup · About
+Detail    ─ metadata, stream providers, favourite, chapter/episode list, resume,
             per-chapter download controls
 Reader    ─ vertical / paged / right-to-left manga with zoom;
             offline pages, or a network novel reader with live typography
-Player    ─ Media3, resume, subtitles, next episode, offline files,
+Player    ─ Media3 with Compose controls, resume, subtitles, next episode, offline files,
             torrent streams with a stream picker, readable errors
 Extensions─ full screen marketplace opened from a category toolbar:
             Discover · Installed · Updates · Repositories
@@ -45,8 +43,8 @@ Verify the checksum, then open the APK. Releases are signed with one fixed certi
 each version installs over the previous one and keeps the library:
 
 ```powershell
-(Get-FileHash .\AllFun-0.9.2-release.apk -Algorithm SHA256).Hash.ToLower()
-Get-Content .\AllFun-0.9.2-release.apk.sha256
+(Get-FileHash .\AllFun-0.10.0-release.apk -Algorithm SHA256).Hash.ToLower()
+Get-Content .\AllFun-0.10.0-release.apk.sha256
 ```
 
 From inside the app, **Settings → About → App Updates** does the same work without a
@@ -61,8 +59,9 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | `:app:assembleDebug` | **BUILD SUCCESSFUL** |
 | `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking |
 | `:app:testDebugUnitTest` | **65 tests pass** — serialization compatibility (generic, polymorphic, defaults, unknown fields), semantic version comparison, release JSON parsing, checksum-file parsing, category/dedupe/format mapping, category sorting, provider-description Markdown flattening, Tachiyomi page conversion, magnet/infohash identity, torrent quality ranking and tracker fallback, Stremio resource support, download queue order/pause/grouping, chapter sort/filter |
-| APK metadata | `app.allfun`, `versionCode 902`, `versionName 0.9.2`, v2 signature, `CN=AllFun` |
-| Runtime, Android 15 / API 35 (emulator) | Signed builds installed over the previous release on the same signer with the library, extensions and settings kept → five destinations, the Library without a scope row, five catalogue actions on one header row, Settings as a hub with working sub-screens and search, three-column search results; empty and error states; no crash |
+| APK metadata | `app.allfun`, `versionCode 1000`, `versionName 0.10.0`, v2 signature, `CN=AllFun` |
+| Runtime, Android 15 / API 35 (emulator) | 0.9.2 baseline: signed builds installed over the previous release on the same signer with the library, extensions and settings kept → five destinations, the Library without a scope row, Settings as a hub with working sub-screens and search, three-column search results; empty and error states; no crash |
+| 0.10.0 verification | `:app:compileDebugKotlin`, `:app:testDebugUnitTest` (65 tests) and `:app:assembleRelease` pass; runtime checks follow the published APK |
 | Catalogue-only addons | An addon declaring `resources: ["catalog"]` (Streaming Catalogs shape) renders its shelf, and its titles open with metadata from Cinemeta instead of failing with "returned a web page"; no `meta` request is sent to an addon that does not declare it |
 | Category screens | Movies, Books and Manga render one vertical adaptive grid (no horizontal shelves or separate "see all" screen); the chip row offers Popular, Latest, A–Z and By source; the header shows title/source/issue counts; filters, favorites and load-more stay in place |
 | Reader chrome | Manga vertical mode keeps the bars hidden while scrolling and toggles them only on a real tap (180 ms grace after a scroll); the novel reader reports taps from inside the document and ignores taps that stop a scroll |
@@ -72,7 +71,8 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Manga category, end to end | Weeb Central (real Keiyoushi extension installed from Discover) → Popular shelf with real covers → One Piece detail (1198 chapters, author, genres) → reader loads real page images → progress on the shelf |
 | Offline downloads | Manga chapters saved as page folders + `pages.json`, novels as saved chapter HTML, direct HTTP video streamed with progress; chapter 1055 (11,087,549 bytes) and chapter 24 (4,968,054 bytes) completed, opened with Wi-Fi and mobile data off, and survived a force-stop; HLS/DASH manifests are refused honestly |
 | Download manager | Settings → Downloads: grouped **Download queue** with a count badge and sort order, per-title and per-item menus, real progress, one **Pause** for the whole engine that survives leaving the screen, resume from the same bytes, three retries with backoff per transfer, cancel/remove, clear finished, Wi-Fi-only, concurrency limit, confirmations |
-| Library | All / Movies / Books / Manga with the Continue strip for unfinished titles, download count, size and completion date on the cards, remove-download with confirmation |
+| Library | All / Movies / Books / Manga with download count, size and completion date on the cards, remove-download with confirmation; the Continue strip was removed so the grid starts at the top |
+| Search | Opens as an animated overlay inside the category: the grid blurs behind a translucent panel, results stay in place, and Back returns to the same scroll position; a full cross-category search is one tap away |
 | Extension marketplace | Real Keiyoushi and LNReader indexes; category scopes All / Movies / Books / Manga; Discover / Installed / Updates / Repositories; install, update, update all, enable, disable, uninstall, permissions |
 | Source states | Working, Loading, No content, Temporarily unavailable, Auth required, Invalid response, Disabled and Unsupported, each with Retry and a separate technical-details disclosure; one failing provider does not block the rest |
 | Cross-source search | "Lantern" returns 3 grouped results across Movies & Shows, Books & Novels and Manhwa & Manga with provider chips and source filters; "one piece" returns real manga results from the installed extension |
@@ -81,11 +81,11 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Stremio addon, end to end | Manifest → catalogue → details → direct HTTP stream with proxy headers → sidecar subtitles → season/episode mapping |
 | Torrent addons, end to end | Torrent-only addon installs and answers: metadata → file selection → sequential download → playback (Big Buck Bunny, 43 seeds, ~1.5 MB/s) with seeking and progress saving; a stale infohash fails with a readable message and the picker offers the remaining releases |
 | Backup and restore | 371 KB JSON export → restore reported 5 titles, 927 chapters/episodes, 5 progress entries and settings; a non-backup file is refused with a readable message |
-| Settings maintenance | Hub of Appearance, Library, Reading, Playback, Downloads, Extensions, Storage, Network, Backup, App updates and About with live subtitles and a settings search; Storage stats, clear cached files without touching the library, repository connection test (1,710 extensions in 1,194 ms) |
+| Settings maintenance | Hub of Appearance, Library, Reading, Playback, Downloads, Extensions, Storage, Network, Backup, App updates and About with live subtitles and a settings search; the new Appearance, Library, Reading and Playback pages apply immediately; Storage stats, clear cached files without touching the library, repository connection test (1,710 extensions in 1,194 ms) |
 | Release (R8) runtime | All paths above re-verified on a signed release build |
 | In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` confirmation |
 | Published release | [v0.9.2](https://github.com/mjt28934/AllFun/releases/tag/v0.9.2) — `AllFun-0.9.2-release.apk`, 61,684,137 bytes, SHA-256 `8b77c618d42b4be9be0e356a1d9b1c3c1be15910530bb593e041e41d6a675e79`; the workflow re-downloaded the checksum asset and compared it, verified the package, `versionCode 902` and signer, and GitHub reports it as the latest |
-| Version | `0.9.2` (versionCode 902) |
+| Version | `0.10.0` (versionCode 1000) |
 | Min SDK | 26 (Android 8.0) |
 | Target SDK | 35 |
 

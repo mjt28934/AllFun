@@ -95,7 +95,10 @@ class ExtensionsViewModel(private val container: AppContainer) : ViewModel() {
         val busyLabel: String? = null,
         val addingRepository: Boolean = false,
         val addRepositoryError: UserError? = null,
-        val repositoryAddTicket: Int = 0
+        val repositoryAddTicket: Int = 0,
+        val addingStremio: Boolean = false,
+        val stremioError: UserError? = null,
+        val stremioAddTicket: Int = 0
     ) {
         /** Every entry from every repository that loaded, first repository wins. */
         val discover: List<RepoExtension>
@@ -429,6 +432,42 @@ class ExtensionsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun clearRepositoryError() {
         _state.update { it.copy(addRepositoryError = null) }
+    }
+
+    /**
+     * Installs a Stremio addon straight from its manifest URL. The addon is then a real
+     * VIDEO source: its catalogs feed Browse and its streams feed the player.
+     */
+    fun addStremio(url: String) {
+        val trimmed = url.trim()
+        if (trimmed.isBlank() || _state.value.addingStremio) return
+        viewModelScope.launch {
+            _state.update { it.copy(addingStremio = true, stremioError = null) }
+            val result = container.sourceHub.addStremio(trimmed)
+            val entity = result.getOrNull()
+            if (entity == null) {
+                _state.update {
+                    it.copy(
+                        addingStremio = false,
+                        stremioError = result.exceptionOrNull()?.toUserError("the addon")
+                    )
+                }
+            } else {
+                refreshInstalled()
+                _messages.send("Installed ${entity.name}")
+                _state.update {
+                    it.copy(
+                        addingStremio = false,
+                        stremioError = null,
+                        stremioAddTicket = it.stremioAddTicket + 1
+                    )
+                }
+            }
+        }
+    }
+
+    fun clearStremioError() {
+        _state.update { it.copy(stremioError = null) }
     }
 
     fun removeRepository(config: RepositoryConfig) {

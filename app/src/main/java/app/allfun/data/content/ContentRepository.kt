@@ -10,6 +10,7 @@ import app.allfun.data.net.userMessage
 import app.allfun.data.settings.SettingsStore
 import app.allfun.data.source.MediaSource
 import app.allfun.data.source.SourceHub
+import app.allfun.data.source.StremioSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -582,6 +583,53 @@ class ContentRepository(
                 .thenBy { it.sourceName.lowercase() }
         )
     }
+
+    /**
+     * Movie and show detail pages list stream providers, not catalogues. A Stremio
+     * catalogue addon only supplied the cover; the playable providers are the addons that
+     * declare `stream` for this id. Catalogue-only addons are therefore excluded instead
+     * of being offered as if they could play anything.
+     *
+     * Options carry no key: selecting one records a playback preference and never
+     * replaces the title's metadata source.
+     */
+    suspend fun streamSources(
+        key: String,
+        category: ContentCategory,
+        title: String
+    ): List<SourceOption> {
+        val preferred = settings.current().preferredSources[preferenceKey(category, title)]
+        val type = key.substringBefore('|', "movie")
+        val streamId = key.substringAfter('|', key)
+        return sourceDao.all()
+            .filter { it.enabled && it.type == SourceType.VIDEO }
+            .mapNotNull { entity ->
+                val source = runCatching { sourceHub.instance(entity) }.getOrNull()
+                    ?: return@mapNotNull null
+                if (source !is StremioSource) return@mapNotNull null
+                if (!source.supportsStreams || !source.acceptsStream(type, streamId)) {
+                    return@mapNotNull null
+                }
+                SourceOption(
+                    sourceId = entity.id,
+                    sourceName = entity.name,
+                    key = null,
+                    category = category,
+                    isPrimary = false,
+                    isPreferred = preferred == entity.id,
+                    available = true,
+                    statusLabel = "Streams this title"
+                )
+            }
+            .sortedWith(
+                compareByDescending<SourceOption> { it.isPreferred }
+                    .thenBy { it.sourceName.lowercase() }
+            )
+    }
+
+    /** The addon the viewer chose for this title's playback, if any. */
+    suspend fun preferredSourceId(title: String, category: ContentCategory): String? =
+        settings.current().preferredSources[preferenceKey(category, title)]
 
     private suspend fun confirmSource(
         entity: SourceEntity,

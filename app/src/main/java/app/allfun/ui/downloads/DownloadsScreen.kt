@@ -1,5 +1,6 @@
 package app.allfun.ui.downloads
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.DownloadDone
+import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -81,7 +83,7 @@ import java.util.Date
  * One floating button pauses or resumes the downloader; the overflow can cancel the whole
  * queue. Completed downloads stay because they are real files the Library reads offline.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun DownloadsScreen(
     container: AppContainer,
@@ -249,30 +251,8 @@ fun DownloadsScreen(
                 }
             }
 
-            if (state.paused && state.activeCount > 0) {
-                item("paused-banner") {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Pause,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            text = "Queue paused. Nothing transfers until you tap Resume.",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-            }
-
             state.groups.forEach { group ->
-                item(key = "group:${group.mediaId}") {
+                stickyHeader(key = "group:${group.mediaId}") {
                     GroupHeader(
                         group = group,
                         onPauseAll = { vm.pauseAll(group.rows) },
@@ -299,11 +279,6 @@ fun DownloadsScreen(
                         onRemove = { pendingRemove = row }
                     )
                 }
-                item(key = "group-divider:${group.mediaId}") {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp)
-                    )
-                }
             }
 
             if (state.rows.isNotEmpty()) {
@@ -312,7 +287,7 @@ fun DownloadsScreen(
                         text = "${formatBytes(state.completedBytes)} stored on this device",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp)
                     )
                 }
             }
@@ -481,86 +456,132 @@ private fun GroupHeader(
     onShow: () -> Unit
 ) {
     var menu by remember { mutableStateOf(false) }
-    Row(
+    // The sticky header carries the group's own progress, so a title keeps answering
+    // "how far along is this?" even when its rows have scrolled away.
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, end = 8.dp, top = 18.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .background(MaterialTheme.colorScheme.surface)
     ) {
-        Column(Modifier.weight(1f)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 12.dp, end = 4.dp, top = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.DragHandle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(10.dp))
             Text(
                 text = group.title,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
             )
-            Text(
-                text = groupSummary(group),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Spacer(Modifier.width(8.dp))
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.surfaceVariant
+            ) {
+                Text(
+                    text = "${group.rows.size}",
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Box {
+                IconButton(onClick = { menu = true }, modifier = Modifier.size(40.dp)) {
+                    Icon(
+                        Icons.Outlined.MoreVert,
+                        contentDescription = "Actions for ${group.title}",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Move this title to top") },
+                        enabled = group.active.isNotEmpty(),
+                        onClick = {
+                            onMoveTop()
+                            menu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Move this title to bottom") },
+                        enabled = group.active.isNotEmpty(),
+                        onClick = {
+                            onMoveBottom()
+                            menu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Open title") },
+                        onClick = {
+                            onShow()
+                            menu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Pause all") },
+                        enabled = group.active.any {
+                            it.status == DownloadStatus.RUNNING || it.status == DownloadStatus.QUEUED
+                        },
+                        onClick = {
+                            onPauseAll()
+                            menu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Resume all") },
+                        enabled = group.rows.any {
+                            it.isPaused ||
+                                it.status == DownloadStatus.WAITING ||
+                                it.status == DownloadStatus.FAILED ||
+                                it.status == DownloadStatus.CANCELED
+                        },
+                        onClick = {
+                            onResumeAll()
+                            menu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Cancel all") },
+                        enabled = group.active.isNotEmpty(),
+                        onClick = {
+                            onCancelAll()
+                            menu = false
+                        }
+                    )
+                }
+            }
         }
-        Box {
-            IconButton(onClick = { menu = true }) {
-                Icon(Icons.Outlined.MoreVert, contentDescription = "Actions for ${group.title}")
-            }
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(
-                    text = { Text("Move this title to top") },
-                    enabled = group.active.isNotEmpty(),
-                    onClick = {
-                        onMoveTop()
-                        menu = false
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Move this title to bottom") },
-                    enabled = group.active.isNotEmpty(),
-                    onClick = {
-                        onMoveBottom()
-                        menu = false
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Open title") },
-                    onClick = {
-                        onShow()
-                        menu = false
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Pause all") },
-                    enabled = group.active.any {
-                        it.status == DownloadStatus.RUNNING || it.status == DownloadStatus.QUEUED
-                    },
-                    onClick = {
-                        onPauseAll()
-                        menu = false
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Resume all") },
-                    enabled = group.rows.any {
-                        it.isPaused ||
-                            it.status == DownloadStatus.WAITING ||
-                            it.status == DownloadStatus.FAILED ||
-                            it.status == DownloadStatus.CANCELED
-                    },
-                    onClick = {
-                        onResumeAll()
-                        menu = false
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Cancel all") },
-                    enabled = group.active.isNotEmpty(),
-                    onClick = {
-                        onCancelAll()
-                        menu = false
-                    }
-                )
-            }
+        Text(
+            text = groupSummary(group),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 40.dp, end = 16.dp, bottom = 8.dp)
+        )
+        val progress = group.progress
+        if (progress != null && group.active.isNotEmpty()) {
+            LinearProgressIndicator(
+                progress = { progress / 100f },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(2.dp),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        } else {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         }
     }
 }
@@ -584,13 +605,13 @@ private fun DownloadRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)
+            .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(9.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
@@ -607,14 +628,16 @@ private fun DownloadRow(
                         DownloadStatus.COMPLETED -> MaterialTheme.colorScheme.secondary
                         DownloadStatus.FAILED -> MaterialTheme.colorScheme.error
                         else -> MaterialTheme.colorScheme.primary
-                    }
+                    },
+                    modifier = Modifier.size(18.dp)
                 )
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     text = row.unitTitle,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -626,13 +649,24 @@ private fun DownloadRow(
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
+            if (row.status == DownloadStatus.RUNNING && row.progress in 0..100) {
+                Text(
+                    text = "${row.progress}%",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
             Box {
-                IconButton(onClick = { menu = true }) {
-                    Icon(Icons.Outlined.MoreVert, contentDescription = "Actions for ${row.unitTitle}")
+                IconButton(onClick = { menu = true }, modifier = Modifier.size(40.dp)) {
+                    Icon(
+                        Icons.Outlined.MoreVert,
+                        contentDescription = "Actions for ${row.unitTitle}",
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     if (row.status.isActive) {
@@ -740,19 +774,25 @@ private fun DownloadRow(
             }
         }
         if (row.status == DownloadStatus.RUNNING) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(4.dp))
             if (row.progress in 0..100) {
                 LinearProgressIndicator(
                     progress = { row.progress / 100f },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(end = 8.dp)
+                        .height(2.dp)
+                        .padding(start = 44.dp, end = 44.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
                 )
             } else {
                 LinearProgressIndicator(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(end = 8.dp)
+                        .height(2.dp)
+                        .padding(start = 44.dp, end = 44.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
                 )
             }
         }

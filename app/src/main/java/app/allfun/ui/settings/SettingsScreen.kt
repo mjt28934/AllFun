@@ -75,12 +75,14 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.allfun.BuildConfig
 import app.allfun.data.AppContainer
+import app.allfun.data.settings.LibraryGrid
 import app.allfun.data.settings.LibrarySort
 import app.allfun.data.settings.LibraryView
 import app.allfun.data.settings.MangaFit
 import app.allfun.data.settings.NovelTheme
 import app.allfun.data.settings.ReaderMode
 import app.allfun.data.settings.ReadingDirection
+import app.allfun.data.settings.SeekStep
 import app.allfun.data.settings.Settings
 import app.allfun.data.settings.ThemeMode
 import app.allfun.ui.components.rememberViewModel
@@ -100,6 +102,7 @@ private enum class SettingsPage(val label: String) {
     LIBRARY("Library"),
     READING("Reading"),
     PLAYBACK("Playback"),
+    DOWNLOADS("Downloads"),
     STORAGE("Storage"),
     NETWORK("Network"),
     BACKUP("Backup"),
@@ -163,7 +166,6 @@ fun SettingsScreen(
                 onOpenPage = { page = it },
                 onManageExtensions = onManageExtensions,
                 onOpenUpdates = onOpenUpdates,
-                onOpenDownloads = onOpenDownloads,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
@@ -177,6 +179,7 @@ fun SettingsScreen(
                 storage = storage,
                 busy = busy,
                 onBack = { page = null },
+                onOpenDownloads = onOpenDownloads,
                 onExport = { exportLauncher.launch(suggestedName) },
                 onImport = {
                     importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
@@ -221,11 +224,10 @@ private fun SettingsHub(
     onOpenPage: (SettingsPage) -> Unit,
     onManageExtensions: () -> Unit,
     onOpenUpdates: () -> Unit,
-    onOpenDownloads: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var query by rememberSaveable { mutableStateOf("") }
-    val entries = settingsEntries(settings, onManageExtensions, onOpenUpdates, onOpenDownloads)
+    val entries = settingsEntries(settings, onManageExtensions, onOpenUpdates)
     val needle = query.trim().lowercase(Locale.ROOT)
     val visible = entries.filter { entry ->
         needle.isBlank() ||
@@ -350,8 +352,7 @@ private fun SettingsEntryRow(entry: SettingsEntry, onClick: () -> Unit) {
 private fun settingsEntries(
     settings: Settings,
     onManageExtensions: () -> Unit,
-    onOpenUpdates: () -> Unit,
-    onOpenDownloads: () -> Unit
+    onOpenUpdates: () -> Unit
 ): List<SettingsEntry> = listOf(
     SettingsEntry(
         title = "Appearance",
@@ -363,10 +364,11 @@ private fun settingsEntries(
     ),
     SettingsEntry(
         title = "Library",
-        subtitle = "${settings.libraryView.label()} · ${settings.librarySort.label}",
+        subtitle = "${settings.libraryView.label()} · ${settings.librarySort.label} · " +
+            settings.libraryGrid.label,
         icon = Icons.Outlined.CollectionsBookmark,
         page = SettingsPage.LIBRARY,
-        keywords = "shelf grid list sort order titles"
+        keywords = "shelf grid list sort order titles poster size"
     ),
     SettingsEntry(
         title = "Reading",
@@ -385,10 +387,11 @@ private fun settingsEntries(
     ),
     SettingsEntry(
         title = "Downloads",
-        subtitle = "Queue, Wi-Fi rule and offline storage",
+        subtitle = "Wi-Fi only ${settings.downloadWifiOnly.onOff()} · " +
+            "${settings.concurrentDownloads} at a time",
         icon = Icons.Outlined.Download,
-        action = onOpenDownloads,
-        keywords = "offline download queue wifi storage chapters"
+        page = SettingsPage.DOWNLOADS,
+        keywords = "offline download queue wifi storage chapters parallel"
     ),
     SettingsEntry(
         title = "Extensions",
@@ -442,6 +445,7 @@ private fun SettingsPageContent(
     storage: SettingsViewModel.StorageStats?,
     busy: String?,
     onBack: () -> Unit,
+    onOpenDownloads: () -> Unit,
     onExport: () -> Unit,
     onImport: () -> Unit,
     modifier: Modifier = Modifier
@@ -473,6 +477,13 @@ private fun SettingsPageContent(
                             subtitle = "Use the wallpaper palette on Android 12 and later",
                             checked = settings.dynamicColor,
                             onChange = vm::setDynamicColor
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        SwitchRow(
+                            title = "Pitch black",
+                            subtitle = "Draw dark screens on OLED black. Light theme is unaffected.",
+                            checked = settings.amoledBlack,
+                            onChange = vm::setAmoledBlack
                         )
                     }
                     SettingsSection("Accessibility") {
@@ -506,6 +517,14 @@ private fun SettingsPageContent(
                         onSelect = vm::setLibraryView
                     )
                     Spacer(Modifier.height(8.dp))
+                    SettingLabel("Poster size")
+                    ChoiceChips(
+                        options = LibraryGrid.entries.toList(),
+                        selected = settings.libraryGrid,
+                        label = { it.label },
+                        onSelect = vm::setLibraryGrid
+                    )
+                    Spacer(Modifier.height(8.dp))
                     SettingLabel("Sort order")
                     ChoiceChips(
                         options = LibrarySort.entries.toList(),
@@ -515,8 +534,8 @@ private fun SettingsPageContent(
                     )
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        text = "The Continue row at the top of the shelf always shows the " +
-                            "titles you started but have not finished, newest first.",
+                        text = "Titles you started show their progress on the card itself, so " +
+                            "the shelf has no separate Continue row.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -552,6 +571,14 @@ private fun SettingsPageContent(
                             onSelect = vm::setReadingDirection
                         )
                     }
+                    SettingsSection("Reader") {
+                        SwitchRow(
+                            title = "Keep the screen awake",
+                            subtitle = "Stops the display sleeping while a chapter is open",
+                            checked = settings.readerKeepScreenOn,
+                            onChange = vm::setReaderKeepScreenOn
+                        )
+                    }
                     SettingsSection("Novels") {
                         SliderRow(
                             title = "Text size",
@@ -581,20 +608,81 @@ private fun SettingsPageContent(
             }
 
             SettingsPage.PLAYBACK -> item {
-                SettingsSection("Playback") {
-                    SwitchRow(
-                        title = "Resume where you stopped",
-                        subtitle = "Continue video from the last saved position",
-                        checked = settings.resumePlayback,
-                        onChange = vm::setResumePlayback
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    SwitchRow(
-                        title = "Show subtitles",
-                        subtitle = "Turn on subtitle tracks a stream provides",
-                        checked = settings.subtitlesEnabled,
-                        onChange = vm::setSubtitlesEnabled
-                    )
+                Column {
+                    SettingsSection("Playback") {
+                        SwitchRow(
+                            title = "Resume where you stopped",
+                            subtitle = "Continue video from the last saved position",
+                            checked = settings.resumePlayback,
+                            onChange = vm::setResumePlayback
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        SwitchRow(
+                            title = "Show subtitles",
+                            subtitle = "Turn on subtitle tracks a stream provides",
+                            checked = settings.subtitlesEnabled,
+                            onChange = vm::setSubtitlesEnabled
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        SwitchRow(
+                            title = "Play the next episode",
+                            subtitle = "Continue to the next episode when one finishes",
+                            checked = settings.autoPlayNext,
+                            onChange = vm::setAutoPlayNext
+                        )
+                    }
+                    SettingsSection("Player controls") {
+                        SettingLabel("Skip amount")
+                        ChoiceChips(
+                            options = SeekStep.entries.toList(),
+                            selected = settings.seekStep,
+                            label = { it.label },
+                            onSelect = vm::setSeekStep
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = "The player's rewind and forward buttons jump this far, and " +
+                                "double-tapping the left or right half of the video does the same.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            SettingsPage.DOWNLOADS -> item {
+                Column {
+                    SettingsSection("Downloading") {
+                        SwitchRow(
+                            title = "Only on Wi-Fi or Ethernet",
+                            subtitle = "Queued downloads wait for an unmetered connection",
+                            checked = settings.downloadWifiOnly,
+                            onChange = vm::setDownloadWifiOnly
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        SettingLabel("Downloads at the same time")
+                        ChoiceChips(
+                            options = (1..4).toList(),
+                            selected = settings.concurrentDownloads,
+                            label = { "$it" },
+                            onSelect = vm::setConcurrentDownloads
+                        )
+                    }
+                    SettingsSection("Queue") {
+                        Text(
+                            text = "Pause, reorder, retry or cancel individual downloads from " +
+                                "the queue. Completed files stay on this device and can be " +
+                                "played without a connection.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Button(onClick = onOpenDownloads) {
+                            Icon(Icons.Outlined.Download, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Open download queue")
+                        }
+                    }
                 }
             }
 

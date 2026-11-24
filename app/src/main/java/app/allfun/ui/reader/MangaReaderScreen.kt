@@ -131,11 +131,11 @@ fun MangaReaderScreen(
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
     LaunchedEffect(state.currentEpisode?.id) { seekRequest = null }
 
-    // Reading is a foreground activity; the screen should not dim mid-chapter.
+    // Reading is a foreground activity; by default the screen should not dim mid-chapter.
     val view = LocalView.current
-    DisposableEffect(view) {
+    DisposableEffect(view, settings.readerKeepScreenOn) {
         val previous = view.keepScreenOn
-        view.keepScreenOn = true
+        view.keepScreenOn = settings.readerKeepScreenOn
         onDispose { view.keepScreenOn = previous }
     }
 

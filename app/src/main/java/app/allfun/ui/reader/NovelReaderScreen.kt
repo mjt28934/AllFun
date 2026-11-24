@@ -74,6 +74,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.allfun.data.AppContainer
 import app.allfun.data.net.UserError
 import app.allfun.data.settings.NovelTheme
+import app.allfun.data.settings.Settings
 import app.allfun.ui.components.ChapterPickerDialog
 import app.allfun.ui.components.rememberViewModel
 import kotlinx.coroutines.launch
@@ -89,6 +90,8 @@ fun NovelReaderScreen(
 ) {
     val vm = rememberViewModel { NovelReaderViewModel(container, mediaId, startEpisodeId) }
     val state by vm.state.collectAsStateWithLifecycle()
+    val appSettings by container.settings.settings
+        .collectAsStateWithLifecycle(initialValue = Settings())
     val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
     var webView by remember { mutableStateOf<WebView?>(null) }
@@ -101,11 +104,11 @@ fun NovelReaderScreen(
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
-    // Reading is a foreground activity; the screen should not dim mid-chapter.
+    // Reading is a foreground activity; by default the screen should not dim mid-chapter.
     val rootView = LocalView.current
-    DisposableEffect(rootView) {
+    DisposableEffect(rootView, appSettings.readerKeepScreenOn) {
         val previous = rootView.keepScreenOn
-        rootView.keepScreenOn = true
+        rootView.keepScreenOn = appSettings.readerKeepScreenOn
         onDispose { rootView.keepScreenOn = previous }
     }
 

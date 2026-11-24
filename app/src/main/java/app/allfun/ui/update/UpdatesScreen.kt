@@ -1,13 +1,8 @@
 package app.allfun.ui.update
 
-import android.Manifest
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
-import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -18,9 +13,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
@@ -31,7 +28,6 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -41,7 +37,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -49,69 +44,40 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.core.content.ContextCompat
 import app.allfun.data.AppContainer
-import app.allfun.data.update.UpdateSource
 import app.allfun.ui.components.rememberViewModel
 import app.allfun.ui.settings.SettingsViewModel
-import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Date
 import java.util.Locale
 
 /**
- * Settings → About → App Updates. Everything shown here comes from GitHub Releases: the
- * installed build, the latest published release, its notes and the real download state.
+ * Settings → App Updates. One job: say whether a newer release exists and what changed in
+ * it, then offer the one action that applies (download, install or retry). Installed codes,
+ * checksums, schedules and install reports stay in the background where they belong.
  */
 @Composable
 fun UpdatesScreen(container: AppContainer, onBack: () -> Unit) {
     val vm = rememberViewModel { UpdatesViewModel(container) }
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     var showAllNotes by remember { mutableStateOf(false) }
-    var notificationsAllowed by remember { mutableStateOf(vm.notificationsAllowed()) }
 
     LaunchedEffect(Unit) {
         vm.messages.collect { snackbar.showSnackbar(it) }
-    }
-
-    // Android 13+ needs a runtime permission before the update notification can appear.
-    val notificationPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        notificationsAllowed = vm.notificationsAllowed()
-        vm.setNotify(granted)
-        if (!granted) {
-            scope.launch {
-                snackbar.showSnackbar(
-                    "Android did not grant notification permission, so update alerts stay off."
-                )
-            }
-        }
-    }
-
-    // Returning from the app's notification settings re-reads whether alerts can appear.
-    val notificationSettings = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) {
-        notificationsAllowed = vm.notificationsAllowed()
-        vm.setNotify(vm.notificationsAllowed())
     }
 
     // Returning from the system's "install unknown apps" screen re-checks the setting.
@@ -122,6 +88,8 @@ fun UpdatesScreen(container: AppContainer, onBack: () -> Unit) {
     val ready = state.download as? UpdateDownloadState.Ready
     val running = state.download as? UpdateDownloadState.Running
     val failed = state.download as? UpdateDownloadState.Failed
+    val verifying = state.download is UpdateDownloadState.Verifying
+    val release = state.available
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
@@ -133,32 +101,29 @@ fun UpdatesScreen(container: AppContainer, onBack: () -> Unit) {
                 .padding(padding)
                 .statusBarsPadding()
                 .navigationBarsPadding(),
-            contentPadding = PaddingValues(bottom = 32.dp)
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp)
         ) {
             item {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 4.dp, end = 8.dp, top = 6.dp),
+                        .padding(top = 6.dp, bottom = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                    Column(Modifier.weight(1f)) {
-                        Text("App Updates", fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                        Text(
-                            text = "Releases from github.com/${UpdateSource.OWNER}/${UpdateSource.REPO}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(
+                        text = "App Updates",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
                     if (state.checking) {
                         CircularProgressIndicator(
                             modifier = Modifier
                                 .padding(8.dp)
-                                .width(22.dp)
-                                .height(22.dp),
+                                .size(22.dp),
                             strokeWidth = 2.dp
                         )
                     } else {
@@ -169,201 +134,41 @@ fun UpdatesScreen(container: AppContainer, onBack: () -> Unit) {
                 }
             }
 
-            item {
-                UpdateSection("Versions") {
-                    InfoRow("Installed", "${state.installedVersion} (code ${state.installedCode})")
-                    InfoRow(
-                        "Latest release",
-                        state.latest?.let { "${it.versionName} · ${it.tag}" } ?: "Not checked yet"
-                    )
-                    InfoRow("Last checked", state.lastCheckAt?.let(::formatTimestamp) ?: "Never")
-                    if (state.installedIsAhead) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = "This build is newer than the latest published release, so " +
-                                "there is nothing to install.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-
-            val status = state.status
-            if (status != null) {
-                item {
-                    Surface(
-                        color = if (state.checkFailed) {
-                            MaterialTheme.colorScheme.errorContainer
-                        } else {
-                            MaterialTheme.colorScheme.secondaryContainer
-                        },
-                        shape = MaterialTheme.shapes.large,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.Top
-                        ) {
-                            Icon(
-                                imageVector = if (state.checkFailed) {
-                                    Icons.Outlined.ErrorOutline
-                                } else {
-                                    Icons.Outlined.CheckCircle
-                                },
-                                contentDescription = null
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                text = status,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (state.checkFailed) {
-                                    MaterialTheme.colorScheme.onErrorContainer
-                                } else {
-                                    MaterialTheme.colorScheme.onSecondaryContainer
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-
-            val release = state.available
-            if (release != null) {
-                item {
-                    UpdateSection("Available update ${release.versionName}") {
+            when {
+                release != null -> item {
+                    UpdateCard(releaseName = release.versionName) {
                         if (release.publishedAt.isNotBlank()) {
                             Text(
                                 text = "Published ${formatIsoDate(release.publishedAt)}",
-                                style = MaterialTheme.typography.bodySmall,
+                                style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(12.dp))
                         }
                         Text(
-                            text = "Release notes",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
                             text = release.notes.ifBlank { "This release has no notes." },
-                            style = MaterialTheme.typography.bodySmall,
-                            maxLines = if (showAllNotes) Int.MAX_VALUE else 12
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = if (showAllNotes) Int.MAX_VALUE else 18
                         )
-                        if (release.notes.length > 700) {
+                        if (release.notes.length > 900) {
                             TextButton(
                                 onClick = { showAllNotes = !showAllNotes },
                                 contentPadding = PaddingValues(0.dp)
                             ) {
-                                Text(if (showAllNotes) "Show less" else "Show all notes")
+                                Text(if (showAllNotes) "Show less" else "Show all changes")
                             }
                         }
-                        Spacer(Modifier.height(4.dp))
-                        InfoRow(
-                            "APK",
-                            "${release.apkAssetName} · ${SettingsViewModel.formatBytes(release.apkSize)}"
-                        )
-                        InfoRow(
-                            "SHA-256",
-                            release.checksumSha256?.take(16)?.plus("…") ?: "not published"
-                        )
-                        if (release.releaseUrl.isNotBlank()) {
-                            Spacer(Modifier.height(8.dp))
-                            OutlinedButton(onClick = { uriHandler.openUri(release.releaseUrl) }) {
-                                Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Open release page")
-                            }
-                        }
-                    }
-                }
-            }
-
-            item {
-                UpdateSection("Actions") {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedButton(
-                            onClick = vm::checkForUpdates,
-                            enabled = !state.checking && running == null
-                        ) {
-                            Text("Check for Updates")
-                        }
-                        if (release != null && ready == null) {
-                            Button(
-                                onClick = vm::downloadUpdate,
-                                enabled = !state.checking &&
-                                    running == null &&
-                                    state.download !is UpdateDownloadState.Verifying
-                            ) {
-                                Icon(Icons.Outlined.Download, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text(if (failed != null) "Retry Download" else "Download Update")
-                            }
-                        }
-                        if (running != null || state.download is UpdateDownloadState.Verifying) {
-                            OutlinedButton(onClick = vm::cancelDownload) {
-                                Text("Cancel")
-                            }
-                        }
-                    }
-
-                    if (running != null) {
-                        Spacer(Modifier.height(12.dp))
-                        val fraction = if (running.total > 0) {
-                            (running.bytes.toFloat() / running.total.toFloat()).coerceIn(0f, 1f)
-                        } else {
-                            null
-                        }
-                        if (fraction != null) {
-                            LinearProgressIndicator(
-                                progress = { fraction },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        } else {
-                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            text = buildString {
-                                if (running.total > 0) {
-                                    append("${(fraction ?: 0f).times(100).toInt()}% · ")
-                                }
-                                append(SettingsViewModel.formatBytes(running.bytes))
-                                if (running.total > 0) {
-                                    append(" of ${SettingsViewModel.formatBytes(running.total)}")
-                                }
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    when (val download = state.download) {
-                        is UpdateDownloadState.Verifying -> {
-                            Spacer(Modifier.height(12.dp))
-                            Text(
-                                "Download finished. Validating SHA-256, package identity and " +
-                                    "signing certificate…",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                        is UpdateDownloadState.Ready -> {
-                            Spacer(Modifier.height(12.dp))
-                            Text(
-                                text = "Verified ${download.file.name} " +
-                                    "(${SettingsViewModel.formatBytes(download.file.length())}). " +
-                                    "Same package and signing key as this install.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Button(onClick = {
+                        Spacer(Modifier.height(16.dp))
+                        UpdateAction(
+                            release = release.versionName,
+                            running = running,
+                            verifying = verifying,
+                            ready = ready != null,
+                            failed = failed,
+                            canInstall = state.canInstallPackages,
+                            onDownload = vm::downloadUpdate,
+                            onCancel = vm::cancelDownload,
+                            onInstall = {
                                 if (state.canInstallPackages) {
                                     vm.installUpdate()
                                 } else {
@@ -371,136 +176,53 @@ fun UpdatesScreen(container: AppContainer, onBack: () -> Unit) {
                                         context.packageName
                                     )?.let(installPermission::launch)
                                 }
-                            }) {
-                                Icon(Icons.Outlined.SystemUpdate, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text(if (state.canInstallPackages) "Install Update" else "Allow Installs")
                             }
-                            if (!state.canInstallPackages) {
-                                Spacer(Modifier.height(6.dp))
-                                Text(
-                                    "Android needs permission for AllFun to install its own " +
-                                        "updates. The system dialog still asks you to confirm.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                        is UpdateDownloadState.Failed -> {
-                            Spacer(Modifier.height(12.dp))
-                            Text(
-                                text = download.message,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                            TextButton(onClick = vm::dismissDownloadError) {
-                                Text("Dismiss")
-                            }
-                        }
-                        else -> Unit
-                    }
-                }
-            }
-
-            val report = state.installReport
-            if (report != null) {
-                item {
-                    UpdateSection("Last installation") {
-                        Text(
-                            text = if (report.success) {
-                                "Android reported a successful install. AllFun is now " +
-                                    "${state.installedVersion}."
-                            } else {
-                                "The system installer did not finish the update."
-                            },
-                            style = MaterialTheme.typography.bodyMedium
                         )
-                        if (report.message.isNotBlank()) {
+                        if (release.releaseUrl.isNotBlank()) {
                             Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = "Installer message: ${report.message}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        InfoRow("When", formatTimestamp(report.at))
-                        TextButton(
-                            onClick = vm::dismissInstallReport,
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text("Dismiss")
-                        }
-                    }
-                }
-            }
-
-            item {
-                UpdateSection("Automatic checks") {
-                    SwitchRow(
-                        title = "Check on launch and in the background",
-                        subtitle = "At most once every 12 hours. Runs only while a network is " +
-                            "available, using WorkManager.",
-                        checked = state.autoCheck,
-                        onChange = { enabled -> vm.setAutoCheck(enabled) }
-                    )
-                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                    SwitchRow(
-                        title = "Notify me when an update is found",
-                        subtitle = when {
-                            notificationsAllowed ->
-                                "One low-priority notification per published version."
-                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                ContextCompat.checkSelfPermission(
-                                    context,
-                                    Manifest.permission.POST_NOTIFICATIONS
-                                ) != PackageManager.PERMISSION_GRANTED ->
-                                "Android has not granted notification permission yet."
-                            else ->
-                                "Notifications for AllFun are turned off in Android settings."
-                        },
-                        checked = state.notify && notificationsAllowed,
-                        onChange = { enabled ->
-                            if (!enabled) {
-                                vm.setNotify(false)
-                            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                ContextCompat.checkSelfPermission(
-                                    context,
-                                    Manifest.permission.POST_NOTIFICATIONS
-                                ) != PackageManager.PERMISSION_GRANTED
+                            TextButton(
+                                onClick = { uriHandler.openUri(release.releaseUrl) },
+                                contentPadding = PaddingValues(0.dp)
                             ) {
-                                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                            } else if (!notificationsAllowed) {
-                                notificationSettings.launch(
-                                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                                        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                Icon(
+                                    Icons.AutoMirrored.Outlined.OpenInNew,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
                                 )
-                            } else {
-                                vm.setNotify(true)
+                                Spacer(Modifier.width(6.dp))
+                                Text("Open release page")
                             }
                         }
-                    )
+                    }
                 }
-            }
 
-            item {
-                UpdateSection("How updates work") {
-                    Text(
-                        text = "Only published, non-draft GitHub Releases count as updates. " +
-                            "A commit or a tag without a published release is ignored. The APK " +
-                            "is downloaded from the release asset, its SHA-256 must match the " +
-                            "published checksum, and Android's own installer performs the " +
-                            "upgrade after you confirm it.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = { uriHandler.openUri(UpdateSource.releasesUrl) }
+                state.checking -> item { CheckingCard() }
+
+                state.checkFailed -> item {
+                    MessageCard(
+                        icon = Icons.Outlined.ErrorOutline,
+                        message = state.status ?: "Could not reach GitHub.",
+                        tone = MessageTone.ERROR
                     ) {
-                        Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("All releases on GitHub")
+                        OutlinedButton(onClick = vm::checkForUpdates) { Text("Try again") }
+                    }
+                }
+
+                else -> item {
+                    MessageCard(
+                        icon = Icons.Outlined.CheckCircle,
+                        message = "You're on the latest release.",
+                        tone = MessageTone.SUCCESS
+                    ) {
+                        Text(
+                            text = "Installed version ${state.installedVersion}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(onClick = vm::checkForUpdates) {
+                            Text("Check again")
+                        }
                     }
                 }
             }
@@ -508,72 +230,179 @@ fun UpdatesScreen(container: AppContainer, onBack: () -> Unit) {
     }
 }
 
+/** The version and its changes, framed as the only thing this screen is about. */
 @Composable
-private fun UpdateSection(title: String, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.secondary,
-            modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
-        )
-        Surface(
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            shape = MaterialTheme.shapes.large,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(Modifier.padding(16.dp), content = content)
+private fun UpdateCard(
+    releaseName: String,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(20.dp)) {
+            Text(
+                text = "Version $releaseName",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "New update available",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.secondary
+            )
+            Spacer(Modifier.height(14.dp))
+            content()
         }
     }
 }
 
 @Composable
-private fun InfoRow(label: String, value: String) {
-    Row(
+private fun CheckingCard() {
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 3.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(vertical = 48.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f)
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
-private fun SwitchRow(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.dp)
+            Spacer(Modifier.height(12.dp))
             Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
+                text = "Checking GitHub releases…",
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Spacer(Modifier.width(12.dp))
-        Switch(checked = checked, onCheckedChange = onChange)
     }
 }
 
-private fun formatTimestamp(at: Long): String =
-    SimpleDateFormat("d MMM yyyy, HH:mm", Locale.getDefault()).format(Date(at))
+private enum class MessageTone { SUCCESS, ERROR }
+
+@Composable
+private fun MessageCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    message: String,
+    tone: MessageTone,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit
+) {
+    val container = if (tone == MessageTone.ERROR) {
+        MaterialTheme.colorScheme.errorContainer
+    } else {
+        MaterialTheme.colorScheme.secondaryContainer
+    }
+    val onContainer = if (tone == MessageTone.ERROR) {
+        MaterialTheme.colorScheme.onErrorContainer
+    } else {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    }
+    Surface(
+        color = container,
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(icon, contentDescription = null, tint = onContainer)
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = onContainer
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+            content()
+        }
+    }
+}
+
+@Composable
+private fun UpdateAction(
+    release: String,
+    running: UpdateDownloadState.Running?,
+    verifying: Boolean,
+    ready: Boolean,
+    failed: UpdateDownloadState.Failed?,
+    canInstall: Boolean,
+    onDownload: () -> Unit,
+    onCancel: () -> Unit,
+    onInstall: () -> Unit
+) {
+    when {
+        running != null || verifying -> {
+            val fraction = if (running != null && running.total > 0) {
+                (running.bytes.toFloat() / running.total.toFloat()).coerceIn(0f, 1f)
+            } else {
+                null
+            }
+            if (fraction != null) {
+                LinearProgressIndicator(
+                    progress = { fraction },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(CircleShape)
+                )
+            } else {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(CircleShape)
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = if (verifying) {
+                    "Checking the download…"
+                } else {
+                    buildString {
+                        append("${((fraction ?: 0f) * 100).toInt()}% · ")
+                        append(SettingsViewModel.formatBytes(running!!.bytes))
+                        if (running.total > 0) {
+                            append(" of ${SettingsViewModel.formatBytes(running.total)}")
+                        }
+                    }
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            TextButton(onClick = onCancel, contentPadding = PaddingValues(0.dp)) {
+                Text("Cancel")
+            }
+        }
+
+        ready -> {
+            Text(
+                text = "Downloaded and verified. Android asks you to confirm the install.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(10.dp))
+            Button(onClick = onInstall, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Outlined.SystemUpdate, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(if (canInstall) "Install $release" else "Allow installs")
+            }
+        }
+
+        else -> {
+            if (failed != null) {
+                Text(
+                    text = failed.message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+                Spacer(Modifier.height(10.dp))
+            }
+            Button(onClick = onDownload, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Outlined.Download, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(if (failed != null) "Retry download" else "Download update")
+            }
+        }
+    }
+}
 
 private fun formatIsoDate(iso: String): String = runCatching {
     OffsetDateTime.parse(iso)

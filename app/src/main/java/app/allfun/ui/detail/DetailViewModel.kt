@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.allfun.data.AppContainer
 import app.allfun.data.content.ContentSourceRef
+import app.allfun.data.content.ContentCategory
 import app.allfun.data.content.SourceOption
 import app.allfun.data.content.category
 import app.allfun.data.db.EpisodeEntity
@@ -11,6 +12,7 @@ import app.allfun.data.db.DownloadEntity
 import app.allfun.data.db.MediaEntity
 import app.allfun.data.db.ProgressEntity
 import app.allfun.data.net.userMessage
+import app.allfun.data.source.StremioSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -37,6 +39,8 @@ class DetailViewModel(
     data class SourceState(
         val loading: Boolean = false,
         val switching: Boolean = false,
+        /** Movies list stream providers; their options have no key and never switch media. */
+        val streamProviders: Boolean = false,
         val options: List<SourceOption> = emptyList(),
         val error: String? = null
     )
@@ -156,28 +160,48 @@ class DetailViewModel(
                     key = item.sourceKey,
                     type = entity?.type ?: category.sourceType
                 )
-                val options = container.content.alternateSources(
-                    title = item.title,
-                    category = category,
-                    primary = primary,
-                    primaryStatus = primaryStatus(item)
-                ).toMutableList()
-                if (options.none { it.isPrimary }) {
-                    options.add(
-                        0,
-                        SourceOption(
-                            sourceId = item.sourceId,
-                            sourceName = primary.sourceName,
-                            key = item.sourceKey,
-                            category = category,
-                            isPrimary = true,
-                            isPreferred = false,
-                            available = true,
-                            statusLabel = primaryStatus(item)
+                val stremioOrigin =
+                    container.sourceHub.sourceFor(item.sourceId) is StremioSource
+                val streamMode = category == ContentCategory.MOVIES && stremioOrigin
+                val options: List<SourceOption> = if (streamMode) {
+                    // Catalogue addons supplied the cover only; list the addons that can
+                    // actually answer a stream request for this id.
+                    container.content.streamSources(
+                        key = item.sourceKey,
+                        category = category,
+                        title = item.title
+                    )
+                } else {
+                    val found = container.content.alternateSources(
+                        title = item.title,
+                        category = category,
+                        primary = primary,
+                        primaryStatus = primaryStatus(item)
+                    ).toMutableList()
+                    if (found.none { it.isPrimary }) {
+                        found.add(
+                            0,
+                            SourceOption(
+                                sourceId = item.sourceId,
+                                sourceName = primary.sourceName,
+                                key = item.sourceKey,
+                                category = category,
+                                isPrimary = true,
+                                isPreferred = false,
+                                available = true,
+                                statusLabel = primaryStatus(item)
+                            )
                         )
+                    }
+                    found
+                }
+                _sources.update {
+                    it.copy(
+                        loading = false,
+                        streamProviders = streamMode,
+                        options = options
                     )
                 }
-                _sources.update { it.copy(loading = false, options = options) }
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
                 _sources.update {
@@ -194,8 +218,15 @@ class DetailViewModel(
     fun useSource(option: SourceOption) {
         val item = media.value ?: return
         if (!option.available) return
-        if (option.key == null) return
         viewModelScope.launch {
+            if (_sources.value.streamProviders) {
+                // A stream provider supplies playback, not metadata, so the detail page
+                // keeps its catalogue source and only the preference changes.
+                rememberPreferred(item, option.sourceId)
+                _messages.send("${option.sourceName} is now preferred for playback.")
+                return@launch
+            }
+            if (option.key == null) return@launch
             if (option.isPrimary) {
                 rememberPreferred(item, option.sourceId)
                 return@launch

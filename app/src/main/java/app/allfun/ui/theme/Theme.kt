@@ -206,11 +206,27 @@ fun AllFunTheme(settings: Settings, content: @Composable () -> Unit) {
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
     }
     val context = LocalContext.current
-    val scheme = when {
-        settings.dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
-            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    val useDynamic =
+        settings.dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val base = when {
+        useDynamic -> if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         dark -> DarkScheme
         else -> LightScheme
+    }
+    // OLED mode only removes the layers that would otherwise glow: the wallpaper-derived
+    // containers stay as they are when Material You is on, so text keeps its contrast.
+    val scheme = if (dark && settings.amoledBlack) {
+        base.copy(
+            background = Color.Black,
+            surface = Color.Black,
+            surfaceContainerLowest = Color.Black,
+            surfaceContainerLow = if (useDynamic) base.surfaceContainerLow else Color(0xFF07070A),
+            surfaceContainer = if (useDynamic) base.surfaceContainer else Color(0xFF0B0B10),
+            surfaceContainerHigh = if (useDynamic) base.surfaceContainerHigh else Color(0xFF121218),
+            surfaceContainerHighest = if (useDynamic) base.surfaceContainerHighest else Color(0xFF181820)
+        )
+    } else {
+        base
     }
     val reduceMotion = settings.reduceMotion || systemReduceMotion()
     CompositionLocalProvider(LocalReduceMotion provides reduceMotion) {

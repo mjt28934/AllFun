@@ -289,13 +289,23 @@ fun AllFunRoot(container: AppContainer) {
             }
         }
 
+        // Tabs sit in a fixed left-to-right order, so the motion can follow the direction
+        // of travel the way a pager does: the incoming section fades in while sliding in
+        // from the side it lives on, and the outgoing one leaves the opposite way.
+        fun tabIndex(route: String?): Int = tabs.indexOfFirst { it.route == route }
+
         val enterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
+            val from = tabIndex(initialState.destination.route)
+            val to = tabIndex(targetState.destination.route)
             when {
                 reduceMotion -> EnterTransition.None
-                // Switching tabs cross-fades in place: no sideways travel between peers.
-                initialState.destination.route in tabRoutes &&
-                    targetState.destination.route in tabRoutes ->
-                    fadeIn(tween(Motion.MEDIUM, easing = Motion.EaseOut))
+                from >= 0 && to >= 0 -> {
+                    val forward = to > from
+                    fadeIn(tween(Motion.MEDIUM, easing = Motion.EaseOut)) +
+                        slideInHorizontally(tween(Motion.MEDIUM, easing = Motion.EaseOut)) {
+                            if (forward) it / 2 else -it / 2
+                        }
+                }
                 else -> fadeIn(tween(Motion.MEDIUM, easing = Motion.EaseOut)) +
                     slideInHorizontally(tween(Motion.MEDIUM, easing = Motion.EaseOut)) {
                         it / 6
@@ -303,7 +313,19 @@ fun AllFunRoot(container: AppContainer) {
             }
         }
         val exitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-            if (reduceMotion) ExitTransition.None else fadeOut(tween(Motion.FAST))
+            val from = tabIndex(initialState.destination.route)
+            val to = tabIndex(targetState.destination.route)
+            when {
+                reduceMotion -> ExitTransition.None
+                from >= 0 && to >= 0 -> {
+                    val forward = to > from
+                    fadeOut(tween(Motion.MEDIUM, easing = Motion.EaseOut)) +
+                        slideOutHorizontally(tween(Motion.MEDIUM, easing = Motion.EaseOut)) {
+                            if (forward) -it / 2 else it / 2
+                        }
+                }
+                else -> fadeOut(tween(Motion.FAST))
+            }
         }
         val popEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
             if (reduceMotion) EnterTransition.None
@@ -350,7 +372,8 @@ fun AllFunRoot(container: AppContainer) {
                         category = ContentCategory.MOVIES,
                         onOpenMedia = { nav.navigate(Routes.detail(it)) },
                         onOpenExtensions = { nav.navigate(Routes.extensions(ContentCategory.MOVIES)) },
-                        onOpenLibrary = openLibrary
+                        onOpenLibrary = openLibrary,
+                        onOpenGlobalSearch = { nav.navigate(Routes.SEARCH) }
                     )
                 }
 
@@ -360,7 +383,8 @@ fun AllFunRoot(container: AppContainer) {
                         category = ContentCategory.BOOKS,
                         onOpenMedia = { nav.navigate(Routes.detail(it)) },
                         onOpenExtensions = { nav.navigate(Routes.extensions(ContentCategory.BOOKS)) },
-                        onOpenLibrary = openLibrary
+                        onOpenLibrary = openLibrary,
+                        onOpenGlobalSearch = { nav.navigate(Routes.SEARCH) }
                     )
                 }
 
@@ -370,7 +394,8 @@ fun AllFunRoot(container: AppContainer) {
                         category = ContentCategory.MANGA,
                         onOpenMedia = { nav.navigate(Routes.detail(it)) },
                         onOpenExtensions = { nav.navigate(Routes.extensions(ContentCategory.MANGA)) },
-                        onOpenLibrary = openLibrary
+                        onOpenLibrary = openLibrary,
+                        onOpenGlobalSearch = { nav.navigate(Routes.SEARCH) }
                     )
                 }
 

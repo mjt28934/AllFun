@@ -646,10 +646,17 @@ private fun SourceSection(
     onRetry: () -> Unit
 ) {
     val confirmed = state.options.count { it.available }
+    val streamMode = state.streamProviders
     SectionHeader(
-        title = "Available sources",
+        title = if (streamMode) "Stream providers" else "Available sources",
         subtitle = when {
+            state.loading && streamMode -> "Checking which addons can stream this title…"
             state.loading -> "Checking your other installed sources…"
+            streamMode -> when (confirmed) {
+                0 -> "No installed addon can stream this title right now"
+                1 -> "1 addon can stream this title"
+                else -> "$confirmed addons can stream this title"
+            }
             confirmed > 1 -> "$confirmed sources confirmed this title"
             confirmed == 1 -> "Only one source confirmed this title"
             state.error != null -> "Source check failed"
@@ -681,11 +688,14 @@ private fun SourceSection(
                 option = option,
                 category = category,
                 enabled = !state.switching,
+                streamProviders = streamMode,
                 onUse = { onUse(option) }
             )
         }
         if (state.options.isEmpty() && !state.loading) {
-            OutlinedButton(onClick = onRetry) { Text("Find sources") }
+            OutlinedButton(onClick = onRetry) {
+                Text(if (streamMode) "Find stream addons" else "Find sources")
+            }
         }
     }
 }
@@ -695,6 +705,7 @@ internal fun SourceOptionRow(
     option: SourceOption,
     category: ContentCategory,
     enabled: Boolean,
+    streamProviders: Boolean = false,
     onUse: () -> Unit
 ) {
     Surface(
@@ -728,7 +739,11 @@ internal fun SourceOptionRow(
                         Spacer(Modifier.width(6.dp))
                         Icon(
                             Icons.Outlined.Star,
-                            contentDescription = "Preferred source",
+                            contentDescription = if (streamProviders) {
+                                "Preferred stream addon"
+                            } else {
+                                "Preferred source"
+                            },
                             tint = MaterialTheme.colorScheme.tertiary,
                             modifier = Modifier.size(14.dp)
                         )
@@ -755,6 +770,8 @@ internal fun SourceOptionRow(
             ) {
                 Text(
                     when {
+                        streamProviders && option.isPreferred -> "Selected"
+                        streamProviders -> "Use"
                         option.isPrimary -> "Current"
                         option.available -> "Use"
                         else -> "Unavailable"

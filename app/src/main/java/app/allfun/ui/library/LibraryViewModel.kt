@@ -8,6 +8,7 @@ import app.allfun.data.db.DownloadStatus
 import app.allfun.data.db.LibraryRow
 import app.allfun.data.db.MediaEntity
 import app.allfun.data.model.MediaKind
+import app.allfun.data.settings.LibraryGrid
 import app.allfun.data.settings.LibrarySort
 import app.allfun.data.settings.LibraryView
 import app.allfun.data.settings.Settings
@@ -18,9 +19,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Locale
-
-/** How many in-progress titles the Continue row shows before the shelf takes over. */
-private const val CONTINUE_LIMIT = 8
 
 /** The four content groups the Library offers. */
 enum class LibraryFilter(val label: String) {
@@ -55,18 +53,13 @@ data class LibraryDownload(
 data class LibraryUiState(
     val all: List<LibraryRow> = emptyList(),
     val items: List<LibraryRow> = emptyList(),
-    /**
-     * Started but unfinished titles, newest first. This is the "pick up where you left
-     * off" row; it respects the selected content group but ignores search so it stays
-     * stable while the user filters the shelf below.
-     */
-    val continueReading: List<LibraryRow> = emptyList(),
     val counts: Map<LibraryFilter, Int> = emptyMap(),
     val downloads: Map<String, LibraryDownload> = emptyMap(),
     val filter: LibraryFilter = LibraryFilter.ALL,
     val query: String = "",
     val sort: LibrarySort = LibrarySort.RECENTLY_UPDATED,
-    val view: LibraryView = LibraryView.GRID
+    val view: LibraryView = LibraryView.GRID,
+    val grid: LibraryGrid = LibraryGrid.COMFORTABLE
 )
 
 class LibraryViewModel(private val container: AppContainer) : ViewModel() {
@@ -100,23 +93,16 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
             selectedFilter.matches(row.media) &&
                 (needle.isBlank() || row.media.matches(needle))
         }.sortedWith(settings.librarySort.comparator())
-        val inProgress = rows.filter { row ->
-            selectedFilter.matches(row.media) &&
-                row.progressEpisodeId != null &&
-                (row.fraction ?: 0f) > 0.01f &&
-                (row.fraction ?: 0f) < 0.995f
-        }.sortedByDescending { it.media.lastOpenedAt ?: it.media.updatedAt }
-            .take(CONTINUE_LIMIT)
         LibraryUiState(
             all = rows,
             items = filtered,
-            continueReading = inProgress,
             counts = counts,
             downloads = downloads,
             filter = selectedFilter,
             query = search,
             sort = settings.librarySort,
-            view = settings.libraryView
+            view = settings.libraryView,
+            grid = settings.libraryGrid
         )
     }.stateIn(
         scope = viewModelScope,

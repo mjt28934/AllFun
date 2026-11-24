@@ -3,6 +3,7 @@ package app.allfun.ui.player
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.allfun.data.AppContainer
+import app.allfun.data.content.category
 import app.allfun.data.db.EpisodeEntity
 import app.allfun.data.db.MediaEntity
 import app.allfun.data.model.StreamInfo
@@ -111,11 +112,16 @@ class PlayerViewModel(
                 }
                 container.sourceHub.sourceFor(item.sourceId)
                     ?: error("That source is no longer available")
+                val preferred = container.content.preferredSourceId(
+                    item.title,
+                    item.kind.category()
+                )
                 val streams = container.sourceHub.streamsFor(
                     originSourceId = item.sourceId,
                     key = item.sourceKey,
                     unitId = unitId,
-                    payload = episode.payload
+                    payload = episode.payload,
+                    preferredSourceId = preferred
                 )
                 if (streams.isEmpty()) {
                     error(

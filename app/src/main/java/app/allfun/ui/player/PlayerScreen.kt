@@ -1,7 +1,13 @@
 package app.allfun.ui.player
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,28 +15,43 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.FastForward
+import androidx.compose.material.icons.outlined.FastRewind
+import androidx.compose.material.icons.outlined.FormatListBulleted
+import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -40,6 +61,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
@@ -78,12 +100,29 @@ fun PlayerScreen(
     val settings by container.settings.settings.collectAsStateWithLifecycle(initialValue = Settings())
     val resumePlayback = rememberUpdatedState(settings.resumePlayback)
     val subtitlesEnabled = rememberUpdatedState(settings.subtitlesEnabled)
+    val autoPlayNext = rememberUpdatedState(settings.autoPlayNext)
     val context = LocalContext.current
     val view = LocalView.current
 
     var player by remember { mutableStateOf<ExoPlayer?>(null) }
     var playbackError by remember { mutableStateOf<String?>(null) }
     var showTechnical by remember { mutableStateOf(false) }
+
+    // Custom controls, laid out like a desktop player: tap to toggle the chrome, and the
+    // middle row keeps play/pause and the seek buttons one thumb-reach away.
+    var controlsVisible by remember { mutableStateOf(true) }
+    var isPlaying by remember { mutableStateOf(false) }
+    var positionMs by remember { mutableLongStateOf(0L) }
+    var durationMs by remember { mutableLongStateOf(0L) }
+    var scrubbing by remember { mutableStateOf(false) }
+    var scrubFraction by remember { mutableFloatStateOf(0f) }
+    val seekSeconds = settings.seekStep.seconds
+    fun seekBy(deltaMs: Long) {
+        val exo = player ?: return
+        val end = exo.duration.takeIf { it > 0 } ?: return
+        exo.seekTo((exo.currentPosition + deltaMs).coerceIn(0L, end))
+        positionMs = exo.currentPosition
+    }
 
     DisposableEffect(Unit) {
         view.keepScreenOn = true
@@ -120,7 +159,15 @@ fun PlayerScreen(
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (playbackState == Player.STATE_ENDED) {
                         vm.saveProgress(exo.duration, exo.duration)
+                        // Settings decides whether the next episode starts on its own; the
+                        // player does not override that choice.
+                        if (autoPlayNext.value) vm.nextEpisode()
                     }
+                    isPlaying = exo.isPlaying
+                }
+
+                override fun onIsPlayingChanged(playing: Boolean) {
+                    isPlaying = playing
                 }
             })
             exo.setMediaItem(mediaItemFor(stream))
@@ -153,6 +200,28 @@ fun PlayerScreen(
         }
     }
 
+    // Position and duration refresh quickly enough for a smooth bar without waking the
+    // player on every frame.
+    LaunchedEffect(player) {
+        val exo = player ?: return@LaunchedEffect
+        while (isActive) {
+            durationMs = exo.duration.coerceAtLeast(0L)
+            if (!scrubbing) positionMs = exo.currentPosition.coerceAtLeast(0L)
+            isPlaying = exo.isPlaying
+            delay(250)
+        }
+    }
+
+    // Chrome fades out while the film plays, and comes back the moment it pauses or the
+    // viewer taps the picture.
+    LaunchedEffect(controlsVisible, isPlaying) {
+        if (controlsVisible && isPlaying) {
+            delay(4_000)
+            controlsVisible = false
+        }
+        if (!isPlaying) controlsVisible = true
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -161,18 +230,17 @@ fun PlayerScreen(
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
-                    useController = true
+                    useController = false
                     setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                     setKeepScreenOn(true)
                 }
             },
             update = { playerView ->
                 playerView.player = player
-                // A player error keeps PlayerView's own overlay (spinner, control bar) on top
-                // of our message. Hide the controls and the buffering spinner while the
-                // error column is showing so nothing is drawn over it.
+                // Controls are drawn by Compose so they can match the rest of the app;
+                // PlayerView keeps only the surface and the buffering spinner.
+                playerView.useController = false
                 val hasError = state.error != null || playbackError != null
-                playerView.useController = !hasError
                 playerView.setShowBuffering(
                     if (hasError) PlayerView.SHOW_BUFFERING_NEVER
                     else PlayerView.SHOW_BUFFERING_WHEN_PLAYING
@@ -181,51 +249,210 @@ fun PlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        Row(
+        // Tap toggles the chrome; a double tap on either half skips like the buttons do.
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color.Black.copy(alpha = 0.8f), Color.Transparent)
+                .fillMaxSize()
+                .pointerInput(seekSeconds) {
+                    detectTapGestures(
+                        onTap = { controlsVisible = !controlsVisible },
+                        onDoubleTap = { offset ->
+                            val delta = seekSeconds * 1000L
+                            seekBy(if (offset.x < size.width / 2) -delta else delta)
+                        }
                     )
-                )
-                .statusBarsPadding()
-                .padding(horizontal = 4.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
+                }
+        )
+
+        val chromeVisible = controlsVisible && state.error == null && playbackError == null
+
+        AnimatedVisibility(
+            visible = chromeVisible,
+            enter = fadeIn(tween(180)),
+            exit = fadeOut(tween(180)),
+            modifier = Modifier.align(Alignment.TopCenter)
         ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    Icons.AutoMirrored.Outlined.ArrowBack,
-                    contentDescription = "Back",
-                    tint = Color.White
-                )
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = state.title,
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = state.subtitle,
-                    color = Color.White.copy(alpha = 0.7f),
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            if (state.episodeCount > 1) {
-                IconButton(
-                    onClick = vm::nextEpisode,
-                    enabled = state.episodeIndex < state.episodeCount - 1
-                ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Black.copy(alpha = 0.85f), Color.Transparent)
+                        )
+                    )
+                    .statusBarsPadding()
+                    .padding(horizontal = 4.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) {
                     Icon(
-                        Icons.Outlined.SkipNext,
-                        contentDescription = "Next episode",
+                        Icons.AutoMirrored.Outlined.ArrowBack,
+                        contentDescription = "Back",
                         tint = Color.White
                     )
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = state.title,
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = state.subtitle,
+                        color = Color.White.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (state.episodeCount > 1) {
+                    IconButton(
+                        onClick = vm::nextEpisode,
+                        enabled = state.episodeIndex < state.episodeCount - 1
+                    ) {
+                        Icon(
+                            Icons.Outlined.SkipNext,
+                            contentDescription = "Next episode",
+                            tint = Color.White
+                        )
+                    }
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = chromeVisible && !state.loading,
+            enter = fadeIn(tween(160)),
+            exit = fadeOut(tween(160)),
+            modifier = Modifier.align(Alignment.Center)
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(26.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SeekControl(
+                    icon = Icons.Outlined.FastRewind,
+                    label = "$seekSeconds s",
+                    onClick = { seekBy(-seekSeconds * 1000L) }
+                )
+                FilledIconButton(
+                    onClick = {
+                        player?.let { exo ->
+                            if (exo.isPlaying) exo.pause() else exo.play()
+                        }
+                    },
+                    modifier = Modifier.size(66.dp),
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = Color.White,
+                        contentColor = Color.Black
+                    )
+                ) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Outlined.Pause
+                        else Icons.Outlined.PlayArrow,
+                        contentDescription = if (isPlaying) "Pause" else "Play",
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+                SeekControl(
+                    icon = Icons.Outlined.FastForward,
+                    label = "$seekSeconds s",
+                    onClick = { seekBy(seekSeconds * 1000L) }
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = chromeVisible,
+            enter = fadeIn(tween(180)),
+            exit = fadeOut(tween(180)),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f))
+                        )
+                    )
+                    .navigationBarsPadding()
+                    .padding(horizontal = 18.dp, vertical = 8.dp)
+            ) {
+                val shownMs = if (scrubbing) (scrubFraction * durationMs).toLong() else positionMs
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = formatPlaybackTime(shownMs),
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        text = formatPlaybackTime(durationMs),
+                        color = Color.White.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+                Slider(
+                    value = if (durationMs > 0) {
+                        (if (scrubbing) scrubFraction else positionMs.toFloat() / durationMs)
+                            .coerceIn(0f, 1f)
+                    } else {
+                        0f
+                    },
+                    onValueChange = {
+                        scrubbing = true
+                        scrubFraction = it
+                    },
+                    onValueChangeFinished = {
+                        if (durationMs > 0) {
+                            player?.seekTo((scrubFraction * durationMs).toLong())
+                            positionMs = (scrubFraction * durationMs).toLong()
+                        }
+                        scrubbing = false
+                    },
+                    enabled = durationMs > 0,
+                    colors = SliderDefaults.colors(
+                        thumbColor = Color.White,
+                        activeTrackColor = Color.White,
+                        inactiveTrackColor = Color.White.copy(alpha = 0.25f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(Modifier.weight(1f))
+                    if (state.streams.size > 1) {
+                        TextButton(onClick = vm::chooseAnotherStream) {
+                            Icon(
+                                Icons.Outlined.FormatListBulleted,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = "Sources (${state.streams.size})",
+                                color = Color.White
+                            )
+                        }
+                    }
+                    if (state.episodeCount > 1) {
+                        TextButton(
+                            onClick = vm::nextEpisode,
+                            enabled = state.episodeIndex < state.episodeCount - 1
+                        ) {
+                            Icon(
+                                Icons.Outlined.SkipNext,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text("Next episode", color = Color.White)
+                        }
+                    }
                 }
             }
         }
@@ -329,6 +556,52 @@ fun PlayerScreen(
                 onClose = onBack
             )
         }
+    }
+}
+
+/**
+ * A round, translucent seek button with the configured skip amount under it, so the
+ * player never claims "10 seconds" when Settings is set to 30.
+ */
+@Composable
+private fun SeekControl(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        IconButton(
+            onClick = onClick,
+            modifier = Modifier
+                .size(54.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.12f))
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = "Skip $label",
+                tint = Color.White,
+                modifier = Modifier.size(30.dp)
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = label,
+            color = Color.White.copy(alpha = 0.7f),
+            style = MaterialTheme.typography.labelSmall
+        )
+    }
+}
+
+private fun formatPlaybackTime(ms: Long): String {
+    val total = (ms.coerceAtLeast(0L) / 1000L)
+    val hours = total / 3600
+    val minutes = (total % 3600) / 60
+    val seconds = total % 60
+    return if (hours > 0) {
+        "%d:%02d:%02d".format(hours, minutes, seconds)
+    } else {
+        "%d:%02d".format(minutes, seconds)
     }
 }
 

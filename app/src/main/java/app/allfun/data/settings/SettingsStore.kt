@@ -20,6 +20,14 @@ private const val MAX_SEARCH_HISTORY = 8
 enum class ReaderMode { VERTICAL, PAGED }
 enum class ThemeMode { SYSTEM, DARK, LIGHT }
 enum class LibraryView { GRID, LIST }
+
+/** How wide each library poster is; the grid keeps its adaptive column count. */
+enum class LibraryGrid(val label: String, val minWidth: Int) {
+    COMPACT("Compact", 104),
+    COMFORTABLE("Comfortable", 132),
+    LARGE("Large", 168)
+}
+
 enum class LibrarySort(val label: String) {
     RECENTLY_UPDATED("Recently updated"),
     RECENTLY_ADDED("Recently added"),
@@ -42,6 +50,13 @@ enum class NovelTheme(val label: String) {
     LIGHT("Light")
 }
 
+/** Seconds skipped by the player's rewind and forward buttons. */
+enum class SeekStep(val label: String, val seconds: Int) {
+    FIVE("5 s", 5),
+    TEN("10 s", 10),
+    THIRTY("30 s", 30)
+}
+
 enum class RepositoryKind { MANGA, NOVEL }
 
 /** A user-added repository URL. Built-in repositories are not stored here. */
@@ -54,13 +69,21 @@ data class Settings(
     val novelTheme: NovelTheme = NovelTheme.DARK,
     val dynamicColor: Boolean = true,
     val themeMode: ThemeMode = ThemeMode.DARK,
+    /** True-black backgrounds and cards for OLED displays. */
+    val amoledBlack: Boolean = false,
     val libraryView: LibraryView = LibraryView.GRID,
+    val libraryGrid: LibraryGrid = LibraryGrid.COMFORTABLE,
     val librarySort: LibrarySort = LibrarySort.RECENTLY_UPDATED,
     val mangaFit: MangaFit = MangaFit.WIDTH,
     val readingDirection: ReadingDirection = ReadingDirection.LTR,
     val reduceMotion: Boolean = false,
+    /** Keep the screen awake while a chapter or novel is open. */
+    val readerKeepScreenOn: Boolean = true,
     val resumePlayback: Boolean = true,
     val subtitlesEnabled: Boolean = true,
+    /** Move to the next episode when one finishes. */
+    val autoPlayNext: Boolean = true,
+    val seekStep: SeekStep = SeekStep.TEN,
     val autoCheckUpdates: Boolean = true,
     val notifyUpdates: Boolean = true,
     /** Most recent global-search terms, newest first. */
@@ -85,13 +108,18 @@ class SettingsStore(private val context: Context) {
         val novelTheme = stringPreferencesKey("novel_theme")
         val dynamicColor = booleanPreferencesKey("dynamic_color")
         val themeMode = stringPreferencesKey("theme_mode")
+        val amoledBlack = booleanPreferencesKey("amoled_black")
         val libraryView = stringPreferencesKey("library_view")
+        val libraryGrid = stringPreferencesKey("library_grid")
         val librarySort = stringPreferencesKey("library_sort")
         val mangaFit = stringPreferencesKey("manga_fit")
         val readingDirection = stringPreferencesKey("reading_direction")
         val reduceMotion = booleanPreferencesKey("reduce_motion")
+        val readerKeepScreenOn = booleanPreferencesKey("reader_keep_screen_on")
         val resumePlayback = booleanPreferencesKey("resume_playback")
         val subtitlesEnabled = booleanPreferencesKey("subtitles_enabled")
+        val autoPlayNext = booleanPreferencesKey("auto_play_next")
+        val seekStep = stringPreferencesKey("seek_step")
         val autoCheckUpdates = booleanPreferencesKey("auto_check_updates")
         val notifyUpdates = booleanPreferencesKey("notify_updates")
         val searchHistory = stringPreferencesKey("search_history")
@@ -112,13 +140,18 @@ class SettingsStore(private val context: Context) {
                 novelTheme = prefs[Keys.novelTheme].toEnum(NovelTheme.DARK),
                 dynamicColor = prefs[Keys.dynamicColor] ?: true,
                 themeMode = prefs[Keys.themeMode].toEnum(ThemeMode.DARK),
+                amoledBlack = prefs[Keys.amoledBlack] ?: false,
                 libraryView = prefs[Keys.libraryView].toEnum(LibraryView.GRID),
+                libraryGrid = prefs[Keys.libraryGrid].toEnum(LibraryGrid.COMFORTABLE),
                 librarySort = prefs[Keys.librarySort].toEnum(LibrarySort.RECENTLY_UPDATED),
                 mangaFit = prefs[Keys.mangaFit].toEnum(MangaFit.WIDTH),
                 readingDirection = prefs[Keys.readingDirection].toEnum(ReadingDirection.LTR),
                 reduceMotion = prefs[Keys.reduceMotion] ?: false,
+                readerKeepScreenOn = prefs[Keys.readerKeepScreenOn] ?: true,
                 resumePlayback = prefs[Keys.resumePlayback] ?: true,
                 subtitlesEnabled = prefs[Keys.subtitlesEnabled] ?: true,
+                autoPlayNext = prefs[Keys.autoPlayNext] ?: true,
+                seekStep = prefs[Keys.seekStep].toEnum(SeekStep.TEN),
                 autoCheckUpdates = prefs[Keys.autoCheckUpdates] ?: true,
                 notifyUpdates = prefs[Keys.notifyUpdates] ?: true,
                 searchHistory = parseSearchHistory(prefs[Keys.searchHistory]),
@@ -154,8 +187,16 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[Keys.themeMode] = mode.name }
     }
 
+    suspend fun setAmoledBlack(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.amoledBlack] = enabled }
+    }
+
     suspend fun setLibraryView(view: LibraryView) {
         context.dataStore.edit { it[Keys.libraryView] = view.name }
+    }
+
+    suspend fun setLibraryGrid(grid: LibraryGrid) {
+        context.dataStore.edit { it[Keys.libraryGrid] = grid.name }
     }
 
     suspend fun setLibrarySort(sort: LibrarySort) {
@@ -174,12 +215,24 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[Keys.reduceMotion] = enabled }
     }
 
+    suspend fun setReaderKeepScreenOn(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.readerKeepScreenOn] = enabled }
+    }
+
     suspend fun setResumePlayback(enabled: Boolean) {
         context.dataStore.edit { it[Keys.resumePlayback] = enabled }
     }
 
     suspend fun setSubtitlesEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.subtitlesEnabled] = enabled }
+    }
+
+    suspend fun setAutoPlayNext(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.autoPlayNext] = enabled }
+    }
+
+    suspend fun setSeekStep(step: SeekStep) {
+        context.dataStore.edit { it[Keys.seekStep] = step.name }
     }
 
     suspend fun setAutoCheckUpdates(enabled: Boolean) {
@@ -254,15 +307,23 @@ class SettingsStore(private val context: Context) {
             prefs[Keys.novelTheme] = settings.novelTheme.name
             prefs[Keys.dynamicColor] = settings.dynamicColor
             prefs[Keys.themeMode] = settings.themeMode.name
+            prefs[Keys.amoledBlack] = settings.amoledBlack
             prefs[Keys.libraryView] = settings.libraryView.name
+            prefs[Keys.libraryGrid] = settings.libraryGrid.name
             prefs[Keys.librarySort] = settings.librarySort.name
             prefs[Keys.mangaFit] = settings.mangaFit.name
             prefs[Keys.readingDirection] = settings.readingDirection.name
             prefs[Keys.reduceMotion] = settings.reduceMotion
+            prefs[Keys.readerKeepScreenOn] = settings.readerKeepScreenOn
             prefs[Keys.resumePlayback] = settings.resumePlayback
             prefs[Keys.subtitlesEnabled] = settings.subtitlesEnabled
+            prefs[Keys.autoPlayNext] = settings.autoPlayNext
+            prefs[Keys.seekStep] = settings.seekStep.name
             prefs[Keys.autoCheckUpdates] = settings.autoCheckUpdates
             prefs[Keys.notifyUpdates] = settings.notifyUpdates
+            prefs[Keys.downloadWifiOnly] = settings.downloadWifiOnly
+            prefs[Keys.concurrentDownloads] = settings.concurrentDownloads.coerceIn(1, 4)
+            prefs[Keys.downloadQueuePaused] = settings.downloadQueuePaused
             prefs[Keys.repositories] = settings.repositories
                 .distinctBy { repo -> "${repo.kind}:${repo.url}" }
                 .joinToString("\n") { repo -> "${repo.kind.name}|${repo.url}" }

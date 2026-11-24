@@ -163,12 +163,16 @@ fun ExtensionsScreen(
     var detailEntryKey by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingRemoveKey by rememberSaveable { mutableStateOf<String?>(null) }
     var showAddRepository by remember { mutableStateOf(false) }
+    var showAddStremio by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         vm.messages.collect { snackbar.showSnackbar(it) }
     }
     LaunchedEffect(state.repositoryAddTicket) {
         if (state.repositoryAddTicket > 0) showAddRepository = false
+    }
+    LaunchedEffect(state.stremioAddTicket) {
+        if (state.stremioAddTicket > 0) showAddStremio = false
     }
     LaunchedEffect(Unit) {
         // Opened from a category toolbar: the search is ready to type into immediately.
@@ -358,6 +362,11 @@ fun ExtensionsScreen(
                         onRetryRepository = vm::retryRepository,
                         onOpen = { detailEntryKey = it.key },
                         onInstall = vm::install,
+                        onOpenInstalled = { detailInstalledKey = it.key },
+                        onAddStremio = {
+                            vm.clearStremioError()
+                            showAddStremio = true
+                        },
                         onManageRepositories = { tab = TAB_REPOSITORIES }
                     )
 
@@ -391,6 +400,18 @@ fun ExtensionsScreen(
             onDismiss = {
                 showAddRepository = false
                 vm.clearRepositoryError()
+            }
+        )
+    }
+
+    if (showAddStremio) {
+        AddStremioDialog(
+            adding = state.addingStremio,
+            error = state.stremioError,
+            onConfirm = vm::addStremio,
+            onDismiss = {
+                showAddStremio = false
+                vm.clearStremioError()
             }
         )
     }
@@ -634,6 +655,8 @@ private fun DiscoverTab(
     onRetryRepository: (RepositoryConfig) -> Unit,
     onOpen: (RepoExtension) -> Unit,
     onInstall: (RepoExtension) -> Unit,
+    onOpenInstalled: (InstalledExtension) -> Unit,
+    onAddStremio: () -> Unit,
     onManageRepositories: () -> Unit
 ) {
     val filterKind = kindFilter?.let { name ->
@@ -655,14 +678,12 @@ private fun DiscoverTab(
     val failed = state.repos.filter { it.error != null }
 
     if (scope == ExtensionScope.VIDEO) {
-        // Repository indexes carry manga and novel extensions only. Video sources are
-        // add-ons (Stremio) or servers (Jellyfin), so this is the honest path for them.
-        EmptyState(
-            icon = Icons.Outlined.Extension,
-            title = "Movies & TV sources are add-ons",
-            message = "AllFun reads video from Stremio add-ons and Jellyfin servers. Add one " +
-                "with the + button on the Movies screen, and its films and episodes appear " +
-                "in Movies & TV."
+        // Repository indexes carry manga and novel extensions only. Video comes from
+        // Stremio addons and Jellyfin servers, so Discover installs addons in place.
+        VideoDiscover(
+            state = state,
+            onAddStremio = onAddStremio,
+            onOpenInstalled = onOpenInstalled
         )
         return
     }
@@ -694,6 +715,14 @@ private fun DiscoverTab(
                         RepositoryErrorRow(repo) { onRetryRepository(repo.config) }
                     }
                 }
+            }
+        }
+        if (scope == ExtensionScope.ALL) {
+            item(key = "video-addons") {
+                StremioInstallCard(
+                    installedCount = state.installed.count { it.kind == ExtensionKind.STREMIO },
+                    onAdd = onAddStremio
+                )
             }
         }
         if (visible.isEmpty()) {
@@ -769,6 +798,132 @@ private fun DiscoverTab(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun VideoDiscover(
+    state: ExtensionsViewModel.UiState,
+    onAddStremio: () -> Unit,
+    onOpenInstalled: (InstalledExtension) -> Unit
+) {
+    val addons = state.installed.filter { it.kind == ExtensionKind.STREMIO }
+        .sortedBy { it.name.lowercase() }
+    val servers = state.installed.filter { it.kind == ExtensionKind.JELLYFIN }
+        .sortedBy { it.name.lowercase() }
+
+    LazyColumn(contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp)) {
+        item(key = "stremio-hero") {
+            StremioInstallCard(installedCount = addons.size, onAdd = onAddStremio)
+        }
+        if (addons.isNotEmpty()) {
+            item(key = "addons-header") { DiscoverGroupHeader("Installed addons", addons.size) }
+            items(addons, key = { it.key }) { item ->
+                ExtensionRow(
+                    name = item.name,
+                    subtitle = item.subtitle(),
+                    iconUrl = item.iconUrl,
+                    nsfw = item.nsfw,
+                    status = item.statusText(),
+                    statusColor = if (item.broken) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    onClick = { onOpenInstalled(item) }
+                )
+            }
+        }
+        if (servers.isNotEmpty()) {
+            item(key = "servers-header") { DiscoverGroupHeader("Jellyfin servers", servers.size) }
+            items(servers, key = { it.key }) { item ->
+                ExtensionRow(
+                    name = item.name,
+                    subtitle = item.subtitle(),
+                    iconUrl = item.iconUrl,
+                    nsfw = item.nsfw,
+                    status = item.statusText(),
+                    statusColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    onClick = { onOpenInstalled(item) }
+                )
+            }
+        }
+        item(key = "video-note") {
+            NoticeCard(
+                text = "A Stremio addon supplies catalogs, metadata or streams; most are " +
+                    "installed from a URL ending in /manifest.json. Jellyfin servers are " +
+                    "connected with the + button on the Movies screen."
+            )
+        }
+    }
+}
+
+@Composable
+private fun StremioInstallCard(installedCount: Int, onAdd: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+    ) {
+        Column(Modifier.padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconBadge(
+                    icon = Icons.Outlined.Extension,
+                    tint = MaterialTheme.colorScheme.primary,
+                    size = 40
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = "Stremio addons",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = when (installedCount) {
+                            0 -> "No addons installed"
+                            1 -> "1 addon installed"
+                            else -> "$installedCount addons installed"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = "Paste an addon URL to add its catalogs and streams. Only the addon " +
+                    "itself is contacted; nothing is uploaded.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(12.dp))
+            Button(onClick = onAdd, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Outlined.Add, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Install Stremio addon")
+            }
+        }
+    }
+}
+
+@Composable
+private fun DiscoverGroupHeader(title: String, count: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.secondary,
+            modifier = Modifier.weight(1f)
+        )
+        StatusPill(text = count.toString(), tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -1203,6 +1358,79 @@ private fun AddRepositoryDialog(
                     Text("Checking")
                 } else {
                     Text("Add")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !adding) { Text("Cancel") }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddStremioDialog(
+    adding: Boolean,
+    error: app.allfun.data.net.UserError?,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var url by remember { mutableStateOf("") }
+    var showTechnical by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = { if (!adding) onDismiss() },
+        title = { Text("Install Stremio addon") },
+        text = {
+            Column {
+                Text(
+                    text = "Enter the addon's manifest URL, for example a Stremio addon " +
+                        "page's Install link, or the addon's base URL.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    label = { Text("Addon URL") },
+                    placeholder = { Text("https://addon.example.com/manifest.json") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (error != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = error.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    if (!error.technical.isNullOrBlank()) {
+                        TextButton(onClick = { showTechnical = !showTechnical }) {
+                            Text(if (showTechnical) "Hide technical details" else "Technical details")
+                        }
+                        if (showTechnical) {
+                            Text(
+                                text = error.technical,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(url) },
+                enabled = !adding && url.isNotBlank()
+            ) {
+                if (adding) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Checking")
+                } else {
+                    Text("Install")
                 }
             }
         },

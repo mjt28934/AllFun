@@ -209,7 +209,8 @@ class SourceHub(
         originSourceId: String,
         key: String,
         unitId: String,
-        payload: String?
+        payload: String?,
+        preferredSourceId: String? = null
     ): List<StreamInfo> {
         val origin = sourceDao.byId(originSourceId) ?: return emptyList()
         if (origin.type != SourceType.VIDEO) return emptyList()
@@ -247,10 +248,16 @@ class SourceHub(
         }
 
         val unique = perAddon.flatten().distinctBy(::streamIdentity)
+        // A provider the viewer picked on the detail page is tried first, in both the
+        // direct and torrent groups; every other addon stays available as a fallback.
+        val preferredName = preferredSourceId
+            ?.let { id -> sourceDao.byId(id)?.name }
         val direct = unique.filter { it.torrent == null }
+            .sortedByDescending { it.addonName == preferredName }
         val torrents = unique.filter { it.torrent != null }
             .sortedWith(
-                compareByDescending<StreamInfo> { StremioTorrents.qualityRank(it) }
+                compareByDescending<StreamInfo> { it.addonName == preferredName }
+                    .thenByDescending { StremioTorrents.qualityRank(it) }
                     .thenByDescending { it.torrent?.seeds ?: 0 }
             )
         return (direct + torrents).take(MAX_STREAMS)
