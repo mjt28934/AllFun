@@ -1,8 +1,10 @@
 # AllFun — Liquid Glass design record
 
-This is the working record for the 0.13.0 interface. It states what was built, which
-decisions were taken where the brief left room, and what was deliberately left out. It
-describes the code in `app/src/main/java/app/allfun/ui/glass/` and the screens that use it.
+This is the working record for the 0.13.x interface. 0.13.0 rebuilt every screen on the glass
+library; 0.13.1 refined the material itself (position-aware lens, edge bend, tinted glass) and
+fixed the bottom sheet's window. It states what was built, which decisions were taken where
+the brief left room, and what was deliberately left out. It describes the code in
+`app/src/main/java/app/allfun/ui/glass/` and the screens that use it.
 
 ## 1. The material
 
@@ -40,10 +42,11 @@ not invent colours, radii, spacing or durations.
   System `#B9B4AA`. Status colours: ok `#5BD08A`, slow `#F2B84B`, failed `#FF6B6B`, always
   paired with an icon or a label.
 - Space: 4dp base, 20dp gutter, 12dp grid gap, 32dp section gap, 16dp panel padding.
-- Radii: panel 24, sheet 32, menu 22, input 18, poster 8, capsule 100, badge 10. Inner
+- Radii: panel 26, sheet 34, menu 24, input 20, poster 10, capsule 100, badge 10. Inner
   corners stay concentric by subtracting padding at the call site.
-- Glass alpha: clear 0.26 body + 0.04 white, frosted 0.54 body + 0.05 white; AMOLED uses
-  the opaque `bg0` at 0.62; light theme uses 0.42 tint.
+- Glass alpha: clear 0.18 body + 0.04 white, frosted 0.48 body + 0.05 white; AMOLED uses
+  the opaque `bg0` at 0.55; light theme uses 0.36 tint. The body is deliberately more
+  transparent than a classic frosted card: the edge bend, not the fill, carries legibility.
 - Type: Fraunces (display/title) + Inter Tight (UI), both OFL variable fonts bundled in
   `res/font`. Scale 36/28/24/17/15/13/12/11sp; digits use `tnum` in every numeric role.
 
@@ -51,28 +54,77 @@ not invent colours, radii, spacing or durations.
 
 `GlassSurface` draws its body inside a clipped outline:
 
-1. Frosted body: a `drawWorldLens` sample of the same deterministic field the screen uses,
-   offset slightly upward, then a `bg0` tint and a white wash.
-2. Clear body: `bg0` tint plus a 7% → 1% white vertical sheen.
-3. Inset (tier C): a 6% white wash only, used for tracks and wells.
-4. Selected state: a 13% accent wash; pressed state: a 5% white flash.
-5. 2dp top edge sheen and a 1dp inner shadow.
-6. 2% grain on standard, 1.2% on clear, none at Lite.
-7. A 900ms specular sweep on High only, never looping.
+1. Frosted body: `drawWorldLens` samples the same deterministic field the screen uses **at the
+   surface's own position** (`LocalWorldField` + `boundsInRoot`), magnified 1.05x about the
+   panel centre; then a `bg0` tint and a white wash.
+2. Clear body: the same lens at 1.12x, a 70% `bg0` tint plus a 7% → 1% white sheen.
+3. Edge bend: an `edgeRing` (outer outline minus a concentric inner one, `Path.op` difference)
+   re-samples the world at 1.26x (clear 1.45x) before the body tint, so a tinted control stays
+   tinted to its edge instead of growing a clear rim. The ring also gets a faint white stroke.
+4. Inset (tier C): a 6% white wash only, used for tracks and wells.
+5. Body tint (`tint`/`tintAlpha`) after the optics, then selected (13% accent wash) and pressed
+   (5% white flash) states.
+6. Thickness: a 20% black shade under the lit top edge and a 15% black shade over the bottom
+   45%, which is what makes the surface read as a slab rather than a sticker.
+7. Grain (2.2% frosted, 1.2% clear) and a broad corner hotspot.
+8. Specular rim: a 1.8dp stroke with a vertical gradient (bright top, dim bottom), inside the
+   clip. A vertical gradient rather than a sweep so the highlight can never rotate on a wide
+   or narrow control.
+9. A 900ms specular sweep on High only, never looping.
 
-Shadow is a single soft drop (`glassShadow`), never stacked. Lite reduces blur from 24 to
-14dp. `GlassSurface` also handles press scale, `Role.Button`, disabled alpha and the
+Shadow is a single soft drop (`glassShadow`), never stacked. Lite reduces blur from 28 to
+16dp. `GlassSurface` also handles press scale, `Role.Button`, disabled alpha and the
 optional click target, so controls cannot drift from the recipe.
+
+Tinted glass is a first-class state: `GlassPrimaryAction` is a clear capsule with
+`tint = accent`, `tintAlpha` 0.52 (0.62 light) and a shadow, and the switch track uses a
+near-solid accent (0.92) when checked. The segmented control's selected pill is neutral white
+glass, and the nav blob is a soft accent/white gradient with no outline, so selected states
+read as light on glass rather than as coloured outlines.
 
 ### Shader status
 
 The brief's SDF/backdrop shader is **not shipped as a GPU shader**. The glass body is drawn
-with Compose/Canvas primitives: radial-gradient lens, alpha tints, linear sheen, grain
-shader and clipped outline. This keeps minSdk 26 working with one code path, avoids
-sampling the live window every frame (the single most expensive part of real glass), and
-keeps lazy grids free of shader allocations. A `RuntimeShader` refraction path (API 33+)
-with Standard/Lite fallback remains a possible future enhancement; the current lens is the
+with Compose/Canvas primitives: a deterministic field sampled through an affine zoom, alpha
+tints, linear sheen, grain shader and clipped outlines. Because the world is a known function,
+the lens can sample "behind" a panel arithmetically instead of reading the window: `WorldField`
+records the field's root bounds and `drawWorldLens` translates the field to the panel's own
+origin and scales it about the panel centre. That gives real displacement (the middle and the
+edge no longer show the same pixels) with no framebuffer read and no second blur pass. The
+same path keeps minSdk 26 working, avoids sampling the live window every frame, and keeps lazy
+grids free of shader allocations. A `RuntimeShader` refraction path (API 33+) with
+Standard/Lite fallback remains a possible future enhancement; the current lens is the
 intentional stand-in. No `AGSL`/`.agsl` file exists in the repo.
+
+### 0.13.1 refinement decisions
+
+- **Sample where the glass is.** Panels and capsules read `LocalWorldField` and their own
+  `boundsInRoot`; they no longer use a fixed offset. Moving a panel across the screen now
+  changes what it refracts.
+- **The edge is the lens.** A concentric ring re-samples the field at a harder zoom and is
+  drawn *before* the body tint. This is the bend; it is also why tinted controls keep their
+  colour at the rim instead of showing a clear halo.
+- **The rim is vertical, not angular.** A sweep-gradient rim rotates its highlight as the
+  control's aspect ratio changes. A top-bright, bottom-dim vertical stroke behaves like light
+  from above on every shape, so it replaced the sweep rim.
+- **Tint after optics.** `GlassSurface` grew `tint`/`tintAlpha`; the primary action is now a
+  tinted clear capsule rather than a flat accent pill, so it belongs to the same material.
+- **More transparent, larger radii.** Clear 0.18 / frosted 0.48 / AMOLED 0.55 / light 0.36,
+  with panel 26, sheet 34, menu 24, input 20, poster 10. The body shows more world; the rim,
+  thickness shades and grain keep text legible.
+- **A world with something to bend.** The field gained a cool top light (7%), a diagonal light
+  shaft (5%) and a vignette (40% at the edges). A flat field makes a lens invisible.
+- **Sheets are windows, not cards.** `GlassSheet` now runs in a full-display dialog window
+  (`FLAG_LAYOUT_IN_SCREEN`, no fitted insets, top-start gravity, no system dim), caps its
+  height at `maxHeight - 56dp`, scrolls its content and pads for the navigation bar. The scrim
+  dropped to 32%. Dialogs share the same window setup so their centring is not shifted by the
+  status bar.
+- **Encoding fix.** Six `Â·` sequences in `CategoryScreen` and nine in `DownloadsScreen` were
+  replaced with `·`; they were double-encoded separators from an earlier edit.
+
+Skipped in 0.13.1: no live backdrop refraction of posters or artwork under a panel (the lens
+bends the world field, not the scrolling content — that needs a GPU backdrop shader), no
+per-frame blur, and no change to any screen's logic, routes, settings keys or data.
 
 ## 4. Glass level
 
@@ -82,9 +134,9 @@ intentional stand-in. No `AGSL`/`.agsl` file exists in the repo.
 | --- | --- | --- | --- |
 | World field | full | full | flat `bg0` + one blob |
 | Lens inside frosted panels | yes | yes | no |
-| Grain | 2.5% / 1.2% | 1.5% / 0.7% | none |
+| Grain | 2.2% / 1.2% | 2.2% / 1.2% | none |
 | Sweep | yes | no | no |
-| Shadow | 24dp / 8dp | 24dp / 8dp | 14dp / 5dp |
+| Shadow | 28dp / 10dp | 28dp / 10dp | 16dp / 6dp |
 | Press scale | yes | yes | yes |
 
 The value is persisted as `glass_quality` (`GlassQuality.HIGH/STANDARD/LITE`, default
@@ -216,6 +268,10 @@ and published [v0.13.0](https://github.com/mjt28934/AllFun/releases/tag/v0.13.0)
 (`AllFun-0.13.0-release.apk`, 62,113,401 bytes, SHA-256
 `fab927aacf23ed8acd770b8c36298846d30b966551e17d8f0e6dbda0688189d2`, `versionCode 1300`,
 same `CN=AllFun` signer).
+
+The 0.13.1 record: the same five tasks pass (66 unit tests, lint 0 errors, 35 warnings), the
+release APK reports `versionCode 1301` / `versionName 0.13.1` and `CN=AllFun`, and the sheet,
+primary action, nav and dialog were checked on a 1080x2340 API 35 emulator before tagging.
 
 ## 12. File map
 

@@ -60,7 +60,7 @@ import androidx.compose.ui.unit.dp
 import app.allfun.ui.theme.LocalReduceMotion
 import kotlin.math.roundToInt
 
-/** 56dp capsule with the accent under it. One per screen. */
+/** 56dp tinted-glass capsule. One per screen. */
 @Composable
 fun GlassPrimaryAction(
     label: String,
@@ -72,50 +72,23 @@ fun GlassPrimaryAction(
 ) {
     val colors = AFTheme.colors
     val haptics = rememberHaptics()
-    val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed && enabled) 0.96f else 1f,
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow),
-        label = "primaryScale"
-    )
-    Box(
-        modifier = modifier
-            .height(56.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                alpha = if (enabled) 1f else 0.45f
-            }
-            .clip(CircleShape)
-            .background(colors.accent.copy(alpha = 0.26f))
-            .drawBehind {
-                drawRect(
-                    Brush.verticalGradient(
-                        0f to Color.White.copy(alpha = 0.10f),
-                        1f to Color.Transparent
-                    )
-                )
-                drawRoundRect(
-                    brush = Brush.linearGradient(
-                        0f to colors.accent.copy(alpha = 0.75f),
-                        1f to colors.accent.copy(alpha = 0.25f)
-                    ),
-                    style = Stroke(width = 2.dp.toPx())
-                )
-            }
-            .clickable(
-                interactionSource = source,
-                indication = null,
-                enabled = enabled && !loading
-            ) {
-                haptics.medium()
-                onClick()
-            },
-        contentAlignment = Alignment.Center
+    GlassSurface(
+        modifier = modifier.height(56.dp),
+        tier = GlassTier.CLEAR,
+        shape = CircleShape,
+        shadow = true,
+        enabled = enabled && !loading,
+        tint = colors.accent,
+        tintAlpha = if (colors.isLight) 0.62f else 0.52f,
+        onClick = {
+            haptics.medium()
+            onClick()
+        }
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 24.dp),
+            modifier = Modifier
+                .height(56.dp)
+                .padding(horizontal = 24.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -204,15 +177,16 @@ fun GlassSwitch(
             .size(width = 52.dp, height = 32.dp)
             .clip(CircleShape)
             .background(
-                if (checked) colors.accent.copy(alpha = 0.22f)
-                else if (colors.isLight) Color.Black.copy(alpha = 0.07f)
-                else Color.White.copy(alpha = 0.07f)
+                if (checked) colors.accent.copy(alpha = 0.92f)
+                else if (colors.isLight) Color.Black.copy(alpha = 0.09f)
+                else Color.White.copy(alpha = 0.10f)
             )
             .drawBehind {
                 drawRoundRect(
-                    brush = Brush.linearGradient(
-                        0f to Color.White.copy(alpha = if (colors.isLight) 0.6f else 0.20f),
-                        1f to Color.Transparent
+                    brush = Brush.verticalGradient(
+                        0f to Color.White.copy(alpha = if (colors.isLight) 0.55f else 0.22f),
+                        0.5f to Color.Transparent,
+                        1f to Color.Black.copy(alpha = 0.10f)
                     ),
                     style = Stroke(width = 1.dp.toPx())
                 )
@@ -298,12 +272,17 @@ fun GlassSegmented(
                 .width(segment)
                 .height(34.dp)
                 .clip(CircleShape)
-                .background(colors.accent.copy(alpha = 0.18f))
+                .background(
+                    Brush.verticalGradient(
+                        0f to Color.White.copy(alpha = if (colors.isLight) 0.70f else 0.15f),
+                        1f to Color.White.copy(alpha = if (colors.isLight) 0.42f else 0.06f)
+                    )
+                )
                 .drawBehind {
                     drawRoundRect(
-                        brush = Brush.linearGradient(
-                            0f to colors.accent.copy(alpha = 0.6f),
-                            1f to colors.accent.copy(alpha = 0.12f)
+                        brush = Brush.verticalGradient(
+                            0f to Color.White.copy(alpha = if (colors.isLight) 0.55f else 0.22f),
+                            1f to Color.Transparent
                         ),
                         style = Stroke(1.dp.toPx())
                     )
