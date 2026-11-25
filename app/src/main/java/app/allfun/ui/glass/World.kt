@@ -9,24 +9,19 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.drawscope.inset
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.unit.dp
 import kotlin.random.Random
 
 /**
@@ -61,76 +56,32 @@ fun worldPalette(section: Section): WorldPalette = when (section) {
 fun DrawScope.drawAmbientField(
     palette: WorldPalette,
     intensity: Float = 1f,
-    seed: Int = 0,
-    width: Float = size.width,
-    height: Float = size.height,
-    origin: Offset = Offset.Zero
+    seed: Int = 0
 ) {
-    drawRect(
-        color = Color(0xFF08090C),
-        topLeft = origin,
-        size = Size(width, height)
-    )
+    val w = size.width
+    val h = size.height
+    drawRect(Color(0xFF0A0B0E))
 
     fun blob(color: Color, cx: Float, cy: Float, radius: Float, alpha: Float) {
-        val r = maxOf(width, height) * radius
-        val center = Offset(origin.x + width * cx, origin.y + height * cy)
+        val r = maxOf(w, h) * radius
         drawCircle(
             brush = Brush.radialGradient(
                 0f to color.copy(alpha = alpha * intensity),
-                0.5f to color.copy(alpha = alpha * intensity * 0.42f),
+                0.55f to color.copy(alpha = alpha * intensity * 0.35f),
                 1f to color.copy(alpha = 0f),
-                center = center,
+                center = Offset(w * cx, h * cy),
                 radius = r
             ),
             radius = r,
-            center = center
+            center = Offset(w * cx, h * cy)
         )
     }
 
     val drift = (seed % 5) * 0.012f
-    blob(palette.primary, 0.84f - drift, 0.00f, 0.72f, 0.30f)
-    blob(palette.secondary, 0.02f, 0.46f, 0.80f, 0.28f)
-    blob(palette.warm, 0.72f, 0.98f, 0.62f, 0.24f)
-    blob(palette.primary, 0.40f, 0.64f, 0.44f, 0.08f)
-
-    // A broad cool light from above. Glass only reads as glass when something reflects.
-    drawRect(
-        brush = Brush.verticalGradient(
-            0f to Color(0xFF9FB4D8).copy(alpha = 0.07f * intensity),
-            0.55f to Color.Transparent,
-            startY = origin.y,
-            endY = origin.y + height * 0.75f
-        ),
-        topLeft = origin,
-        size = Size(width, height * 0.75f)
-    )
-
-    // A soft diagonal shaft gives the lens a gradient edge to bend, instead of a flat field.
-    drawRect(
-        brush = Brush.linearGradient(
-            0f to Color.Transparent,
-            0.34f to Color.White.copy(alpha = 0.05f * intensity),
-            0.6f to Color.Transparent,
-            start = Offset(origin.x, origin.y + height * 0.04f),
-            end = Offset(origin.x + width, origin.y + height * 0.62f)
-        ),
-        topLeft = origin,
-        size = Size(width, height)
-    )
-
-    // Vignette: the field falls away at the edges so chrome stays legible over it.
-    drawRect(
-        brush = Brush.radialGradient(
-            0f to Color.Transparent,
-            0.55f to Color.Transparent,
-            1f to Color.Black.copy(alpha = 0.40f * intensity),
-            center = Offset(origin.x + width * 0.5f, origin.y + height * 0.32f),
-            radius = maxOf(width, height) * 0.85f
-        ),
-        topLeft = origin,
-        size = Size(width, height)
-    )
+    blob(palette.primary, 0.86f - drift, 0.02f, 0.62f, 0.20f)
+    blob(palette.secondary, 0.06f, 0.44f, 0.70f, 0.30f)
+    blob(palette.warm, 0.70f, 0.92f, 0.55f, 0.22f)
+    blob(palette.primary, 0.38f, 0.66f, 0.40f, 0.07f)
 }
 
 private fun grainBitmap(): Bitmap {
@@ -169,23 +120,6 @@ private fun grainShaderOrNull(): BitmapShader? {
 }
 
 /**
- * The field currently behind the screen, in root coordinates. Glass surfaces read this to
- * sample the world at their own position: a panel then shows the part of the field it
- * actually covers, magnified a little, which is what sells it as a lens instead of a tint.
- */
-data class WorldField(
-    val palette: WorldPalette,
-    val intensity: Float = 1f,
-    val origin: Offset = Offset.Zero,
-    val width: Float = 0f,
-    val height: Float = 0f
-) {
-    val valid: Boolean get() = width > 0f && height > 0f
-}
-
-val LocalWorldField = staticCompositionLocalOf<WorldField?> { null }
-
-/**
  * Full-screen backdrop. The field is static, so it is drawn once per size change and the
  * content scrolls over it.
  */
@@ -197,57 +131,23 @@ fun WorldBackdrop(
     content: @Composable BoxScope.() -> Unit
 ) {
     val palette = remember(section) { worldPalette(section) }
-    var bounds by remember { mutableStateOf(Rect.Zero) }
-    Box(
-        modifier
-            .fillMaxSize()
-            .onGloballyPositioned { bounds = it.boundsInRoot() }
-    ) {
+    Box(modifier.fillMaxSize()) {
         Canvas(Modifier.fillMaxSize()) {
             drawAmbientField(palette, intensity = intensity)
             drawGrain(0.035f)
         }
-        CompositionLocalProvider(
-            LocalWorldField provides WorldField(
-                palette = palette,
-                intensity = intensity,
-                origin = bounds.topLeft,
-                width = bounds.width,
-                height = bounds.height
-            )
-        ) {
-            content()
-        }
+        content()
     }
 }
 
 /**
- * Draws the world as seen through a panel: magnified about the panel's centre so the edges
- * sample further out than the middle. This is the refraction, done arithmetically because the
- * field is deterministic. No backdrop read, no second blur pass.
+ * A clipped, slightly refracted copy of the field, used as the body of a frosted panel. The
+ * panel is not sampling the screen: it draws the same field, scaled and shifted, which is
+ * what makes the glass feel continuous without a live backdrop read.
  */
-fun DrawScope.drawWorldLens(
-    field: WorldField?,
-    palette: WorldPalette,
-    panelOrigin: Offset,
-    zoom: Float = 1.08f
-) {
-    if (field == null || !field.valid) {
-        // Dialogs and previews have no backdrop: bend a local copy of the same field.
+fun DrawScope.drawWorldLens(palette: WorldPalette, shift: Offset, zoom: Float = 1.06f) {
+    inset(-size.width * (zoom - 1f) / 2f - shift.x, -size.height * (zoom - 1f) / 2f - shift.y) {
         drawAmbientField(palette, intensity = 0.9f)
-        return
-    }
-    val center = Offset(size.width / 2f, size.height / 2f)
-    withTransform({
-        scale(zoom, zoom, pivot = center)
-        translate(field.origin.x - panelOrigin.x, field.origin.y - panelOrigin.y)
-    }) {
-        drawAmbientField(
-            palette = field.palette,
-            intensity = field.intensity,
-            width = field.width,
-            height = field.height
-        )
     }
 }
 

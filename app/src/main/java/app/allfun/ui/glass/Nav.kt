@@ -29,10 +29,6 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -103,7 +99,7 @@ fun GlassNav(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = GlassTokens.gutter, vertical = 12.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         val cell = maxWidth / tabs.size
         val blobX by animateDpAsState(
@@ -114,26 +110,20 @@ fun GlassNav(
         GlassSurface(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(62.dp),
+                .height(64.dp),
             tier = GlassTier.CLEAR,
-            shape = RoundedCornerShape(31.dp),
+            shape = RoundedCornerShape(32.dp),
             shadow = true,
             sweep = true
         ) {
-            Box(Modifier.fillMaxWidth().height(62.dp)) {
+            Box(Modifier.fillMaxWidth().height(64.dp)) {
                 Box(
                     Modifier
                         .offset(x = blobX + 4.dp, y = 6.dp)
                         .width((cell - 8.dp).coerceAtLeast(40.dp))
-                        .height(50.dp)
-                        .clip(RoundedCornerShape(25.dp))
-                        .background(accent.copy(alpha = if (colors.isLight) 0.10f else 0.09f))
-                        .background(
-                            Brush.verticalGradient(
-                                0f to Color.White.copy(alpha = if (colors.isLight) 0.42f else 0.09f),
-                                1f to Color.White.copy(alpha = if (colors.isLight) 0.16f else 0.02f)
-                            )
-                        )
+                        .height(52.dp)
+                        .clip(RoundedCornerShape(26.dp))
+                        .background(accent.copy(alpha = 0.14f))
                 )
                 Row(Modifier.fillMaxWidth()) {
                     tabs.forEachIndexed { index, tab ->
@@ -146,7 +136,7 @@ fun GlassNav(
                         Column(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(62.dp)
+                                .height(64.dp)
                                 .clickable(
                                     interactionSource = remember { MutableInteractionSource() },
                                     indication = null
@@ -163,7 +153,7 @@ fun GlassNav(
                                 icon = if (isSelected) tab.activeIcon else tab.icon,
                                 contentDescription = tab.label,
                                 tint = if (isSelected) accent else colors.textMid,
-                                size = 23.dp
+                                size = 22.dp
                             )
                             Box(Modifier.height(14.dp), contentAlignment = Alignment.Center) {
                                 AFText(

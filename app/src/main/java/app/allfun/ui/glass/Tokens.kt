@@ -47,15 +47,13 @@ object GlassTokens {
     val Slow = Color(0xFFF2B84B)
     val Failed = Color(0xFFFF6B6B)
 
-    // Glass body tints, as alpha over whatever sits behind the surface. Lower than a
-    // classic frosted card: Apple's glass stays readable because the edge bends light, not
-    // because the fill hides the world.
-    const val CLEAR_TINT = 0.18f
+    // Glass body tints, as alpha over whatever sits behind the surface.
+    const val CLEAR_TINT = 0.26f
     const val CLEAR_WHITE = 0.04f
-    const val FROST_TINT = 0.48f
+    const val FROST_TINT = 0.54f
     const val FROST_WHITE = 0.05f
-    const val AMOLED_TINT = 0.55f
-    const val LIGHT_TINT = 0.36f
+    const val AMOLED_TINT = 0.62f
+    const val LIGHT_TINT = 0.42f
 
     // Spacing scale (4dp base).
     val gutter = 20.dp
@@ -64,11 +62,11 @@ object GlassTokens {
     val panelPadding = 16.dp
 
     // Concentric radii: inner = outer - padding.
-    val rPanel = 26.dp
-    val rSheet = 34.dp
-    val rMenu = 24.dp
-    val rInput = 20.dp
-    val rPoster = 10.dp
+    val rPanel = 24.dp
+    val rSheet = 32.dp
+    val rMenu = 22.dp
+    val rInput = 18.dp
+    val rPoster = 8.dp
     val rCapsule = 100.dp
     val rBadge = 10.dp
 

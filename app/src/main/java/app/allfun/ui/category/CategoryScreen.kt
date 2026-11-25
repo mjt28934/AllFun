@@ -512,16 +512,16 @@ private fun CategoryGrid(
     ) {
         item(span = { GridItemSpan(maxLineSpan) }, key = "header") {
             Column(Modifier.padding(bottom = 4.dp)) {
-                AFOverline("${category.shortLabel} · Browse")
+                AFOverline("${category.shortLabel} Â· Browse")
                 Spacer(Modifier.height(8.dp))
                 ScreenHeader(
                     title = category.label,
                     subtitle = when {
                         sourceCount == 0 -> "No source connected"
                         phase == CategoryPhase.LOADING -> "Reading your sourcesâ€¦"
-                        else -> "${visibleItems.size} titles · ${sourceCount} " +
+                        else -> "${visibleItems.size} titles Â· ${sourceCount} " +
                             (if (sourceCount == 1) "source" else "sources") +
-                            if (state.hasActiveFilters) " · filtered" else ""
+                            if (state.hasActiveFilters) " Â· filtered" else ""
                     }
                 )
                 Spacer(Modifier.height(18.dp))
@@ -668,7 +668,7 @@ private fun CategoryGrid(
                                 format,
                                 item.sourceLabel.takeIf { format == null },
                                 "+${item.alternateCount}".takeIf { item.alternateCount > 0 }
-                            ).joinToString(" · ").ifBlank { null },
+                            ).joinToString(" Â· ").ifBlank { null },
                             badges = buildList {
                                 if (downloaded) {
                                     add(
@@ -954,7 +954,7 @@ private fun SearchResults(
                     subtitle = listOfNotNull(
                         format,
                         item.sourceLabel.takeIf { format == null }
-                    ).joinToString(" · ").ifBlank { null },
+                    ).joinToString(" Â· ").ifBlank { null },
                     progress = null,
                     badges = if (refId(item.primary) in downloadedMedia) {
                         listOf(
@@ -1260,4 +1260,4 @@ private fun filterSummary(state: CategoryViewModel.UiState): String = buildList 
     state.sourceFilter?.let { id ->
         state.feed?.sources?.firstOrNull { it.id == id }?.name?.let { add(it) }
     }
-}.joinToString(" · ")
+}.joinToString(" Â· ")

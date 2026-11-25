@@ -13,7 +13,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -21,17 +20,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -41,52 +36,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.DialogWindowProvider
 import app.allfun.ui.theme.LocalReduceMotion
 import kotlinx.coroutines.delay
-
-/**
- * The platform gives a Dialog a wrap-content window. A bottom sheet has to be anchored to the
- * real screen edge, so the window is stretched to the full display and the system dim is turned
- * off: the sheet draws its own, much lighter scrim and the world stays visible behind it.
- */
-@Composable
-private fun FullScreenSheetWindow() {
-    val view = LocalView.current
-    if (view.isInEditMode) return
-    SideEffect {
-        val window = (view.parent as? DialogWindowProvider)?.window ?: return@SideEffect
-        // A floating dialog is normally laid out inside the status-bar frame, and a
-        // MATCH_PARENT height would then hang below the display. Letting the window ignore
-        // the display frame and pinning it to the top corner makes it cover the real screen,
-        // so the sheet's bottom edge sits on the navigation bar instead of past it.
-        window.setGravity(android.view.Gravity.TOP or android.view.Gravity.START)
-        val lp = window.attributes
-        lp.flags = lp.flags or
-            android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-            android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-        if (android.os.Build.VERSION.SDK_INT >= 30) {
-            // Floating dialog frames normally shrink to the status and navigation bars;
-            // fitting no insets keeps the window on the full display instead.
-            lp.fitInsetsTypes = 0
-        }
-        if (android.os.Build.VERSION.SDK_INT >= 28) {
-            lp.layoutInDisplayCutoutMode =
-                android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-        }
-        window.attributes = lp
-        window.setLayout(
-            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-            android.view.ViewGroup.LayoutParams.MATCH_PARENT
-        )
-        window.setDimAmount(0f)
-        window.setBackgroundDrawableResource(android.R.color.transparent)
-    }
-}
 
 /** Bottom sheet in frosted glass, with the 36x4 handle and a scrim you can tap. */
 @Composable
@@ -95,21 +49,21 @@ fun GlassSheet(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val reduce = LocalReduceMotion.current
     var shown by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { shown = true }
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
+            dismissOnClickOutside = true
         )
     ) {
-        FullScreenSheetWindow()
-        BoxWithConstraints(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize()) {
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.32f))
+                    .background(Color.Black.copy(alpha = 0.55f))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -126,19 +80,14 @@ fun GlassSheet(
                 GlassSurface(
                     modifier = modifier
                         .fillMaxWidth()
-                        .heightIn(max = (maxHeight - 56.dp).coerceAtLeast(240.dp))
+                        .navigationBarsPadding()
                         .imePadding(),
                     tier = GlassTier.FROSTED,
                     shape = RoundedCornerShape(topStart = GlassTokens.rSheet, topEnd = GlassTokens.rSheet),
                     shadow = true
                 ) {
                     Column(Modifier.fillMaxWidth()) {
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(top = 10.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
+                        Box(Modifier.fillMaxWidth().padding(top = 10.dp), contentAlignment = Alignment.Center) {
                             Box(
                                 Modifier
                                     .width(36.dp)
@@ -150,8 +99,6 @@ fun GlassSheet(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .verticalScroll(rememberScrollState())
-                                .navigationBarsPadding()
                                 .padding(horizontal = 20.dp, vertical = 16.dp),
                             content = content
                         )
@@ -175,14 +122,13 @@ fun GlassDialog(
 ) {
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        FullScreenSheetWindow()
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.32f))
+                    .background(Color.Black.copy(alpha = 0.55f))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -345,14 +291,13 @@ fun GlassPromptDialog(
     val snapshot = values.map { it.value }
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        FullScreenSheetWindow()
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.32f))
+                    .background(Color.Black.copy(alpha = 0.55f))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,

@@ -148,11 +148,11 @@ fun DownloadsScreen(
                             AFText(
                                 text = buildString {
                                     append("${state.activeCount} active")
-                                    append(" · ${state.completed.size} saved")
+                                    append(" Â· ${state.completed.size} saved")
                                     if (state.failed.isNotEmpty()) {
-                                        append(" · ${state.failed.size} failed")
+                                        append(" Â· ${state.failed.size} failed")
                                     }
-                                    append(" · ${state.concurrent} at a time")
+                                    append(" Â· ${state.concurrent} at a time")
                                 },
                                 style = AFTheme.type.caption,
                                 color = if (state.failed.isNotEmpty()) {
@@ -680,7 +680,7 @@ private fun groupSummary(group: DownloadGroup): String {
             group.completed.size == group.rows.size -> "${group.completed.size} saved"
             group.failed.isNotEmpty() -> buildString {
                 append("${group.failed.size} failed")
-                if (group.completed.isNotEmpty()) append(" · ${group.completed.size} saved")
+                if (group.completed.isNotEmpty()) append(" Â· ${group.completed.size} saved")
             }
             else -> "${group.rows.size} items"
         }
@@ -699,7 +699,7 @@ private fun groupSummary(group: DownloadGroup): String {
         group.progress?.let { add("$it%") }
         if (group.completed.isNotEmpty()) add("${group.completed.size} saved")
     }
-    return parts.joinToString(" · ")
+    return parts.joinToString(" Â· ")
 }
 
 private fun statusText(row: DownloadEntity): String = when (row.status) {
@@ -707,9 +707,9 @@ private fun statusText(row: DownloadEntity): String = when (row.status) {
         if (row.progress in 0..100) append("Downloading ${row.progress}%")
         else append("Downloading")
         if (row.totalBytes > 0) {
-            append(" · ${formatBytes(row.downloadedBytes)} of ${formatBytes(row.totalBytes)}")
+            append(" Â· ${formatBytes(row.downloadedBytes)} of ${formatBytes(row.totalBytes)}")
         } else if (row.downloadedBytes > 0) {
-            append(" · ${formatBytes(row.downloadedBytes)}")
+            append(" Â· ${formatBytes(row.downloadedBytes)}")
         }
     }
     DownloadStatus.QUEUED -> row.note ?: "Queued"
@@ -717,10 +717,10 @@ private fun statusText(row: DownloadEntity): String = when (row.status) {
     DownloadStatus.COMPLETED -> buildString {
         append("Completed")
         row.completedAt?.let {
-            append(" · ")
+            append(" Â· ")
             append(DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(it)))
         }
-        if (row.totalBytes > 0) append(" · ${formatBytes(row.totalBytes)}")
+        if (row.totalBytes > 0) append(" Â· ${formatBytes(row.totalBytes)}")
     }
     DownloadStatus.FAILED -> row.error ?: "Failed"
     DownloadStatus.CANCELED -> "Cancelled"
