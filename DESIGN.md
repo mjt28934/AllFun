@@ -272,10 +272,6 @@ same `CN=AllFun` signer).
 The 0.13.1 record: the same five tasks pass (66 unit tests, lint 0 errors, 35 warnings), the
 release APK reports `versionCode 1301` / `versionName 0.13.1` and `CN=AllFun`, and the sheet,
 primary action, nav and dialog were checked on a 1080x2340 API 35 emulator before tagging.
-The workflow published [v0.13.1](https://github.com/mjt28934/AllFun/releases/tag/v0.13.1)
-(`AllFun-0.13.1-release.apk`, 62,113,397 bytes, SHA-256
-`13d0caab9099b738b6fcb32759f67f256c653618b3d0faa86eda0ce4905b03fc`); the downloaded asset
-matched its checksum, package, version code and signer, and GitHub reports it as the latest.
 
 ## 12. File map
 
