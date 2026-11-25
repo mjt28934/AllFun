@@ -211,6 +211,11 @@ Run from the repository root:
 ```
 
 The 0.13.0 record: compile, 66 unit tests, lint (0 errors) and both APK variants pass.
+The tag-triggered release workflow repeated the tests, built and verified the signed APK,
+and published [v0.13.0](https://github.com/mjt28934/AllFun/releases/tag/v0.13.0)
+(`AllFun-0.13.0-release.apk`, 62,113,401 bytes, SHA-256
+`fab927aacf23ed8acd770b8c36298846d30b966551e17d8f0e6dbda0688189d2`, `versionCode 1300`,
+same `CN=AllFun` signer).
 
 ## 12. File map
 
