@@ -11,7 +11,6 @@ import app.allfun.data.net.toUserError
 import app.allfun.data.settings.AccentPalette
 import app.allfun.data.settings.AppTextSize
 import app.allfun.data.settings.CornerStyle
-import app.allfun.data.settings.GlassQuality
 import app.allfun.data.settings.LibraryGrid
 import app.allfun.data.settings.LibrarySort
 import app.allfun.data.settings.LibraryView
@@ -83,9 +82,6 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun setCornerStyle(style: CornerStyle) = launchSettings { setCornerStyle(style) }
 
     fun setAppTextSize(size: AppTextSize) = launchSettings { setAppTextSize(size) }
-
-    fun setGlassQuality(quality: GlassQuality) =
-        launchSettings { setGlassQuality(quality) }
 
     fun setReduceMotion(enabled: Boolean) = launchSettings { setReduceMotion(enabled) }
 

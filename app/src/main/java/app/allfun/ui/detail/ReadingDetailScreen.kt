@@ -1,17 +1,16 @@
 package app.allfun.ui.detail
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,25 +18,72 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Circle
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.AttachMoney
+import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.Brush
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Done
+import androidx.compose.material.icons.outlined.DoneAll
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.DownloadDone
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.RemoveDone
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,62 +92,40 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.allfun.data.content.ContentCategory
-import app.allfun.data.content.SourceOption
-import app.allfun.data.content.category
-import app.allfun.data.content.displayDescription
 import app.allfun.data.db.DownloadEntity
 import app.allfun.data.db.DownloadStatus
 import app.allfun.data.db.EpisodeEntity
 import app.allfun.data.db.MediaEntity
+import app.allfun.data.db.ProgressEntity
+import app.allfun.data.content.category
+import app.allfun.data.content.displayDescription
 import app.allfun.data.model.MediaKind
+import app.allfun.ui.components.CoverImage
+import app.allfun.ui.components.SectionHeader
+import app.allfun.ui.components.accent
+import app.allfun.ui.components.staggeredReveal
 import app.allfun.ui.formatDuration
 import app.allfun.ui.formatNumber
-import app.allfun.ui.glass.AFIcons
-import app.allfun.ui.glass.AFDivider
-import app.allfun.ui.glass.AFIcon
-import app.allfun.ui.glass.AFIconButton
-import app.allfun.ui.glass.AFOverline
-import app.allfun.ui.glass.AFSpinner
-import app.allfun.ui.glass.AFText
-import app.allfun.ui.glass.AFTextButton
-import app.allfun.ui.glass.AFTheme
-import app.allfun.ui.glass.BottomScrim
-import app.allfun.ui.glass.GlassButton
-import app.allfun.ui.glass.GlassChip
-import app.allfun.ui.glass.GlassDialog
-import app.allfun.ui.glass.GlassEmpty
-import app.allfun.ui.glass.GlassPanel
-import app.allfun.ui.glass.GlassPrimaryAction
-import app.allfun.ui.glass.GlassProgress
-import app.allfun.ui.glass.GlassSheet
-import app.allfun.ui.glass.GlassToastHost
-import app.allfun.ui.glass.GlassTopCapsule
-import app.allfun.ui.glass.PosterArtwork
-import app.allfun.ui.glass.Section
-import app.allfun.ui.glass.SheetRow
-import app.allfun.ui.glass.TopScrim
-import app.allfun.ui.glass.WorldBackdrop
-import app.allfun.ui.glass.rememberGlassToastState
-import app.allfun.ui.glass.rememberHaptics
 import app.allfun.ui.theme.LocalReduceMotion
-
-private val NAV_RESERVE = 140.dp
+import app.allfun.ui.theme.Motion
 
 /**
- * The reading detail page: cover, one primary action, the source it came from, the
- * description and the chapter list. Chapters are rows on the world, not a stack of cards,
- * so a title with 800 chapters still scrolls at the same cost as one with 8.
+ * Komikku's manga detail page, mapped onto AllFun's providers: backdrop header, action
+ * row, expandable description with tags, sortable chapter list with read markers, and a
+ * continue-reading button. Books use the same page with book wording.
  */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun ReadingDetailScreen(
     vm: DetailViewModel,
@@ -120,10 +144,10 @@ internal fun ReadingDetailScreen(
     val sourceName by vm.sourceName.collectAsStateWithLifecycle()
     val switched by vm.switchMediaId.collectAsStateWithLifecycle()
 
-    val toast = rememberGlassToastState()
+    val snackbar = remember { SnackbarHostState() }
     var showSources by rememberSaveable { mutableStateOf(false) }
     var showOverflow by remember { mutableStateOf(false) }
-    var showChapterSheet by rememberSaveable { mutableStateOf(false) }
+    var showChapterDialog by rememberSaveable { mutableStateOf(false) }
     var actionChapter by remember { mutableStateOf<EpisodeEntity?>(null) }
     var pendingRemove by remember { mutableStateOf<DownloadEntity?>(null) }
     var sort by rememberSaveable { mutableStateOf(ChapterSort.SOURCE) }
@@ -131,11 +155,9 @@ internal fun ReadingDetailScreen(
     var descriptionExpanded by rememberSaveable(media.id) {
         mutableStateOf(!media.inLibrary)
     }
-    val reduceMotion = LocalReduceMotion.current
-    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
     LaunchedEffect(Unit) {
-        vm.messages.collect { toast.show(it) }
+        vm.messages.collect { snackbar.showSnackbar(it) }
     }
     LaunchedEffect(switched) {
         val id = switched ?: return@LaunchedEffect
@@ -144,8 +166,7 @@ internal fun ReadingDetailScreen(
     }
 
     val downloadedIds = remember(downloads) {
-        downloads.filter { it.status == DownloadStatus.COMPLETED }
-            .mapTo(mutableSetOf()) { it.unitId }
+        downloads.filter { it.status == DownloadStatus.COMPLETED }.mapTo(mutableSetOf()) { it.unitId }
     }
     val visibleChapters = remember(episodes, sort, filter, downloadedIds) {
         filteredChapters(orderedChapters(episodes, sort), filter, downloadedIds)
@@ -158,245 +179,181 @@ internal fun ReadingDetailScreen(
             ?: episodes.firstOrNull()
     }
     val hasRead = remember(episodes) { episodes.any { it.read } }
-    val unread = remember(episodes) { episodes.count { !it.read } }
     val allDownloaded = episodes.isNotEmpty() &&
         downloads.count { it.status == DownloadStatus.COMPLETED } == episodes.size
+
+    // The title bar starts transparent over the header and gains its surface once the
+    // header has scrolled away, mirroring the video detail page.
     val listState = rememberLazyListState()
     val collapsed by remember {
-        derivedStateOf {
+        androidx.compose.runtime.derivedStateOf {
             listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 96
         }
     }
+    val barColor by animateColorAsState(
+        targetValue = if (collapsed) {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.97f)
+        } else {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.42f)
+        },
+        animationSpec = if (LocalReduceMotion.current) {
+            androidx.compose.animation.core.snap()
+        } else {
+            tween(Motion.MEDIUM, easing = Motion.EaseOut)
+        },
+        label = "readingBar"
+    )
 
-    WorldBackdrop(section = sectionFor(media)) {
-        Box(Modifier.fillMaxSize()) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                state = listState,
-                contentPadding = PaddingValues(
-                    start = 20.dp,
-                    end = 20.dp,
-                    top = statusTop + 72.dp,
-                    bottom = NAV_RESERVE
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
+        topBar = {
+            TopAppBar(
+                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                    containerColor = barColor
                 ),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                item(key = "hero") { ReadingHero(media = media, sourceName = sourceName) }
-
-                item(key = "primary") {
-                    GlassPrimaryAction(
-                        label = when {
-                            episodes.isEmpty() -> "No ${media.unitLabel.lowercase()}s yet"
-                            hasRead || progress != null -> "Continue"
-                            else -> "Start reading"
-                        },
-                        onClick = {
-                            resumeChapter?.let { onOpen(mediaId, it.id, media.kind) }
-                        },
-                        icon = if (media.kind.isVideo) AFIcons.Play else AFIcons.Book,
-                        enabled = resumeChapter != null,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                item(key = "actions") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        GlassButton(
-                            label = if (media.inLibrary) "Saved" else "Save",
-                            onClick = vm::toggleLibrary,
-                            icon = AFIcons.Bookmark,
-                            modifier = Modifier.weight(1f)
-                        )
-                        GlassButton(
-                            label = if (media.favorite) "Liked" else "Like",
-                            onClick = vm::toggleFavorite,
-                            icon = if (media.favorite) AFIcons.HeartFilled else AFIcons.Heart,
-                            modifier = Modifier.weight(1f)
-                        )
-                        if (canDownload) {
-                            GlassButton(
-                                label = if (allDownloaded) "Saved offline" else "Download",
-                                onClick = vm::download,
-                                icon = if (allDownloaded) AFIcons.Check else AFIcons.Download,
-                                enabled = !allDownloaded,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                }
-
-                item(key = "source") {
-                    ReadingSourcePanel(
-                        state = sourceState,
-                        currentName = sourceName,
-                        onOpen = { showSources = true },
-                        onRetry = vm::findSources
-                    )
-                }
-
-                if (!media.description.isNullOrBlank() || media.genreList.isNotEmpty()) {
-                    item(key = "about") {
-                        val description = media.description.orEmpty().displayDescription()
-                        GlassPanel(header = "About") {
-                            if (description.isNotBlank()) {
-                                AFText(
-                                    text = description,
-                                    style = AFTheme.type.bodySmall,
-                                    color = AFTheme.colors.textMid,
-                                    onGlass = true,
-                                    maxLines = if (descriptionExpanded) Int.MAX_VALUE else 6,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.animateContentSize(
-                                        animationSpec = if (reduceMotion) snap() else tween(200)
-                                    )
-                                )
-                                if (description.length > 280) {
-                                    AFTextButton(
-                                        label = if (descriptionExpanded) {
-                                            "Show less"
-                                        } else {
-                                            "Read more"
-                                        },
-                                        onClick = {
-                                            descriptionExpanded = !descriptionExpanded
-                                        }
-                                    )
-                                }
-                            }
-                            if (media.genreList.isNotEmpty()) {
-                                Spacer(Modifier.height(8.dp))
-                                AFText(
-                                    text = media.genreList.take(6).joinToString(" · "),
-                                    style = AFTheme.type.caption,
-                                    color = AFTheme.colors.textLo,
-                                    onGlass = true,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-                }
-
-                item(key = "chapters-header") {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                title = {
+                    AnimatedVisibility(
+                        visible = collapsed,
+                        enter = fadeIn(tween(Motion.FAST)),
+                        exit = fadeOut(tween(Motion.FAST))
                     ) {
-                        AFText(
-                            text = "Chapters",
-                            style = AFTheme.type.heading,
-                            color = AFTheme.colors.textHi,
-                            modifier = Modifier.weight(1f)
+                        Text(
+                            text = media.title,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-                        if (episodes.isNotEmpty()) {
-                            AFText(
-                                text = visibleChapters.size.toString(),
-                                style = AFTheme.type.numeric,
-                                color = AFTheme.colors.textLo,
-                                modifier = Modifier.padding(end = 4.dp)
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Outlined.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                },
+                actions = {
+                    Box {
+                        IconButton(onClick = { showOverflow = true }) {
+                            Icon(Icons.Outlined.MoreVert, contentDescription = "More actions")
+                        }
+                        DropdownMenu(
+                            expanded = showOverflow,
+                            onDismissRequest = { showOverflow = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Refresh") },
+                                leadingIcon = { Icon(Icons.Outlined.Refresh, contentDescription = null) },
+                                onClick = {
+                                    showOverflow = false
+                                    vm.refreshNow()
+                                }
                             )
-                            AFIconButton(
-                                icon = AFIcons.Filter,
-                                contentDescription = "Sort and filter chapters",
-                                onClick = { showChapterSheet = true },
-                                active = filter != ChapterFilter.ALL ||
-                                    sort != ChapterSort.SOURCE
+                            DropdownMenuItem(
+                                text = { Text("Mark all as read") },
+                                leadingIcon = { Icon(Icons.Outlined.DoneAll, contentDescription = null) },
+                                enabled = episodes.any { !it.read },
+                                onClick = {
+                                    showOverflow = false
+                                    vm.markAllRead()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Available sources") },
+                                leadingIcon = { Icon(Icons.Outlined.Public, contentDescription = null) },
+                                onClick = {
+                                    showOverflow = false
+                                    showSources = true
+                                }
                             )
                         }
                     }
                 }
-
-                if (visibleChapters.isEmpty()) {
-                    item(key = "chapters-empty") {
-                        when {
-                            preparing -> Row(verticalAlignment = Alignment.CenterVertically) {
-                                AFSpinner(size = 16.dp)
-                                Spacer(Modifier.width(10.dp))
-                                AFText(
-                                    text = "Looking for ${media.unitLabel.lowercase()}s…",
-                                    style = AFTheme.type.bodySmall,
-                                    color = AFTheme.colors.textLo
-                                )
-                            }
-
-                            episodes.isEmpty() -> GlassEmpty(
-                                title = "No chapters yet",
-                                body = "The source did not return a chapter list for this " +
-                                    "title. Refreshing asks it again.",
-                                actionLabel = "Try again",
-                                onAction = vm::refreshNow
-                            )
-
-                            else -> GlassEmpty(
-                                title = "Nothing matches",
-                                body = "No chapters match this filter. There are " +
-                                    "${episodes.size} in total.",
-                                actionLabel = "Show all",
-                                onAction = { filter = ChapterFilter.ALL }
-                            )
-                        }
-                    }
-                } else {
-                    itemsIndexed(visibleChapters, key = { _, chapter -> chapter.id }) { _, chapter ->
-                        ReadingChapterRow(
-                            chapter = chapter,
-                            kind = media.kind,
-                            progress = progress?.takeIf { it.episodeId == chapter.id },
-                            download = downloads.firstOrNull { it.unitId == chapter.id },
-                            canDownload = canDownload,
-                            onClick = { onOpen(mediaId, chapter.id, media.kind) },
-                            onLongClick = { actionChapter = chapter },
-                            onDownload = { vm.download(chapter.id) },
-                            onCancelDownload = vm::cancelDownload,
-                            onRetryDownload = vm::retryDownload,
-                            onRemoveDownload = { pendingRemove = it }
-                        )
-                    }
-                }
+            )
+        },
+        floatingActionButton = {
+            if (resumeChapter != null && episodes.any { !it.read }) {
+                ExtendedFloatingActionButton(
+                    text = { Text(if (hasRead) "Resume" else "Start") },
+                    icon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
+                    onClick = { onOpen(mediaId, resumeChapter.id, media.kind) }
+                )
+            }
+        }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            state = listState,
+            contentPadding = PaddingValues(bottom = 96.dp)
+        ) {
+            item {
+                ReadingHeader(media = media, sourceName = sourceName)
             }
 
-            TopScrim(Modifier.align(Alignment.TopCenter))
-            BottomScrim(Modifier.align(Alignment.BottomCenter))
-
-            GlassTopCapsule(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                onBack = onBack
-            ) {
-                AnimatedVisibility(
-                    visible = collapsed,
-                    enter = fadeIn(tween(if (reduceMotion) 0 else 160)),
-                    exit = fadeOut(tween(if (reduceMotion) 0 else 120)),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    AFText(
-                        text = media.title,
-                        style = AFTheme.type.heading,
-                        color = AFTheme.colors.textHi,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(start = 12.dp)
-                    )
-                }
-                if (!collapsed) Spacer(Modifier.weight(1f))
-                AFIconButton(
-                    icon = AFIcons.More,
-                    contentDescription = "More actions",
-                    onClick = { showOverflow = true }
+            item {
+                ReadingActionRow(
+                    media = media,
+                    downloads = downloads,
+                    canDownload = canDownload,
+                    allDownloaded = allDownloaded,
+                    onLibrary = vm::toggleLibrary,
+                    onFavorite = vm::toggleFavorite,
+                    onDownloadAll = { vm.download() },
+                    onSources = { showSources = true }
                 )
             }
 
-            GlassToastHost(
-                state = toast,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 108.dp)
-            )
+            item {
+                ReadingDescription(
+                    description = media.description,
+                    genres = media.genreList,
+                    expanded = descriptionExpanded,
+                    onToggle = { descriptionExpanded = !descriptionExpanded }
+                )
+            }
+
+            item {
+                ChapterListHeader(
+                    count = visibleChapters.size,
+                    filtered = filter != ChapterFilter.ALL || sort != ChapterSort.SOURCE,
+                    onClick = { showChapterDialog = true }
+                )
+            }
+
+            if (visibleChapters.isEmpty()) {
+                item {
+                    Text(
+                        text = when {
+                            preparing -> "Looking for ${media.unitLabel.lowercase()}s…"
+                            episodes.isEmpty() -> "No ${media.unitLabel.lowercase()}s yet. " +
+                                "The source did not return a ${media.unitLabel.lowercase()} list."
+                            else -> "No ${media.unitLabel.lowercase()}s match this filter."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
+                    )
+                }
+            } else {
+                itemsIndexed(visibleChapters, key = { _, chapter -> chapter.id }) { index, chapter ->
+                    ReadingChapterRow(
+                        chapter = chapter,
+                        kind = media.kind,
+                        progress = progress?.takeIf { it.episodeId == chapter.id },
+                        download = downloads.firstOrNull { it.unitId == chapter.id },
+                        canDownload = canDownload,
+                        onClick = { onOpen(mediaId, chapter.id, media.kind) },
+                        onLongClick = { actionChapter = chapter },
+                        onDownload = { vm.download(chapter.id) },
+                        onCancelDownload = vm::cancelDownload,
+                        onRetryDownload = vm::retryDownload,
+                        onRemoveDownload = { pendingRemove = it },
+                        modifier = Modifier
+                            .staggeredReveal(index)
+                            .animateItem()
+                    )
+                }
+            }
         }
     }
 
@@ -413,66 +370,16 @@ internal fun ReadingDetailScreen(
         )
     }
 
-    if (showOverflow) {
-        GlassSheet(onDismiss = { showOverflow = false }) {
-            AFText(
-                text = "This title",
-                style = AFTheme.type.title,
-                color = AFTheme.colors.textHi,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.height(10.dp))
-            SheetRow(
-                title = "Refresh",
-                subtitle = "Ask the source for its chapter list again",
-                leading = {
-                    AFIcon(AFIcons.Refresh, null, tint = AFTheme.colors.textMid, size = 20.dp)
-                },
-                onClick = {
-                    showOverflow = false
-                    vm.refreshNow()
-                }
-            )
-            if (unread > 0) {
-                SheetRow(
-                    title = "Mark all as read",
-                    subtitle = "$unread unread " +
-                        if (unread == 1) "chapter" else "chapters",
-                    leading = {
-                        AFIcon(AFIcons.Check, null, tint = AFTheme.colors.textMid, size = 20.dp)
-                    },
-                    onClick = {
-                        showOverflow = false
-                        vm.markAllRead()
-                    }
-                )
-            }
-            SheetRow(
-                title = "Available sources",
-                subtitle = "Every installed source that knows this title",
-                leading = {
-                    AFIcon(AFIcons.Globe, null, tint = AFTheme.colors.textMid, size = 20.dp)
-                },
-                onClick = {
-                    showOverflow = false
-                    showSources = true
-                }
-            )
-            Spacer(Modifier.height(6.dp))
-        }
-    }
-
-    if (showChapterSheet) {
-        ChapterListSheet(
+    if (showChapterDialog) {
+        ChapterListDialog(
             sort = sort,
             filter = filter,
             total = episodes.size,
-            unread = unread,
+            unread = episodes.count { !it.read },
             downloaded = episodes.count { it.id in downloadedIds },
             onSort = { sort = it },
             onFilter = { filter = it },
-            onDismiss = { showChapterSheet = false }
+            onDismiss = { showChapterDialog = false }
         )
     }
 
@@ -512,103 +419,310 @@ internal fun ReadingDetailScreen(
     }
 
     pendingRemove?.let { row ->
-        GlassDialog(
-            title = "Remove downloaded file?",
-            body = "\"${row.unitTitle}\" is deleted from this device. You can download it " +
-                "again while ${media.title}'s provider is available.",
-            confirmLabel = "Remove",
-            destructive = true,
-            onConfirm = {
-                vm.removeDownload(row.key)
-                pendingRemove = null
+        AlertDialog(
+            onDismissRequest = { pendingRemove = null },
+            title = { Text("Remove downloaded file?") },
+            text = {
+                Text(
+                    "\"${row.unitTitle}\" is deleted from this device. You can download it " +
+                        "again while ${media.title}'s provider is available."
+                )
             },
-            onDismiss = { pendingRemove = null }
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        vm.removeDownload(row.key)
+                        pendingRemove = null
+                    }
+                ) { Text("Remove", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRemove = null }) { Text("Cancel") }
+            }
         )
     }
 }
 
-private fun sectionFor(media: MediaEntity): Section = when (media.kind.category()) {
-    ContentCategory.MOVIES -> Section.MOVIES
-    ContentCategory.BOOKS -> Section.BOOKS
-    ContentCategory.MANGA -> Section.MANGA
-}
-
 @Composable
-private fun ReadingHero(media: MediaEntity, sourceName: String) {
-    val colors = AFTheme.colors
+private fun ReadingHeader(media: MediaEntity, sourceName: String) {
+    val accent = media.kind.category().accent()
     val status = media.status?.takeIf { it.isNotBlank() }
-    val meta = listOfNotNull(
-        status,
-        media.year?.toString(),
-        sourceName.takeIf { it.isNotBlank() }
-    ).joinToString(" · ")
-    GlassPanel {
-        Row {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 214.dp)
+            .background(
+                Brush.verticalGradient(
+                    0f to accent.copy(alpha = 0.22f),
+                    1f to Color.Transparent
+                )
+            )
+    ) {
+        if (!media.backdropUrl.isNullOrBlank()) {
+            CoverImage(
+                url = media.backdropUrl,
+                title = media.title,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(214.dp)
+            )
             Box(
-                Modifier
-                    .width(104.dp)
-                    .height(156.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(colors.bg2)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(214.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.Black.copy(alpha = 0.10f),
+                            0.55f to MaterialTheme.colorScheme.background.copy(alpha = 0.55f),
+                            1f to MaterialTheme.colorScheme.background
+                        )
+                    )
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(100.dp)
+                    .height(150.dp)
+                    .clip(MaterialTheme.shapes.extraSmall)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                PosterArtwork(media.title, media.coverUrl, Modifier.fillMaxSize())
+                CoverImage(
+                    url = media.coverUrl,
+                    title = media.title,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
-                AFText(
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
                     text = media.title,
-                    style = AFTheme.type.title,
-                    color = colors.textHi,
-                    onGlass = true,
-                    maxLines = 4,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
-                val author = media.author?.takeIf { it.isNotBlank() }
-                if (author != null) {
-                    Spacer(Modifier.height(6.dp))
-                    AFText(
-                        text = "By $author",
-                        style = AFTheme.type.caption,
-                        color = colors.textMid,
-                        onGlass = true,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                Spacer(Modifier.height(2.dp))
+                ReadingInfoLine(
+                    icon = Icons.Outlined.Person,
+                    text = media.author?.takeIf { it.isNotBlank() } ?: "Unknown author"
+                )
+                if (!media.artist.isNullOrBlank() && media.artist != media.author) {
+                    ReadingInfoLine(
+                        icon = Icons.Outlined.Brush,
+                        text = media.artist.orEmpty()
                     )
                 }
-                val artist = media.artist?.takeIf {
-                    it.isNotBlank() && it != media.author
-                }
-                if (artist != null) {
-                    Spacer(Modifier.height(2.dp))
-                    AFText(
-                        text = "Art by $artist",
-                        style = AFTheme.type.caption,
-                        color = colors.textLo,
-                        onGlass = true,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                if (meta.isNotBlank()) {
-                    Spacer(Modifier.height(8.dp))
-                    AFText(
-                        text = meta,
-                        style = AFTheme.type.caption,
-                        color = colors.textLo,
-                        onGlass = true,
+                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    statusIcon(status)?.let { icon ->
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            modifier = Modifier
+                                .padding(end = 4.dp)
+                                .size(16.dp)
+                        )
+                    }
+                    Text(
+                        text = listOfNotNull(
+                            status,
+                            media.year?.toString(),
+                            sourceName.takeIf { it.isNotBlank() }
+                        ).joinToString(" · ").ifBlank { sourceName },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                if (media.totalUnits > 0) {
-                    Spacer(Modifier.height(4.dp))
-                    AFText(
-                        text = "${media.totalUnits} " + media.unitLabel.lowercase() +
-                            if (media.totalUnits == 1) "" else "s",
-                        style = AFTheme.type.numeric,
-                        color = colors.textLo,
-                        onGlass = true
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReadingInfoLine(icon: ImageVector, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            modifier = Modifier
+                .padding(end = 4.dp)
+                .size(16.dp)
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun ReadingActionRow(
+    media: MediaEntity,
+    downloads: List<DownloadEntity>,
+    canDownload: Boolean,
+    allDownloaded: Boolean,
+    onLibrary: () -> Unit,
+    onFavorite: () -> Unit,
+    onDownloadAll: () -> Unit,
+    onSources: () -> Unit
+) {
+    val actionColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        ReadingActionButton(
+            title = if (media.inLibrary) "In library" else "Add to library",
+            icon = if (media.inLibrary) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+            color = if (media.inLibrary) MaterialTheme.colorScheme.primary else actionColor,
+            onClick = onLibrary
+        )
+        ReadingActionButton(
+            title = if (media.favorite) "Favorited" else "Favorite",
+            icon = if (media.favorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+            color = if (media.favorite) MaterialTheme.colorScheme.tertiary else actionColor,
+            onClick = onFavorite
+        )
+        ReadingActionButton(
+            title = if (allDownloaded) "Downloaded" else "Download",
+            icon = when {
+                allDownloaded -> Icons.Outlined.DownloadDone
+                downloads.isNotEmpty() -> Icons.Outlined.Download
+                else -> Icons.Outlined.Download
+            },
+            color = if (downloads.isNotEmpty()) MaterialTheme.colorScheme.primary else actionColor,
+            enabled = canDownload && !allDownloaded,
+            onClick = onDownloadAll
+        )
+        ReadingActionButton(
+            title = "Sources",
+            icon = Icons.Outlined.Public,
+            color = actionColor,
+            onClick = onSources
+        )
+    }
+}
+
+@Composable
+private fun RowScope.ReadingActionButton(
+    title: String,
+    icon: ImageVector,
+    color: Color,
+    onClick: () -> Unit,
+    enabled: Boolean = true
+) {
+    TextButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.weight(1f)
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (enabled) color else color.copy(alpha = 0.38f),
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = title,
+                color = if (enabled) color else color.copy(alpha = 0.38f),
+                fontSize = 12.sp,
+                lineHeight = 14.sp,
+                textAlign = TextAlign.Center,
+                // Two lines so "Add to library" is not clipped to "Add to libr…" in a
+                // quarter-width column, and so it still fits at large font sizes.
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ReadingDescription(
+    description: String?,
+    genres: List<String>,
+    expanded: Boolean,
+    onToggle: () -> Unit
+) {
+    val text = description?.displayDescription()?.takeIf { it.isNotBlank() }
+    if (text == null && genres.isEmpty()) return
+    val reduceMotion = LocalReduceMotion.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, start = 16.dp, end = 16.dp)
+            .animateContentSize(
+                animationSpec = if (reduceMotion) {
+                    androidx.compose.animation.core.snap()
+                } else {
+                    tween(Motion.MEDIUM, easing = Motion.EaseOut)
+                }
+            )
+    ) {
+        if (text != null) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = if (expanded) Int.MAX_VALUE else 6,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (text.length > 280) {
+                TextButton(
+                    onClick = onToggle,
+                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
+                    modifier = Modifier.semantics {
+                        stateDescription = if (expanded) "Expanded" else "Collapsed"
+                    }
+                ) {
+                    Text(if (expanded) "Show less" else "Read more")
+                    Spacer(Modifier.width(4.dp))
+                    Icon(
+                        imageVector = if (expanded) Icons.Outlined.ExpandLess
+                        else Icons.Outlined.ExpandMore,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
                     )
+                }
+            }
+        }
+        if (genres.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.padding(top = 4.dp)
+            ) {
+                genres.forEach { genre ->
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh
+                    ) {
+                        Text(
+                            text = genre,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
                 }
             }
         }
@@ -616,109 +730,28 @@ private fun ReadingHero(media: MediaEntity, sourceName: String) {
 }
 
 @Composable
-private fun ReadingSourcePanel(
-    state: DetailViewModel.SourceState,
-    currentName: String,
-    onOpen: () -> Unit,
-    onRetry: () -> Unit
-) {
-    val colors = AFTheme.colors
-    val confirmed = state.options.count { it.available }
-    val current = state.options.firstOrNull { it.isPrimary }
-        ?: state.options.firstOrNull { it.isPreferred }
-        ?: state.options.firstOrNull { it.available }
-    val summary = when {
-        state.loading -> "Checking your other installed sources…"
-        confirmed > 1 -> "$confirmed sources confirmed this title"
-        confirmed == 1 -> "Only one source confirmed this title"
-        state.error != null -> "Source check failed"
-        else -> "No provider confirmed this title right now"
-    }
-    GlassPanel(header = "Source") {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                AFText(
-                    text = current?.sourceName
-                        ?: currentName.takeIf { it.isNotBlank() }
-                        ?: "No source selected",
-                    style = AFTheme.type.body,
-                    color = colors.textHi,
-                    onGlass = true,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                AFText(
-                    text = summary,
-                    style = AFTheme.type.caption,
-                    color = if (state.error != null) colors.failed else colors.textLo,
-                    onGlass = true,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            if (state.loading || state.switching) {
-                AFSpinner(size = 18.dp)
-            } else {
-                AFTextButton(
-                    label = if (state.options.isEmpty()) "Find" else "Change",
-                    onClick = if (state.options.isEmpty()) onRetry else onOpen
-                )
-            }
-        }
-        if (state.error != null) {
-            AFTextButton("Retry", onRetry, color = colors.failed)
-        }
-    }
-}
-
-@Composable
-private fun ReadingSourceSheet(
-    state: DetailViewModel.SourceState,
-    category: ContentCategory,
-    onUse: (SourceOption) -> Unit,
-    onRetry: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    GlassSheet(onDismiss = onDismiss) {
-        AFText(
-            text = "Available sources",
-            style = AFTheme.type.title,
-            color = AFTheme.colors.textHi
+private fun ChapterListHeader(count: Int, filtered: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "$count ${if (count == 1) "chapter" else "chapters"}",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onBackground
         )
-        Spacer(Modifier.height(4.dp))
-        AFText(
-            text = when {
-                state.loading -> "Checking your other installed sources…"
-                state.options.count { it.available } > 1 ->
-                    "${state.options.count { it.available }} sources confirmed this title"
-                state.error != null -> "Source check failed"
-                else -> "No other provider confirmed this title right now"
-            },
-            style = AFTheme.type.caption,
-            color = AFTheme.colors.textLo
+        Icon(
+            imageVector = Icons.Outlined.Tune,
+            contentDescription = if (filtered) "Chapter list options, filter active"
+            else "Chapter list options",
+            tint = if (filtered) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
         )
-        if (state.loading || state.switching) {
-            Spacer(Modifier.height(10.dp))
-            GlassProgress(progress = 0.4f, height = 3.dp)
-        }
-        Spacer(Modifier.height(8.dp))
-        state.options.forEach { option ->
-            SourceOptionRow(
-                option = option,
-                category = category,
-                enabled = !state.switching,
-                onUse = { onUse(option) }
-            )
-        }
-        if (state.options.isEmpty() && !state.loading) {
-            Spacer(Modifier.height(8.dp))
-            GlassButton(label = "Find sources", onClick = onRetry, icon = AFIcons.Search)
-        }
-        if (state.error != null) {
-            Spacer(Modifier.height(4.dp))
-            AFTextButton("Retry", onRetry, color = AFTheme.colors.failed)
-        }
-        Spacer(Modifier.height(8.dp))
     }
 }
 
@@ -727,7 +760,7 @@ private fun ReadingSourceSheet(
 private fun ReadingChapterRow(
     chapter: EpisodeEntity,
     kind: MediaKind,
-    progress: app.allfun.data.db.ProgressEntity?,
+    progress: ProgressEntity?,
     download: DownloadEntity?,
     canDownload: Boolean,
     onClick: () -> Unit,
@@ -735,106 +768,86 @@ private fun ReadingChapterRow(
     onDownload: () -> Unit,
     onCancelDownload: (String) -> Unit,
     onRetryDownload: (String) -> Unit,
-    onRemoveDownload: (DownloadEntity) -> Unit
+    onRemoveDownload: (DownloadEntity) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val colors = AFTheme.colors
-    val haptics = rememberHaptics()
+    val status = download?.status
     val read = chapter.read
     val readPercent = progress?.fraction
         ?.takeIf { it > 0f }
         ?.let { (it * 100).toInt() }
 
-    Column(Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .combinedClickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClickLabel = "Open ${chapterLabel(chapter, kind)}",
-                    onLongClickLabel = "Chapter actions",
-                    onClick = {
-                        haptics.tick()
-                        onClick()
-                    },
-                    onLongClick = {
-                        haptics.medium()
-                        onLongClick()
-                    }
-                )
-                .semantics { stateDescription = if (read) "Read" else "Unread" }
-                .padding(start = 4.dp, top = 10.dp, end = 4.dp, bottom = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(start = 16.dp, top = 12.dp, end = 8.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Box(Modifier.width(44.dp), contentAlignment = Alignment.CenterStart) {
-                if (chapter.number > 0) {
-                    AFText(
-                        text = formatNumber(chapter.number),
-                        style = AFTheme.type.numeric,
-                        color = if (read) colors.textLo else colors.accent
-                    )
-                } else {
-                    AFIcon(
-                        icon = if (kind.isVideo) AFIcons.Play else AFIcons.Book,
-                        contentDescription = null,
-                        tint = if (read) colors.textLo else colors.accent,
-                        size = 18.dp
-                    )
-                }
-            }
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (!read) {
-                        Box(
-                            Modifier
-                                .size(6.dp)
-                                .clip(CircleShape)
-                                .background(colors.accent)
-                        )
-                        Spacer(Modifier.width(7.dp))
-                    }
-                    AFText(
-                        text = chapterLabel(chapter, kind),
-                        style = AFTheme.type.body,
-                        color = if (read) colors.textMid else colors.textHi,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (!read) {
+                    Icon(
+                        imageVector = Icons.Filled.Circle,
+                        contentDescription = "Unread",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .padding(end = 4.dp)
+                            .size(8.dp)
                     )
                 }
-                val subtitle = chapterSubtitle(chapter, download?.status)
-                AFText(
-                    text = if (readPercent != null) "$subtitle · $readPercent%" else subtitle,
-                    style = AFTheme.type.caption,
-                    color = if (read) colors.textLo else colors.textMid,
+                Text(
+                    text = chapterLabel(chapter, kind),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(
+                        alpha = if (read) 0.5f else 1f
+                    ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                val fraction = progress?.fraction?.coerceIn(0f, 1f) ?: 0f
-                if (fraction > 0f) {
-                    Spacer(Modifier.height(6.dp))
-                    Box(Modifier.width(88.dp)) {
-                        GlassProgress(progress = fraction, height = 3.dp)
-                    }
+            }
+            Row {
+                val subtitleColor = MaterialTheme.colorScheme.onSurface.copy(
+                    alpha = if (read) 0.4f else 0.62f
+                )
+                Text(
+                    text = chapterSubtitle(chapter, status),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = subtitleColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (readPercent != null) {
+                    Text(
+                        text = " · $readPercent%",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        maxLines = 1
+                    )
                 }
             }
-            if (canDownload) {
-                Spacer(Modifier.width(4.dp))
-                ChapterDownloadAction(
-                    chapter = chapter,
-                    download = download,
-                    onDownload = onDownload,
-                    onCancelDownload = onCancelDownload,
-                    onRetryDownload = onRetryDownload,
-                    onRemoveDownload = onRemoveDownload
-                )
-            }
         }
-        AFDivider(startInset = 52.dp)
+        if (canDownload) {
+            ChapterDownloadIndicator(
+                chapter = chapter,
+                download = download,
+                onDownload = onDownload,
+                onCancelDownload = onCancelDownload,
+                onRetryDownload = onRetryDownload,
+                onRemoveDownload = onRemoveDownload
+            )
+        }
     }
 }
 
 @Composable
-private fun ChapterDownloadAction(
+private fun ChapterDownloadIndicator(
     chapter: EpisodeEntity,
     download: DownloadEntity?,
     onDownload: () -> Unit,
@@ -842,244 +855,47 @@ private fun ChapterDownloadAction(
     onRetryDownload: (String) -> Unit,
     onRemoveDownload: (DownloadEntity) -> Unit
 ) {
-    val colors = AFTheme.colors
     when (download?.status) {
-        DownloadStatus.COMPLETED -> AFIconButton(
-            icon = AFIcons.Check,
-            contentDescription = "Remove downloaded ${chapter.title}",
-            onClick = { onRemoveDownload(download) },
-            tint = colors.ok,
-            visualSize = 40.dp
-        )
-        DownloadStatus.RUNNING, DownloadStatus.QUEUED, DownloadStatus.WAITING -> {
-            val fraction = (download.progress.takeIf { it >= 0 } ?: 0) / 100f
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClickLabel = "Cancel download of ${chapter.title}"
-                    ) { onCancelDownload(download.key) },
-                contentAlignment = Alignment.Center
-            ) {
-                DownloadRing(
-                    progress = fraction,
-                    color = colors.accent,
-                    track = colors.hairline
-                )
-                AFIcon(
-                    icon = AFIcons.Close,
-                    contentDescription = null,
-                    tint = colors.textMid,
-                    size = 11.dp
-                )
-            }
-        }
-        DownloadStatus.FAILED -> AFIconButton(
-            icon = AFIcons.Refresh,
-            contentDescription = "Retry download of ${chapter.title}",
-            onClick = { onRetryDownload(download.key) },
-            tint = colors.failed,
-            visualSize = 40.dp
-        )
-        DownloadStatus.CANCELED, null -> AFIconButton(
-            icon = AFIcons.Download,
-            contentDescription = "Download ${chapter.title}",
-            onClick = onDownload,
-            tint = colors.textMid,
-            visualSize = 40.dp
-        )
-    }
-}
-
-@Composable
-private fun DownloadRing(progress: Float, color: Color, track: Color) {
-    Canvas(Modifier.size(22.dp)) {
-        val stroke = 2.dp.toPx()
-        drawArc(
-            color = track,
-            startAngle = 0f,
-            sweepAngle = 360f,
-            useCenter = false,
-            style = Stroke(width = stroke)
-        )
-        drawArc(
-            color = color,
-            startAngle = -90f,
-            sweepAngle = 360f * progress.coerceIn(0f, 1f),
-            useCenter = false,
-            style = Stroke(width = stroke, cap = StrokeCap.Round)
-        )
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ChapterListSheet(
-    sort: ChapterSort,
-    filter: ChapterFilter,
-    total: Int,
-    unread: Int,
-    downloaded: Int,
-    onSort: (ChapterSort) -> Unit,
-    onFilter: (ChapterFilter) -> Unit,
-    onDismiss: () -> Unit
-) {
-    GlassSheet(onDismiss = onDismiss) {
-        AFText(
-            text = "Chapter list",
-            style = AFTheme.type.title,
-            color = AFTheme.colors.textHi
-        )
-        Spacer(Modifier.height(4.dp))
-        AFText(
-            text = "$total total · $unread unread · $downloaded offline",
-            style = AFTheme.type.caption,
-            color = AFTheme.colors.textLo
-        )
-        Spacer(Modifier.height(12.dp))
-        AFOverline("Sort")
-        Spacer(Modifier.height(4.dp))
-        ChapterSort.entries.forEach { option ->
-            SheetRow(
-                title = option.label,
-                selected = sort == option,
-                onClick = { onSort(option) }
+        DownloadStatus.COMPLETED -> IconButton(onClick = { onRemoveDownload(download) }) {
+            Icon(
+                Icons.Outlined.DownloadDone,
+                contentDescription = "Remove downloaded ${chapter.title}",
+                tint = MaterialTheme.colorScheme.primary
             )
         }
-        Spacer(Modifier.height(12.dp))
-        AFOverline("Filter")
-        Spacer(Modifier.height(8.dp))
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            ChapterFilter.entries.forEach { option ->
-                val count = when (option) {
-                    ChapterFilter.ALL -> total
-                    ChapterFilter.UNREAD -> unread
-                    ChapterFilter.DOWNLOADED -> downloaded
+        DownloadStatus.RUNNING, DownloadStatus.QUEUED, DownloadStatus.WAITING ->
+            IconButton(onClick = { onCancelDownload(download.key) }) {
+                Box(contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(
+                        progress = {
+                            ((download.progress.takeIf { it >= 0 } ?: 0) / 100f)
+                                .coerceIn(0f, 1f)
+                        },
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Icon(
+                        Icons.Outlined.Close,
+                        contentDescription = "Cancel download of ${chapter.title}",
+                        modifier = Modifier.size(11.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                GlassChip(
-                    label = option.label,
-                    selected = filter == option,
-                    badge = count,
-                    onClick = { onFilter(option) }
-                )
             }
-        }
-        Spacer(Modifier.height(14.dp))
-        GlassButton(
-            label = "Done",
-            onClick = onDismiss,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(Modifier.height(6.dp))
-    }
-}
-
-@Composable
-private fun ChapterActionSheet(
-    chapter: EpisodeEntity,
-    kind: MediaKind,
-    progress: app.allfun.data.db.ProgressEntity?,
-    download: DownloadEntity?,
-    canDownload: Boolean,
-    onRead: () -> Unit,
-    onToggleRead: () -> Unit,
-    onDownload: () -> Unit,
-    onCancelDownload: (String) -> Unit,
-    onRetryDownload: (String) -> Unit,
-    onRemoveDownload: (DownloadEntity) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val colors = AFTheme.colors
-    GlassSheet(onDismiss = onDismiss) {
-        AFText(
-            text = chapterLabel(chapter, kind),
-            style = AFTheme.type.title,
-            color = colors.textHi,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-        val detail = listOfNotNull(
-            chapter.pageCount?.let { "$it ${if (it == 1) "page" else "pages"}" },
-            progress?.fraction?.takeIf { it > 0f }?.let { "${(it * 100).toInt()}% read" },
-            download?.status?.let { downloadStatusLabel(it) }
-        ).joinToString(" · ")
-        if (detail.isNotBlank()) {
-            Spacer(Modifier.height(4.dp))
-            AFText(
-                text = detail,
-                style = AFTheme.type.caption,
-                color = colors.textLo
+        DownloadStatus.FAILED -> IconButton(onClick = { onRetryDownload(download.key) }) {
+            Icon(
+                Icons.Outlined.Download,
+                contentDescription = "Retry download of ${chapter.title}",
+                tint = MaterialTheme.colorScheme.error
             )
         }
-        Spacer(Modifier.height(10.dp))
-        SheetRow(
-            title = "Read now",
-            leading = {
-                AFIcon(
-                    icon = if (kind.isVideo) AFIcons.Play else AFIcons.Book,
-                    contentDescription = null,
-                    tint = colors.textMid,
-                    size = 20.dp
-                )
-            },
-            onClick = onRead
-        )
-        SheetRow(
-            title = if (chapter.read) "Mark as unread" else "Mark as read",
-            leading = {
-                AFIcon(AFIcons.Check, null, tint = colors.textMid, size = 20.dp)
-            },
-            onClick = onToggleRead
-        )
-        if (canDownload) {
-            when (download?.status) {
-                DownloadStatus.COMPLETED -> SheetRow(
-                    title = "Delete downloaded file",
-                    leading = {
-                        AFIcon(AFIcons.Trash, null, tint = colors.failed, size = 20.dp)
-                    },
-                    onClick = { onRemoveDownload(download) }
-                )
-                DownloadStatus.RUNNING, DownloadStatus.QUEUED, DownloadStatus.WAITING ->
-                    SheetRow(
-                        title = "Cancel download",
-                        leading = {
-                            AFIcon(AFIcons.Close, null, tint = colors.textMid, size = 20.dp)
-                        },
-                        onClick = { onCancelDownload(download.key) }
-                    )
-                DownloadStatus.FAILED -> {
-                    SheetRow(
-                        title = "Retry download",
-                        leading = {
-                            AFIcon(AFIcons.Refresh, null, tint = colors.textMid, size = 20.dp)
-                        },
-                        onClick = { onRetryDownload(download.key) }
-                    )
-                    SheetRow(
-                        title = "Remove failed download",
-                        leading = {
-                            AFIcon(AFIcons.Trash, null, tint = colors.failed, size = 20.dp)
-                        },
-                        onClick = { onRemoveDownload(download) }
-                    )
-                }
-                DownloadStatus.CANCELED, null -> SheetRow(
-                    title = "Download",
-                    leading = {
-                        AFIcon(AFIcons.Download, null, tint = colors.textMid, size = 20.dp)
-                    },
-                    onClick = onDownload
-                )
-            }
+        DownloadStatus.CANCELED, null -> IconButton(onClick = onDownload) {
+            Icon(
+                Icons.Outlined.Download,
+                contentDescription = "Download ${chapter.title}",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
-        Spacer(Modifier.height(6.dp))
     }
 }
 
@@ -1111,6 +927,243 @@ private fun chapterLabel(chapter: EpisodeEntity, kind: MediaKind): String =
         if (chapter.number > 0) "${kind.unit} ${formatNumber(chapter.number)}" else kind.unit
     }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReadingSourceSheet(
+    state: DetailViewModel.SourceState,
+    category: app.allfun.data.content.ContentCategory,
+    onUse: (app.allfun.data.content.SourceOption) -> Unit,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(Modifier.padding(bottom = 24.dp)) {
+            SectionHeader(
+                title = "Available sources",
+                subtitle = when {
+                    state.loading -> "Checking your other installed sources…"
+                    state.options.count { it.available } > 1 ->
+                        "${state.options.count { it.available }} sources confirmed this title"
+                    state.error != null -> "Source check failed"
+                    else -> "No other provider confirmed this title right now"
+                }
+            )
+            if (state.loading || state.switching) {
+                androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
+            state.error?.let { error ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = error,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = onRetry) { Text("Retry") }
+                }
+            }
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                state.options.forEach { option ->
+                    SourceOptionRow(
+                        option = option,
+                        category = category,
+                        enabled = !state.switching,
+                        onUse = { onUse(option) }
+                    )
+                }
+                if (state.options.isEmpty() && !state.loading) {
+                    OutlinedButtonRow(onRetry)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OutlinedButtonRow(onClick: () -> Unit) {
+    TextButton(onClick = onClick) { Text("Find sources") }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ChapterListDialog(
+    sort: ChapterSort,
+    filter: ChapterFilter,
+    total: Int,
+    unread: Int,
+    downloaded: Int,
+    onSort: (ChapterSort) -> Unit,
+    onFilter: (ChapterFilter) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Chapter list") },
+        text = {
+            Column {
+                Text(
+                    text = "Sort",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                ChapterSort.entries.forEach { option ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSort(option) }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = sort == option, onClick = { onSort(option) })
+                        Text(option.label, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = "Filter",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.height(4.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    ChapterFilter.entries.forEach { option ->
+                        val count = when (option) {
+                            ChapterFilter.ALL -> total
+                            ChapterFilter.UNREAD -> unread
+                            ChapterFilter.DOWNLOADED -> downloaded
+                        }
+                        FilterChip(
+                            selected = filter == option,
+                            onClick = { onFilter(option) },
+                            label = { Text("${option.label} ($count)") }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Done") }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChapterActionSheet(
+    chapter: EpisodeEntity,
+    kind: MediaKind,
+    progress: ProgressEntity?,
+    download: DownloadEntity?,
+    canDownload: Boolean,
+    onRead: () -> Unit,
+    onToggleRead: () -> Unit,
+    onDownload: () -> Unit,
+    onCancelDownload: (String) -> Unit,
+    onRetryDownload: (String) -> Unit,
+    onRemoveDownload: (DownloadEntity) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(Modifier.padding(bottom = 24.dp)) {
+            Column(Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
+                Text(
+                    text = chapterLabel(chapter, kind),
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                val detail = listOfNotNull(
+                    chapter.pageCount?.let { "$it pages" },
+                    progress?.fraction?.takeIf { it > 0f }?.let { "${(it * 100).toInt()}% read" },
+                    download?.status?.let { downloadStatusLabel(it) }
+                ).joinToString(" · ")
+                if (detail.isNotBlank()) {
+                    Text(
+                        text = detail,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+            ChapterActionItem(
+                icon = Icons.AutoMirrored.Outlined.MenuBook,
+                label = "Read now",
+                onClick = onRead
+            )
+            ChapterActionItem(
+                icon = if (chapter.read) Icons.Outlined.RemoveDone else Icons.Outlined.Done,
+                label = if (chapter.read) "Mark as unread" else "Mark as read",
+                onClick = onToggleRead
+            )
+            if (canDownload) {
+                when (download?.status) {
+                    DownloadStatus.COMPLETED -> ChapterActionItem(
+                        icon = Icons.Outlined.Delete,
+                        label = "Delete downloaded file",
+                        tint = MaterialTheme.colorScheme.error,
+                        onClick = { onRemoveDownload(download) }
+                    )
+                    DownloadStatus.RUNNING, DownloadStatus.QUEUED, DownloadStatus.WAITING ->
+                        ChapterActionItem(
+                            icon = Icons.Outlined.Close,
+                            label = "Cancel download",
+                            onClick = { onCancelDownload(download.key) }
+                        )
+                    DownloadStatus.FAILED -> {
+                        ChapterActionItem(
+                            icon = Icons.Outlined.Download,
+                            label = "Retry download",
+                            onClick = { onRetryDownload(download.key) }
+                        )
+                        ChapterActionItem(
+                            icon = Icons.Outlined.Delete,
+                            label = "Remove failed download",
+                            tint = MaterialTheme.colorScheme.error,
+                            onClick = { onRemoveDownload(download) }
+                        )
+                    }
+                    DownloadStatus.CANCELED, null -> ChapterActionItem(
+                        icon = Icons.Outlined.Download,
+                        label = "Download",
+                        onClick = onDownload
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChapterActionItem(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    tint: Color = MaterialTheme.colorScheme.onSurface
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 24.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(16.dp))
+        Text(label, style = MaterialTheme.typography.bodyLarge, color = tint)
+    }
+}
+
 private fun downloadStatusLabel(status: DownloadStatus): String = when (status) {
     DownloadStatus.COMPLETED -> "Downloaded"
     DownloadStatus.RUNNING -> "Downloading"
@@ -1118,4 +1171,13 @@ private fun downloadStatusLabel(status: DownloadStatus): String = when (status) 
     DownloadStatus.WAITING -> "Waiting"
     DownloadStatus.FAILED -> "Download failed"
     DownloadStatus.CANCELED -> "Download cancelled"
+}
+
+private fun statusIcon(status: String?): ImageVector? = when (status?.lowercase()) {
+    "ongoing", "publishing" -> Icons.Outlined.Schedule
+    "completed", "finished", "complete" -> Icons.Outlined.DoneAll
+    "licensed" -> Icons.Outlined.AttachMoney
+    "hiatus", "on hiatus" -> Icons.Outlined.Pause
+    "cancelled", "canceled" -> Icons.Outlined.Block
+    else -> null
 }

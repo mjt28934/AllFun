@@ -1,8 +1,7 @@
-﻿package app.allfun.ui.downloads
+package app.allfun.ui.downloads
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,17 +9,50 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Cancel
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.DownloadDone
+import androidx.compose.material.icons.outlined.DragHandle
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Remove
+import androidx.compose.material.icons.outlined.Sort
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -29,7 +61,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -37,45 +71,23 @@ import app.allfun.data.AppContainer
 import app.allfun.data.db.DownloadEntity
 import app.allfun.data.db.DownloadStatus
 import app.allfun.data.download.QueueOrder
+import app.allfun.ui.components.AnimatedProgress
+import app.allfun.ui.components.EmptyState
 import app.allfun.ui.components.rememberViewModel
+import app.allfun.ui.components.staggeredReveal
 import app.allfun.ui.formatBytes
-import app.allfun.ui.glass.AFIcons
-import app.allfun.ui.glass.AFIcon
-import app.allfun.ui.glass.AFIconButton
-import app.allfun.ui.glass.AFOverline
-import app.allfun.ui.glass.AFText
-import app.allfun.ui.glass.AFTextButton
-import app.allfun.ui.glass.AFTheme
-import app.allfun.ui.glass.BottomScrim
-import app.allfun.ui.glass.GlassChip
-import app.allfun.ui.glass.GlassDialog
-import app.allfun.ui.glass.GlassEmpty
-import app.allfun.ui.glass.GlassPanel
-import app.allfun.ui.glass.GlassProgress
-import app.allfun.ui.glass.GlassSegmented
-import app.allfun.ui.glass.GlassSheet
-import app.allfun.ui.glass.GlassToastHost
-import app.allfun.ui.glass.GlassTopCapsule
-import app.allfun.ui.glass.ScreenHeader
-import app.allfun.ui.glass.Section
-import app.allfun.ui.glass.SheetRow
-import app.allfun.ui.glass.TopScrim
-import app.allfun.ui.glass.WorldBackdrop
-import app.allfun.ui.glass.rememberGlassToastState
-import app.allfun.ui.glass.rememberHaptics
 import java.text.DateFormat
 import java.util.Date
 
-private val NAV_RESERVE = 160.dp
-
 /**
- * Downloads â†’ the live queue, with Komikku's behaviour.
+ * Downloads → the live queue, with Komikku's behaviour.
  *
- * The queue is explicit and persisted: every item has a position that menu actions ("move
- * to top"/"move to bottom"), whole-title moves and the sort sheet rewrite. One capsule
- * control pauses or resumes the downloader; the overflow can cancel the whole queue.
- * Completed downloads stay because they are real files the Library reads offline.
+ * The queue is explicit and persisted: every item has a position that drag-free menu
+ * actions ("move to top"/"move to bottom"), whole-title moves and the sort menu rewrite.
+ * One floating button pauses or resumes the downloader; the overflow can cancel the whole
+ * queue. Completed downloads stay because they are real files the Library reads offline.
  */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun DownloadsScreen(
     container: AppContainer,
@@ -85,22 +97,20 @@ fun DownloadsScreen(
     val vm = rememberViewModel { DownloadsViewModel(container) }
     val state by vm.state.collectAsStateWithLifecycle()
     val openMediaId by vm.openMediaId.collectAsStateWithLifecycle()
-    val toast = rememberGlassToastState()
+    val snackbar = remember { SnackbarHostState() }
     var pendingCancel by remember { mutableStateOf<DownloadEntity?>(null) }
     var pendingRemove by remember { mutableStateOf<DownloadEntity?>(null) }
     var pendingCancelGroup by remember { mutableStateOf<DownloadGroup?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
     var confirmClearQueue by remember { mutableStateOf(false) }
     var showConcurrency by remember { mutableStateOf(false) }
-    var moreOpen by remember { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
     var sortOpen by remember { mutableStateOf(false) }
-    var rowMenu by remember { mutableStateOf<DownloadEntity?>(null) }
-    var groupMenu by remember { mutableStateOf<DownloadGroup?>(null) }
-    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
     LaunchedEffect(Unit) {
-        vm.messages.collect { toast.show(it) }
+        vm.messages.collect { snackbar.showSnackbar(it) }
     }
+
     LaunchedEffect(openMediaId) {
         openMediaId?.let { id ->
             onOpenMedia(id)
@@ -108,567 +118,773 @@ fun DownloadsScreen(
         }
     }
 
-    WorldBackdrop(section = Section.SYSTEM) {
-        Box(Modifier.fillMaxSize()) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(
-                    start = 20.dp,
-                    end = 20.dp,
-                    top = statusTop + 72.dp,
-                    bottom = NAV_RESERVE
-                ),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                item(key = "header") {
-                    ScreenHeader(
-                        title = "Downloads",
-                        subtitle = "Saved files play without a connection",
-                        overline = "Offline"
-                    )
-                }
-
-                if (state.rows.isEmpty()) {
-                    item(key = "empty") {
-                        GlassEmpty(
-                            title = "Nothing queued",
-                            body = "Open a manga chapter, a novel chapter or a film and tap " +
-                                "Download. Progress and failures are shown here with what " +
-                                "really happened.",
-                            actionLabel = "Back",
-                            onAction = onBack
-                        )
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        topBar = {
+            TopAppBar(
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Download queue")
+                        if (state.activeCount > 0) {
+                            Spacer(Modifier.width(8.dp))
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primary
+                            ) {
+                                Text(
+                                    text = "${state.activeCount}",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
+                        }
                     }
-                } else {
-                    item(key = "summary") {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            AFText(
-                                text = buildString {
-                                    append("${state.activeCount} active")
-                                    append(" Â· ${state.completed.size} saved")
-                                    if (state.failed.isNotEmpty()) {
-                                        append(" Â· ${state.failed.size} failed")
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    if (state.rows.isNotEmpty()) {
+                        Box {
+                            IconButton(onClick = { sortOpen = true }) {
+                                Icon(Icons.Outlined.Sort, contentDescription = "Order the queue")
+                            }
+                            DropdownMenu(expanded = sortOpen, onDismissRequest = { sortOpen = false }) {
+                                QueueOrder.entries.forEach { option ->
+                                    DropdownMenuItem(
+                                        text = { Text(option.label) },
+                                        onClick = {
+                                            vm.sortQueue(option)
+                                            sortOpen = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                        Box {
+                            IconButton(onClick = { menuOpen = true }) {
+                                Icon(Icons.Outlined.MoreVert, contentDescription = "Queue options")
+                            }
+                            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("Cancel all") },
+                                    enabled = state.activeCount > 0,
+                                    onClick = {
+                                        confirmClearQueue = true
+                                        menuOpen = false
                                     }
-                                    append(" Â· ${state.concurrent} at a time")
-                                },
-                                style = AFTheme.type.caption,
-                                color = if (state.failed.isNotEmpty()) {
-                                    AFTheme.colors.failed
-                                } else {
-                                    AFTheme.colors.textLo
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                            AFText(
-                                text = when {
-                                    state.paused -> "Paused"
-                                    state.activeCount == 0 -> "Idle"
-                                    else -> "Running"
-                                },
-                                style = AFTheme.type.label,
-                                color = if (state.paused) AFTheme.colors.textMid
-                                else AFTheme.colors.textMid
-                            )
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Download only on Wi-Fi") },
+                                    trailingIcon = {
+                                        if (state.wifiOnly) {
+                                            Icon(Icons.Outlined.Check, contentDescription = null)
+                                        }
+                                    },
+                                    onClick = {
+                                        vm.setWifiOnly(!state.wifiOnly)
+                                        menuOpen = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Download at the same time: ${state.concurrent}") },
+                                    onClick = {
+                                        showConcurrency = true
+                                        menuOpen = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Refresh queue") },
+                                    onClick = {
+                                        vm.refresh()
+                                        menuOpen = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Clear finished") },
+                                    enabled = state.completed.isNotEmpty() || state.failed.isNotEmpty(),
+                                    onClick = {
+                                        confirmClear = true
+                                        menuOpen = false
+                                    }
+                                )
+                            }
                         }
                     }
-
-                    state.groups.forEach { group ->
-                        item(key = "group:" + group.mediaId) {
-                            DownloadGroupPanel(
-                                group = group,
-                                onOpenGroupMenu = { groupMenu = group },
-                                onOpenRowMenu = { rowMenu = it },
-                                onOpenTitle = { vm.openMedia(group.mediaId) }
-                            )
-                        }
-                    }
-
-                    item(key = "storage") {
-                        AFText(
-                            text = "${formatBytes(state.completedBytes)} stored on this device",
-                            style = AFTheme.type.caption,
-                            color = AFTheme.colors.textLo,
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                }
+            )
+        },
+        floatingActionButton = {
+            if (state.canToggleQueue) {
+                ExtendedFloatingActionButton(
+                    onClick = vm::toggleQueue,
+                    icon = {
+                        Icon(
+                            imageVector = if (state.paused) {
+                                Icons.Outlined.PlayArrow
+                            } else {
+                                Icons.Outlined.Pause
+                            },
+                            contentDescription = null
                         )
-                    }
-                }
-            }
-
-            TopScrim(Modifier.align(Alignment.TopCenter))
-            BottomScrim(Modifier.align(Alignment.BottomCenter))
-
-            GlassTopCapsule(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                onBack = onBack
-            ) {
-                AFText(
-                    text = "Downloads",
-                    style = AFTheme.type.heading,
-                    color = AFTheme.colors.textHi,
-                    maxLines = 1,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = 12.dp)
-                )
-                if (state.activeCount > 0) {
-                    AFText(
-                        text = state.activeCount.toString(),
-                        style = AFTheme.type.numeric,
-                        color = AFTheme.colors.accent,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                }
-                if (state.canToggleQueue) {
-                    AFIconButton(
-                        icon = if (state.paused) AFIcons.Play else AFIcons.Pause,
-                        contentDescription = if (state.paused) {
-                            "Resume the queue"
-                        } else {
-                            "Pause the queue"
-                        },
-                        onClick = vm::toggleQueue
-                    )
-                }
-                if (state.rows.isNotEmpty()) {
-                    AFIconButton(
-                        icon = AFIcons.More,
-                        contentDescription = "Queue options",
-                        onClick = { moreOpen = true }
-                    )
-                }
-            }
-
-            GlassToastHost(
-                state = toast,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 108.dp)
-            )
-        }
-    }
-
-    if (sortOpen) {
-        GlassSheet(onDismiss = { sortOpen = false }) {
-            AFText("Order the queue", style = AFTheme.type.title, color = AFTheme.colors.textHi)
-            Spacer(Modifier.height(10.dp))
-            QueueOrder.entries.forEach { option ->
-                SheetRow(
-                    title = option.label,
-                    onClick = {
-                        vm.sortQueue(option)
-                        sortOpen = false
-                    }
-                )
-            }
-            Spacer(Modifier.height(6.dp))
-        }
-    }
-
-    if (moreOpen) {
-        GlassSheet(onDismiss = { moreOpen = false }) {
-            AFText("Queue options", style = AFTheme.type.title, color = AFTheme.colors.textHi)
-            Spacer(Modifier.height(10.dp))
-            SheetRow(
-                title = "Order the queue",
-                subtitle = "Sort active downloads by their position or title",
-                leading = { AFIcon(AFIcons.Sort, null, tint = AFTheme.colors.textMid, size = 20.dp) },
-                onClick = {
-                    moreOpen = false
-                    sortOpen = true
-                }
-            )
-            SheetRow(
-                title = "Download only on Wi-Fi",
-                subtitle = "Queued files wait for an unmetered connection",
-                selected = state.wifiOnly,
-                leading = { AFIcon(AFIcons.Wifi, null, tint = AFTheme.colors.textMid, size = 20.dp) },
-                onClick = { vm.setWifiOnly(!state.wifiOnly) }
-            )
-            SheetRow(
-                title = "Downloads at the same time",
-                subtitle = "Currently ${state.concurrent}",
-                leading = { AFIcon(AFIcons.Sliders, null, tint = AFTheme.colors.textMid, size = 20.dp) },
-                onClick = {
-                    moreOpen = false
-                    showConcurrency = true
-                }
-            )
-            SheetRow(
-                title = "Refresh queue",
-                leading = { AFIcon(AFIcons.Refresh, null, tint = AFTheme.colors.textMid, size = 20.dp) },
-                onClick = {
-                    vm.refresh()
-                    moreOpen = false
-                }
-            )
-            SheetRow(
-                title = "Clear finished",
-                subtitle = "Delete completed files and drop failed entries",
-                leading = { AFIcon(AFIcons.Trash, null, tint = AFTheme.colors.textMid, size = 20.dp) },
-                onClick = {
-                    moreOpen = false
-                    confirmClear = true
-                }
-            )
-            SheetRow(
-                title = "Cancel all",
-                subtitle = "Stop every unfinished download",
-                leading = { AFIcon(AFIcons.Close, null, tint = AFTheme.colors.failed, size = 20.dp) },
-                onClick = {
-                    moreOpen = false
-                    confirmClearQueue = true
-                }
-            )
-            Spacer(Modifier.height(6.dp))
-        }
-    }
-
-    rowMenu?.let { row ->
-        GlassSheet(onDismiss = { rowMenu = null }) {
-            AFText(
-                text = row.unitTitle,
-                style = AFTheme.type.title,
-                color = AFTheme.colors.textHi,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.height(10.dp))
-            if (row.status.isActive) {
-                SheetRow("Move to top", onClick = { vm.moveToTop(row.key); rowMenu = null })
-                SheetRow(
-                    "Move this title to top",
-                    onClick = { vm.moveGroupToTop(row.mediaId); rowMenu = null }
-                )
-                SheetRow("Move to bottom", onClick = { vm.moveToBottom(row.key); rowMenu = null })
-                SheetRow(
-                    "Move this title to bottom",
-                    onClick = { vm.moveGroupToBottom(row.mediaId); rowMenu = null }
-                )
-                if (row.isPaused || row.status == DownloadStatus.WAITING) {
-                    SheetRow("Resume", onClick = { vm.resume(row.key); rowMenu = null })
-                } else {
-                    SheetRow("Pause", onClick = { vm.pause(row.key); rowMenu = null })
-                }
-                SheetRow("Cancel", onClick = { pendingCancel = row; rowMenu = null })
-                SheetRow(
-                    "Cancel all for this title",
-                    onClick = {
-                        groupMenu = null
-                        pendingCancelGroup = state.groups.firstOrNull { group ->
-                            group.rows.any { it.key == row.key }
-                        }
-                        rowMenu = null
-                    }
-                )
-            }
-            SheetRow("Open title", onClick = { vm.openMedia(row.mediaId); rowMenu = null })
-            if (row.status == DownloadStatus.FAILED || row.status == DownloadStatus.CANCELED) {
-                SheetRow("Retry", onClick = { vm.retry(row.key); rowMenu = null })
-            }
-            if (row.status == DownloadStatus.COMPLETED ||
-                row.status == DownloadStatus.FAILED ||
-                row.status == DownloadStatus.CANCELED
-            ) {
-                SheetRow(
-                    title = if (row.status == DownloadStatus.COMPLETED) {
-                        "Delete files"
-                    } else {
-                        "Remove from queue"
                     },
-                    onClick = { pendingRemove = row; rowMenu = null }
+                    text = { Text(if (state.paused) "Resume" else "Pause") }
                 )
             }
-            Spacer(Modifier.height(6.dp))
         }
-    }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentPadding = PaddingValues(bottom = 96.dp)
+        ) {
+            if (state.rows.isEmpty()) {
+                item("empty") {
+                    EmptyState(
+                        icon = Icons.Outlined.Download,
+                        title = "Nothing queued",
+                        message = "Open a manga chapter, a novel chapter or a film and tap " +
+                            "Download. Progress and failures are shown here with what really " +
+                            "happened."
+                    )
+                }
+            }
 
-    groupMenu?.let { group ->
-        GlassSheet(onDismiss = { groupMenu = null }) {
-            AFText(
-                text = group.title,
-                style = AFTheme.type.title,
-                color = AFTheme.colors.textHi,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.height(10.dp))
-            SheetRow(
-                "Move this title to top",
-                onClick = { vm.moveGroupToTop(group.mediaId); groupMenu = null }
-            )
-            SheetRow(
-                "Move this title to bottom",
-                onClick = { vm.moveGroupToBottom(group.mediaId); groupMenu = null }
-            )
-            SheetRow("Open title", onClick = { vm.openMedia(group.mediaId); groupMenu = null })
-            SheetRow("Pause all", onClick = { vm.pauseAll(group.rows); groupMenu = null })
-            SheetRow("Resume all", onClick = { vm.resumeAll(group.rows); groupMenu = null })
-            SheetRow(
-                "Cancel all",
-                onClick = { pendingCancelGroup = group; groupMenu = null }
-            )
-            Spacer(Modifier.height(6.dp))
+            if (state.rows.isNotEmpty()) {
+                item("summary") {
+                    DownloadSummary(
+                        active = state.activeCount,
+                        saved = state.completed.size,
+                        failed = state.failed.size,
+                        paused = state.paused,
+                        concurrent = state.concurrent
+                    )
+                }
+            }
+
+            state.groups.forEachIndexed { groupIndex, group ->
+                stickyHeader(key = "group:${group.mediaId}") {
+                    GroupHeader(
+                        group = group,
+                        onPauseAll = { vm.pauseAll(group.rows) },
+                        onResumeAll = { vm.resumeAll(group.rows) },
+                        onCancelAll = { pendingCancelGroup = group },
+                        onMoveTop = { vm.moveGroupToTop(group.mediaId) },
+                        onMoveBottom = { vm.moveGroupToBottom(group.mediaId) },
+                        onShow = { vm.openMedia(group.mediaId) }
+                    )
+                }
+                itemsIndexed(group.rows, key = { _, row -> row.key }) { index, row ->
+                    DownloadRow(
+                        row = row,
+                        onMoveTop = { vm.moveToTop(row.key) },
+                        onMoveBottom = { vm.moveToBottom(row.key) },
+                        onMoveGroupTop = { vm.moveGroupToTop(group.mediaId) },
+                        onMoveGroupBottom = { vm.moveGroupToBottom(group.mediaId) },
+                        onShow = { vm.openMedia(group.mediaId) },
+                        onCancelGroup = { pendingCancelGroup = group },
+                        onPause = { vm.pause(row.key) },
+                        onResume = { vm.resume(row.key) },
+                        onRetry = { vm.retry(row.key) },
+                        onCancel = { pendingCancel = row },
+                        onRemove = { pendingRemove = row },
+                        modifier = Modifier
+                            .staggeredReveal(index + groupIndex)
+                            .animateItem()
+                    )
+                }
+            }
+
+            if (state.rows.isNotEmpty()) {
+                item("storage") {
+                    Text(
+                        text = "${formatBytes(state.completedBytes)} stored on this device",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp)
+                    )
+                }
+            }
         }
     }
 
     if (showConcurrency) {
-        GlassSheet(onDismiss = { showConcurrency = false }) {
-            AFText(
-                text = "Downloads at the same time",
-                style = AFTheme.type.title,
-                color = AFTheme.colors.textHi
-            )
-            Spacer(Modifier.height(12.dp))
-            GlassSegmented(
-                options = (1..4).map { it.toString() },
-                selectedIndex = (state.concurrent - 1).coerceIn(0, 3),
-                onSelect = { vm.setConcurrent(it + 1) },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(10.dp))
-            AFText(
-                text = "More parallel files finish a title sooner but compete for bandwidth.",
-                style = AFTheme.type.caption,
-                color = AFTheme.colors.textLo
-            )
-            Spacer(Modifier.height(8.dp))
-        }
+        AlertDialog(
+            onDismissRequest = { showConcurrency = false },
+            title = { Text("Downloads at the same time") },
+            text = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = { vm.setConcurrent(state.concurrent - 1) },
+                        enabled = state.concurrent > 1
+                    ) { Icon(Icons.Outlined.Remove, contentDescription = "Fewer downloads") }
+                    Text(
+                        text = "${state.concurrent}",
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
+                    IconButton(
+                        onClick = { vm.setConcurrent(state.concurrent + 1) },
+                        enabled = state.concurrent < 4
+                    ) { Icon(Icons.Outlined.Add, contentDescription = "More downloads") }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showConcurrency = false }) { Text("Done") }
+            }
+        )
     }
 
     pendingCancel?.let { row ->
-        GlassDialog(
-            title = "Cancel this download?",
-            body = "\"${row.unitTitle}\" stops downloading and its partial files are deleted.",
-            confirmLabel = "Cancel download",
-            destructive = true,
-            onConfirm = {
-                vm.cancel(row.key)
-                pendingCancel = null
+        AlertDialog(
+            onDismissRequest = { pendingCancel = null },
+            title = { Text("Cancel this download?") },
+            text = {
+                Text(
+                    "\"${row.unitTitle}\" stops downloading and its partial files are deleted."
+                )
             },
-            onDismiss = { pendingCancel = null },
-            dismissLabel = "Keep it"
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        vm.cancel(row.key)
+                        pendingCancel = null
+                    }
+                ) { Text("Cancel download", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingCancel = null }) { Text("Keep it") }
+            }
         )
     }
 
     pendingCancelGroup?.let { group ->
-        GlassDialog(
-            title = "Cancel this title's queue?",
-            body = "Every active part of \"${group.title}\" stops and its partial files are " +
-                "deleted. Completed parts stay on this device.",
-            confirmLabel = "Cancel ${group.active.size}",
-            destructive = true,
-            onConfirm = {
-                vm.cancelAll(group.rows)
-                pendingCancelGroup = null
+        AlertDialog(
+            onDismissRequest = { pendingCancelGroup = null },
+            title = { Text("Cancel this title's queue?") },
+            text = {
+                Text(
+                    "Every active part of \"${group.title}\" stops and its partial files are " +
+                        "deleted. Completed parts stay on this device."
+                )
             },
-            onDismiss = { pendingCancelGroup = null },
-            dismissLabel = "Keep them"
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        vm.cancelAll(group.rows)
+                        pendingCancelGroup = null
+                    }
+                ) { Text("Cancel ${group.active.size}", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingCancelGroup = null }) { Text("Keep them") }
+            }
         )
     }
 
     pendingRemove?.let { row ->
-        GlassDialog(
-            title = "Delete downloaded files?",
-            body = "\"${row.unitTitle}\" (${formatBytes(row.totalBytes)}) is removed from this " +
-                "device. The title stays in your library.",
-            confirmLabel = "Delete",
-            destructive = true,
-            onConfirm = {
-                vm.remove(row.key)
-                pendingRemove = null
+        AlertDialog(
+            onDismissRequest = { pendingRemove = null },
+            title = { Text("Delete downloaded files?") },
+            text = {
+                Text(
+                    "\"${row.unitTitle}\" (${formatBytes(row.totalBytes)}) is removed from this " +
+                        "device. The title stays in your library."
+                )
             },
-            onDismiss = { pendingRemove = null },
-            dismissLabel = "Keep"
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        vm.remove(row.key)
+                        pendingRemove = null
+                    }
+                ) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRemove = null }) { Text("Keep") }
+            }
         )
     }
 
     if (confirmClearQueue) {
-        GlassDialog(
-            title = "Cancel the whole queue?",
-            body = "Every unfinished download stops and its partial files are deleted. " +
-                "Completed downloads stay on this device.",
-            confirmLabel = "Cancel all",
-            destructive = true,
-            onConfirm = {
-                vm.clearQueue()
-                confirmClearQueue = false
+        AlertDialog(
+            onDismissRequest = { confirmClearQueue = false },
+            title = { Text("Cancel the whole queue?") },
+            text = {
+                Text(
+                    "Every unfinished download stops and its partial files are deleted. " +
+                        "Completed downloads stay on this device."
+                )
             },
-            onDismiss = { confirmClearQueue = false },
-            dismissLabel = "Keep them"
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        vm.clearQueue()
+                        confirmClearQueue = false
+                    }
+                ) { Text("Cancel all", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClearQueue = false }) { Text("Keep them") }
+            }
         )
     }
 
     if (confirmClear) {
-        GlassDialog(
-            title = "Clear finished downloads?",
-            body = "Completed files are deleted from this device, and failed or cancelled " +
-                "entries disappear. Titles stay in your library.",
-            confirmLabel = "Clear",
-            destructive = true,
-            onConfirm = {
-                vm.clearFinished()
-                confirmClear = false
+        AlertDialog(
+            onDismissRequest = { confirmClear = false },
+            title = { Text("Clear finished downloads?") },
+            text = {
+                Text(
+                    "Completed files are deleted from this device, and failed or cancelled " +
+                        "entries disappear. Titles stay in your library."
+                )
             },
-            onDismiss = { confirmClear = false }
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        vm.clearFinished()
+                        confirmClear = false
+                    }
+                ) { Text("Clear", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClear = false }) { Text("Cancel") }
+            }
         )
     }
 }
 
 @Composable
-private fun DownloadGroupPanel(
+private fun GroupHeader(
     group: DownloadGroup,
-    onOpenGroupMenu: () -> Unit,
-    onOpenRowMenu: (DownloadEntity) -> Unit,
-    onOpenTitle: () -> Unit
+    onPauseAll: () -> Unit,
+    onResumeAll: () -> Unit,
+    onCancelAll: () -> Unit,
+    onMoveTop: () -> Unit,
+    onMoveBottom: () -> Unit,
+    onShow: () -> Unit
 ) {
-    GlassPanel {
+    var menu by remember { mutableStateOf(false) }
+    // The sticky header carries the group's own progress, so a title keeps answering
+    // "how far along is this?" even when its rows have scrolled away.
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClickLabel = "Open ${group.title}"
-                ) { onOpenTitle() },
+                .padding(start = 12.dp, end = 4.dp, top = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(Modifier.weight(1f)) {
-                AFText(
-                    text = group.title,
-                    style = AFTheme.type.heading,
-                    color = AFTheme.colors.textHi,
-                    onGlass = true,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                AFText(
-                    text = groupSummary(group),
-                    style = AFTheme.type.caption,
-                    color = if (group.failed.isNotEmpty()) AFTheme.colors.failed
-                    else AFTheme.colors.textLo,
-                    onGlass = true,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+            Icon(
+                imageVector = Icons.Outlined.DragHandle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = group.title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(8.dp))
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.surfaceVariant
+            ) {
+                Text(
+                    text = "${group.rows.size}",
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Spacer(Modifier.width(8.dp))
-            AFText(
-                text = group.rows.size.toString(),
-                style = AFTheme.type.numeric,
-                color = AFTheme.colors.textLo,
-                onGlass = true
-            )
-            AFIconButton(
-                icon = AFIcons.More,
-                contentDescription = "Actions for ${group.title}",
-                onClick = onOpenGroupMenu
-            )
+            Box {
+                IconButton(onClick = { menu = true }, modifier = Modifier.size(40.dp)) {
+                    Icon(
+                        Icons.Outlined.MoreVert,
+                        contentDescription = "Actions for ${group.title}",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Move this title to top") },
+                        enabled = group.active.isNotEmpty(),
+                        onClick = {
+                            onMoveTop()
+                            menu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Move this title to bottom") },
+                        enabled = group.active.isNotEmpty(),
+                        onClick = {
+                            onMoveBottom()
+                            menu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Open title") },
+                        onClick = {
+                            onShow()
+                            menu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Pause all") },
+                        enabled = group.active.any {
+                            it.status == DownloadStatus.RUNNING || it.status == DownloadStatus.QUEUED
+                        },
+                        onClick = {
+                            onPauseAll()
+                            menu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Resume all") },
+                        enabled = group.rows.any {
+                            it.isPaused ||
+                                it.status == DownloadStatus.WAITING ||
+                                it.status == DownloadStatus.FAILED ||
+                                it.status == DownloadStatus.CANCELED
+                        },
+                        onClick = {
+                            onResumeAll()
+                            menu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Cancel all") },
+                        enabled = group.active.isNotEmpty(),
+                        onClick = {
+                            onCancelAll()
+                            menu = false
+                        }
+                    )
+                }
+            }
         }
+        Text(
+            text = groupSummary(group),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 40.dp, end = 16.dp, bottom = 8.dp)
+        )
         val progress = group.progress
         if (progress != null && group.active.isNotEmpty()) {
-            Spacer(Modifier.height(10.dp))
-            GlassProgress(progress = progress / 100f, height = 3.dp)
-        }
-        Spacer(Modifier.height(6.dp))
-        group.rows.forEachIndexed { index, row ->
-            if (index > 0) {
-                Spacer(Modifier.height(2.dp))
-            }
-            DownloadRow(
-                row = row,
-                onOpenMenu = { onOpenRowMenu(row) },
-                onOpenTitle = onOpenTitle
+            AnimatedProgress(
+                progress = progress / 100f,
+                modifier = Modifier.padding(horizontal = 12.dp),
+                height = 3
             )
+            Spacer(Modifier.height(6.dp))
+        } else {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         }
+    }
+}
+
+/**
+ * A one-glance answer to "what is the queue doing?" before the groups start: how many
+ * parts are moving, how many are on disk, and how many need attention.
+ */
+@Composable
+private fun DownloadSummary(
+    active: Int,
+    saved: Int,
+    failed: Int,
+    paused: Boolean,
+    concurrent: Int
+) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "QUEUE",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = when {
+                        paused -> "Paused"
+                        active == 0 -> "Idle"
+                        active == 1 -> "1 downloading"
+                        else -> "$active downloading"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (paused) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = " · $concurrent at a time",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                SummaryStat("Active", active, MaterialTheme.colorScheme.primary)
+                SummaryStat("Saved", saved, MaterialTheme.colorScheme.secondary)
+                SummaryStat(
+                    "Failed",
+                    failed,
+                    if (failed > 0) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SummaryStat(label: String, value: Int, tint: Color) {
+    Column {
+        Text(
+            text = value.toString(),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = tint
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
 @Composable
 private fun DownloadRow(
     row: DownloadEntity,
-    onOpenMenu: () -> Unit,
-    onOpenTitle: () -> Unit
+    onMoveTop: () -> Unit,
+    onMoveBottom: () -> Unit,
+    onMoveGroupTop: () -> Unit,
+    onMoveGroupBottom: () -> Unit,
+    onShow: () -> Unit,
+    onCancelGroup: () -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onRetry: () -> Unit,
+    onCancel: () -> Unit,
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val colors = AFTheme.colors
-    val haptics = rememberHaptics()
-    val tone = when (row.status) {
-        DownloadStatus.COMPLETED -> colors.ok
-        DownloadStatus.FAILED -> colors.failed
-        DownloadStatus.CANCELED -> colors.textLo
-        DownloadStatus.WAITING -> colors.textMid
-        else -> colors.accent
-    }
-    val icon = when (row.status) {
-        DownloadStatus.COMPLETED -> AFIcons.Check
-        DownloadStatus.FAILED -> AFIcons.Close
-        DownloadStatus.CANCELED -> AFIcons.Close
-        DownloadStatus.WAITING -> AFIcons.Pause
-        else -> AFIcons.Download
-    }
+    var menu by remember { mutableStateOf(false) }
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClickLabel = "Open ${row.unitTitle}"
-            ) {
-                haptics.tick()
-                onOpenTitle()
-            }
-            .padding(vertical = 10.dp)
+            .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            AFIcon(icon, null, tint = tone, size = 18.dp)
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = when (row.status) {
+                        DownloadStatus.COMPLETED -> Icons.Outlined.DownloadDone
+                        DownloadStatus.FAILED -> Icons.Outlined.Close
+                        DownloadStatus.CANCELED -> Icons.Outlined.Cancel
+                        DownloadStatus.WAITING -> Icons.Outlined.Pause
+                        else -> Icons.Outlined.Download
+                    },
+                    contentDescription = null,
+                    tint = when (row.status) {
+                        DownloadStatus.COMPLETED -> MaterialTheme.colorScheme.secondary
+                        DownloadStatus.FAILED -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.primary
+                    },
+                    modifier = Modifier.size(18.dp)
+                )
+            }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                AFText(
+                Text(
                     text = row.unitTitle,
-                    style = AFTheme.type.label,
-                    color = colors.textHi,
-                    onGlass = true,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                AFText(
+                Text(
                     text = statusText(row),
-                    style = AFTheme.type.caption,
-                    color = if (row.status == DownloadStatus.FAILED) colors.failed else colors.textLo,
-                    onGlass = true,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (row.status == DownloadStatus.FAILED) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
             if (row.status == DownloadStatus.RUNNING && row.progress in 0..100) {
-                AFText(
+                Text(
                     text = "${row.progress}%",
-                    style = AFTheme.type.numeric,
-                    color = colors.accent,
-                    onGlass = true
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
-            AFIconButton(
-                icon = AFIcons.More,
-                contentDescription = "Actions for ${row.unitTitle}",
-                onClick = onOpenMenu,
-                visualSize = 40.dp
-            )
+            Box {
+                IconButton(onClick = { menu = true }, modifier = Modifier.size(40.dp)) {
+                    Icon(
+                        Icons.Outlined.MoreVert,
+                        contentDescription = "Actions for ${row.unitTitle}",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    if (row.status.isActive) {
+                        // Same actions as Komikku's per-download menu.
+                        DropdownMenuItem(
+                            text = { Text("Move to top") },
+                            onClick = {
+                                onMoveTop()
+                                menu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Move this title to top") },
+                            onClick = {
+                                onMoveGroupTop()
+                                menu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Move to bottom") },
+                            onClick = {
+                                onMoveBottom()
+                                menu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Move this title to bottom") },
+                            onClick = {
+                                onMoveGroupBottom()
+                                menu = false
+                            }
+                        )
+                        if (row.isPaused || row.status == DownloadStatus.WAITING) {
+                            DropdownMenuItem(
+                                text = { Text("Resume") },
+                                onClick = {
+                                    onResume()
+                                    menu = false
+                                }
+                            )
+                        } else {
+                            DropdownMenuItem(
+                                text = { Text("Pause") },
+                                onClick = {
+                                    onPause()
+                                    menu = false
+                                }
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text("Cancel") },
+                            onClick = {
+                                onCancel()
+                                menu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Cancel all for this title") },
+                            onClick = {
+                                onCancelGroup()
+                                menu = false
+                            }
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text("Open title") },
+                        onClick = {
+                            onShow()
+                            menu = false
+                        }
+                    )
+                    if (row.status == DownloadStatus.FAILED ||
+                        row.status == DownloadStatus.CANCELED
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Retry") },
+                            onClick = {
+                                onRetry()
+                                menu = false
+                            }
+                        )
+                    }
+                    if (row.status == DownloadStatus.COMPLETED ||
+                        row.status == DownloadStatus.FAILED ||
+                        row.status == DownloadStatus.CANCELED
+                    ) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = if (row.status == DownloadStatus.COMPLETED) {
+                                        "Delete files"
+                                    } else {
+                                        "Remove from queue"
+                                    },
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            },
+                            onClick = {
+                                onRemove()
+                                menu = false
+                            }
+                        )
+                    }
+                }
+            }
         }
         if (row.status == DownloadStatus.RUNNING) {
-            Spacer(Modifier.height(8.dp))
-            Box(Modifier.padding(start = 30.dp, end = 44.dp)) {
-                if (row.progress in 0..100) {
-                    GlassProgress(progress = row.progress / 100f, height = 3.dp)
-                } else {
-                    GlassProgress(progress = 0.35f, height = 3.dp)
-                }
+            Spacer(Modifier.height(4.dp))
+            if (row.progress in 0..100) {
+                AnimatedProgress(
+                    progress = row.progress / 100f,
+                    modifier = Modifier.padding(start = 44.dp, end = 44.dp),
+                    height = 3
+                )
+            } else {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .padding(start = 44.dp, end = 44.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
             }
         }
     }
@@ -680,7 +896,7 @@ private fun groupSummary(group: DownloadGroup): String {
             group.completed.size == group.rows.size -> "${group.completed.size} saved"
             group.failed.isNotEmpty() -> buildString {
                 append("${group.failed.size} failed")
-                if (group.completed.isNotEmpty()) append(" Â· ${group.completed.size} saved")
+                if (group.completed.isNotEmpty()) append(" · ${group.completed.size} saved")
             }
             else -> "${group.rows.size} items"
         }
@@ -690,6 +906,7 @@ private fun groupSummary(group: DownloadGroup): String {
     val queued = group.active.count {
         it.status == DownloadStatus.QUEUED && !it.isPaused
     }
+    // Anything left is waiting on a condition such as Wi-Fi rather than on the user.
     val waiting = (group.active.size - paused - downloading - queued).coerceAtLeast(0)
     val parts = buildList {
         if (downloading > 0) add("$downloading downloading")
@@ -699,7 +916,7 @@ private fun groupSummary(group: DownloadGroup): String {
         group.progress?.let { add("$it%") }
         if (group.completed.isNotEmpty()) add("${group.completed.size} saved")
     }
-    return parts.joinToString(" Â· ")
+    return parts.joinToString(" · ")
 }
 
 private fun statusText(row: DownloadEntity): String = when (row.status) {
@@ -707,9 +924,9 @@ private fun statusText(row: DownloadEntity): String = when (row.status) {
         if (row.progress in 0..100) append("Downloading ${row.progress}%")
         else append("Downloading")
         if (row.totalBytes > 0) {
-            append(" Â· ${formatBytes(row.downloadedBytes)} of ${formatBytes(row.totalBytes)}")
+            append(" · ${formatBytes(row.downloadedBytes)} of ${formatBytes(row.totalBytes)}")
         } else if (row.downloadedBytes > 0) {
-            append(" Â· ${formatBytes(row.downloadedBytes)}")
+            append(" · ${formatBytes(row.downloadedBytes)}")
         }
     }
     DownloadStatus.QUEUED -> row.note ?: "Queued"
@@ -717,10 +934,10 @@ private fun statusText(row: DownloadEntity): String = when (row.status) {
     DownloadStatus.COMPLETED -> buildString {
         append("Completed")
         row.completedAt?.let {
-            append(" Â· ")
+            append(" · ")
             append(DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(it)))
         }
-        if (row.totalBytes > 0) append(" Â· ${formatBytes(row.totalBytes)}")
+        if (row.totalBytes > 0) append(" · ${formatBytes(row.totalBytes)}")
     }
     DownloadStatus.FAILED -> row.error ?: "Failed"
     DownloadStatus.CANCELED -> "Cancelled"

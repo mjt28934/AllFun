@@ -29,17 +29,6 @@ import app.allfun.data.settings.AccentPalette
 import app.allfun.data.settings.CornerStyle
 import app.allfun.data.settings.Settings
 import app.allfun.data.settings.ThemeMode
-import app.allfun.ui.glass.GlassLevel
-import app.allfun.ui.glass.LocalAFColors
-import app.allfun.ui.glass.LocalAFType
-import app.allfun.ui.glass.LocalAmbientField
-import app.allfun.ui.glass.LocalGlassLevel
-import app.allfun.ui.glass.LocalTiltField
-import app.allfun.ui.glass.Section
-import app.allfun.ui.glass.afType
-import app.allfun.ui.glass.darkAFColors
-import app.allfun.ui.glass.glassAccent
-import app.allfun.ui.glass.lightAFColors
 
 val Ink = Color(0xFF0A0A0F)
 val InkRaised = Color(0xFF13131B)
@@ -406,41 +395,13 @@ fun AllFunTheme(settings: Settings, content: @Composable () -> Unit) {
     val reduceMotion = settings.reduceMotion || systemReduceMotion()
     val density = LocalDensity.current
     val fontScale = settings.appTextSize.scale
-    // The glass material owns the visible palette. Material's scheme is kept in step so the
-    // few widgets that still render through it (dialogs, text fields) cannot look foreign.
-    val glassColors = if (dark) {
-        darkAFColors(
-            accent = settings.accent.glassAccent(Section.SYSTEM.accent),
-            amoled = settings.amoledBlack
-        )
-    } else {
-        lightAFColors(settings.accent.glassAccent(Section.SYSTEM.accent))
-    }
-    val glassLevel = when (settings.glassQuality) {
-        app.allfun.data.settings.GlassQuality.HIGH -> GlassLevel.HIGH
-        app.allfun.data.settings.GlassQuality.STANDARD -> GlassLevel.STANDARD
-        app.allfun.data.settings.GlassQuality.LITE -> GlassLevel.LITE
-    }
     CompositionLocalProvider(
         LocalReduceMotion provides reduceMotion,
-        LocalAFColors provides glassColors,
-        LocalAFType provides afType(),
-        LocalGlassLevel provides glassLevel,
-        LocalAmbientField provides true,
-        LocalTiltField provides !reduceMotion,
         LocalDensity provides if (fontScale == 1f) density
         else Density(density.density, density.fontScale * fontScale)
     ) {
         MaterialTheme(
-            colorScheme = animatedScheme(
-                scheme.copy(
-                    primary = glassColors.accent,
-                    background = glassColors.bg0,
-                    surface = glassColors.bg0,
-                    onBackground = glassColors.textHi,
-                    onSurface = glassColors.textHi
-                )
-            ),
+            colorScheme = animatedScheme(scheme),
             typography = AppTypography,
             shapes = shapesFor(settings.cornerStyle),
             content = content

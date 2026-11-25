@@ -1,18 +1,21 @@
 package app.allfun.ui.search
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -22,55 +25,55 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.allfun.data.AppContainer
 import app.allfun.data.content.ContentCategory
-import app.allfun.data.content.format
+import app.allfun.ui.components.ContentCard
+import app.allfun.ui.components.ContentReveal
+import app.allfun.ui.components.EmptyState
+import app.allfun.ui.components.ErrorState
+import app.allfun.ui.components.GridSkeleton
+import app.allfun.ui.components.LoadingState
+import app.allfun.ui.components.ProviderStatusLine
+import app.allfun.ui.components.SectionHeader
 import app.allfun.ui.components.rememberViewModel
-import app.allfun.ui.glass.AFIcons
-import app.allfun.ui.glass.AFIcon
-import app.allfun.ui.glass.AFIconButton
-import app.allfun.ui.glass.AFSpinner
-import app.allfun.ui.glass.AFText
-import app.allfun.ui.glass.AFTextButton
-import app.allfun.ui.glass.AFTheme
-import app.allfun.ui.glass.BottomScrim
-import app.allfun.ui.glass.GlassChip
-import app.allfun.ui.glass.GlassEmpty
-import app.allfun.ui.glass.GlassPanel
-import app.allfun.ui.glass.GlassSurface
-import app.allfun.ui.glass.GlassTextField
-import app.allfun.ui.glass.GlassTier
-import app.allfun.ui.glass.GlassToastHost
-import app.allfun.ui.glass.GlassTopCapsule
-import app.allfun.ui.glass.PosterCard
-import app.allfun.ui.glass.Section
-import app.allfun.ui.glass.SkeletonPosterGrid
-import app.allfun.ui.glass.TopScrim
-import app.allfun.ui.glass.WorldBackdrop
-import app.allfun.ui.glass.rememberGlassToastState
-import app.allfun.ui.glass.rememberHaptics
 
-private val NAV_RESERVE = 140.dp
-
-/**
- * One query across every category. Results stay grouped by section and keep the provider
- * that returned them; nothing is merged away.
- */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun GlobalSearchScreen(
     container: AppContainer,
@@ -83,7 +86,7 @@ fun GlobalSearchScreen(
         GlobalSearchViewModel(container, initialCategory)
     }
     val state by vm.state.collectAsStateWithLifecycle()
-    val toast = rememberGlassToastState()
+    val snackbar = remember { SnackbarHostState() }
     val focus = LocalFocusManager.current
     val focusRequester = remember { FocusRequester() }
     val visible = state.visibleResults()
@@ -92,18 +95,21 @@ fun GlobalSearchScreen(
     // recent searches from the top, not the offset the results list was left at.
     val idleScroll = rememberLazyListState()
     val resultsScroll = rememberLazyListState()
-    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
     LaunchedEffect(state.query) {
         if (state.query.isNotBlank() && resultsScroll.firstVisibleItemIndex != 0) {
             resultsScroll.scrollToItem(0)
         }
     }
+    // History arrives one frame after the idle list is composed. LazyColumn anchors on the
+    // first visible item, so prepending the history section above the hint would leave the
+    // hint in place and push the recent searches out of view.
     LaunchedEffect(state.history) {
         if (idleScroll.firstVisibleItemIndex != 0) idleScroll.scrollToItem(0)
     }
+
     LaunchedEffect(Unit) {
-        vm.messages.collect { toast.show(it) }
+        vm.messages.collect { snackbar.showSnackbar(it) }
     }
     LaunchedEffect(Unit) {
         vm.openMediaId.collect { id ->
@@ -117,312 +123,225 @@ fun GlobalSearchScreen(
         runCatching { focusRequester.requestFocus() }
     }
 
-    WorldBackdrop(section = Section.SYSTEM) {
-        Box(Modifier.fillMaxSize()) {
-            Column(
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .statusBarsPadding()
+        ) {
+            Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .padding(top = 72.dp)
+                    .fillMaxWidth()
+                    .padding(start = 4.dp, end = 16.dp, top = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    GlassTextField(
-                        value = state.query,
-                        onValueChange = vm::setQuery,
-                        placeholder = "Movies, shows, books, novels, manga…",
-                        leading = AFIcons.Search,
-                        trailing = {
-                            if (state.query.isNotEmpty()) {
-                                AFIconButton(
-                                    icon = AFIcons.Close,
-                                    contentDescription = "Clear search",
-                                    onClick = { vm.setQuery("") },
-                                    visualSize = 32.dp
-                                )
-                            }
-                        },
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+                }
+                Text(
+                    text = "Search",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+                Spacer(Modifier.weight(1f))
+                if (state.knownSources > 0) {
+                    Box(
                         modifier = Modifier
-                            .weight(1f)
-                            .focusRequester(focusRequester),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search)
+                            .clip(RoundedCornerShape(50))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = if (state.knownSources == 1) "1 source"
+                            else "${state.knownSources} sources",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+
+            OutlinedTextField(
+                value = state.query,
+                onValueChange = vm::setQuery,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .focusRequester(focusRequester),
+                placeholder = { Text("Movies, shows, books, novels, manga…") },
+                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (state.query.isNotEmpty()) {
+                        IconButton(onClick = { vm.setQuery("") }) {
+                            Icon(Icons.Outlined.Close, contentDescription = "Clear search")
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(18.dp),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(
+                    onSearch = {
+                        vm.submit()
+                        focus.clearFocus()
+                    }
+                )
+            )
+
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    FilterChip(
+                        selected = state.categoryFilter == null,
+                        onClick = { vm.setCategory(null) },
+                        label = { Text("Everything") }
                     )
                 }
+                items(ContentCategory.entries) { category ->
+                    FilterChip(
+                        selected = state.categoryFilter == category,
+                        onClick = { vm.setCategory(category) },
+                        label = { Text(category.shortLabel) }
+                    )
+                }
+            }
 
-                Spacer(Modifier.height(10.dp))
+            if (state.availableSources.size > 1) {
                 LazyRow(
-                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     item {
-                        GlassChip(
-                            label = "Everything",
-                            selected = state.categoryFilter == null,
-                            onClick = { vm.setCategory(null) }
+                        FilterChip(
+                            selected = state.sourceFilter == null,
+                            onClick = { vm.setSource(null) },
+                            label = { Text("All sources") }
                         )
                     }
-                    items(ContentCategory.entries) { category ->
-                        GlassChip(
-                            label = category.shortLabel,
-                            selected = state.categoryFilter == category,
-                            onClick = { vm.setCategory(category) }
+                    items(state.availableSources, key = { it.first }) { (sourceId, sourceName) ->
+                        FilterChip(
+                            selected = state.sourceFilter == sourceId,
+                            onClick = {
+                                vm.setSource(
+                                    if (state.sourceFilter == sourceId) null else sourceId
+                                )
+                            },
+                            label = { Text(sourceName, maxLines = 1) }
                         )
                     }
                 }
+            }
 
-                if (state.availableSources.size > 1) {
-                    Spacer(Modifier.height(8.dp))
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 20.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+            if (state.searching) {
+                LinearProgressIndicator(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .clip(CircleShape)
+                )
+            }
+
+            Box(Modifier.weight(1f)) {
+                when {
+                    state.query.isBlank() -> SearchIdle(
+                        history = state.history,
+                        listState = idleScroll,
+                        hasSources = state.knownSources > 0 || state.statuses.isNotEmpty(),
+                        onUseHistory = vm::useHistory,
+                        onRemoveHistory = vm::removeHistory,
+                        onClearHistory = vm::clearHistory,
+                        onManageExtensions = onManageExtensions
+                    )
+
+                    state.error != null -> ErrorState(
+                        error = state.error!!,
+                        onRetry = vm::retry,
+                        secondary = "Manage extensions" to onManageExtensions
+                    )
+
+                    state.searching -> Column(Modifier.fillMaxSize()) {
+                        LoadingState("Searching your installed sources")
+                        GridSkeleton(count = 9, minCellWidth = 108.dp)
+                    }
+
+                    state.searched && state.total == 0 -> EmptyState(
+                        icon = Icons.Outlined.Search,
+                        title = "No results",
+                        message = "No installed source returned \"${state.query}\". " +
+                            "Search only reports real responses; nothing is simulated.",
+                        actionLabel = "Manage extensions",
+                        onAction = onManageExtensions
+                    )
+
+                    else -> LazyColumn(
+                        state = resultsScroll,
+                        contentPadding = PaddingValues(bottom = 32.dp)
                     ) {
                         item {
-                            GlassChip(
-                                label = "All sources",
-                                selected = state.sourceFilter == null,
-                                onClick = { vm.setSource(null) }
-                            )
-                        }
-                        items(state.availableSources, key = { it.first }) { (sourceId, sourceName) ->
-                            GlassChip(
-                                label = sourceName,
-                                selected = state.sourceFilter == sourceId,
-                                onClick = {
-                                    vm.setSource(
-                                        if (state.sourceFilter == sourceId) null else sourceId
-                                    )
-                                }
-                            )
-                        }
-                    }
-                }
-
-                if (state.searching) {
-                    Row(
-                        modifier = Modifier.padding(start = 22.dp, top = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        AFSpinner(size = 14.dp)
-                        Spacer(Modifier.width(8.dp))
-                        AFText(
-                            text = "Searching ${state.knownSources} " +
-                                if (state.knownSources == 1) "source" else "sources",
-                            style = AFTheme.type.caption,
-                            color = AFTheme.colors.textLo
-                        )
-                    }
-                }
-
-                Box(Modifier.weight(1f)) {
-                    when {
-                        state.query.isBlank() -> SearchIdle(
-                            history = state.history,
-                            listState = idleScroll,
-                            hasSources = state.knownSources > 0 || state.statuses.isNotEmpty(),
-                            onUseHistory = vm::useHistory,
-                            onRemoveHistory = vm::removeHistory,
-                            onClearHistory = vm::clearHistory,
-                            onManageExtensions = onManageExtensions
-                        )
-
-                        state.error != null -> GlassEmpty(
-                            title = "Search could not finish",
-                            body = state.error?.message.orEmpty(),
-                            actionLabel = "Try again",
-                            onAction = vm::retry
-                        )
-
-                        state.searching -> Column(Modifier.fillMaxSize()) {
-                            SkeletonPosterGrid(
-                                columns = 3,
-                                rows = 2,
-                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-                            )
-                            AFText(
-                                text = "Asking every installed source at once",
-                                style = AFTheme.type.caption,
-                                color = AFTheme.colors.textLo,
-                                modifier = Modifier.padding(horizontal = 20.dp)
+                            Text(
+                                text = "${state.total} ${if (state.total == 1) "result" else "results"} " +
+                                    "for \"${state.query}\"",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
                             )
                         }
 
-                        state.searched && state.total == 0 -> GlassEmpty(
-                            title = "No results",
-                            body = "No installed source returned \"${state.query}\". Search " +
-                                "only reports real responses; nothing is simulated.",
-                            actionLabel = "Manage extensions",
-                            onAction = onManageExtensions
-                        )
-
-                        else -> LazyColumn(
-                            state = resultsScroll,
-                            contentPadding = PaddingValues(
-                                start = 20.dp,
-                                end = 20.dp,
-                                top = 8.dp,
-                                bottom = NAV_RESERVE
-                            ),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            item(key = "summary") {
-                                AFText(
-                                    text = "${state.total} " +
-                                        (if (state.total == 1) "result" else "results") +
-                                        " for \"${state.query}\"",
-                                    style = AFTheme.type.label,
-                                    color = AFTheme.colors.textMid
+                        ContentCategory.entries.forEach { category ->
+                            val items = visible[category].orEmpty()
+                            if (items.isEmpty()) return@forEach
+                            item("header-${category.name}") {
+                                SectionHeader(
+                                    title = category.label,
+                                    subtitle = "${items.size} " +
+                                        (if (items.size == 1) "title" else "titles")
                                 )
                             }
-
-                            ContentCategory.entries.forEach { category ->
-                                val categoryItems = visible[category].orEmpty()
-                                if (categoryItems.isEmpty()) return@forEach
-                                item(key = "header-${category.name}") {
-                                    Row(
-                                        Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        AFText(
-                                            text = category.label,
-                                            style = AFTheme.type.heading,
-                                            color = AFTheme.colors.textHi,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        AFText(
-                                            text = categoryItems.size.toString(),
-                                            style = AFTheme.type.numeric,
-                                            color = AFTheme.colors.textLo
-                                        )
-                                    }
-                                }
-                                item(key = "row-${category.name}") {
+                            item("row-${category.name}") {
+                                ContentReveal {
                                     LazyRow(
+                                        contentPadding = PaddingValues(horizontal = 16.dp),
                                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                                     ) {
                                         items(
-                                            categoryItems,
+                                            items,
                                             key = { it.primary.sourceId + "|" + it.primary.key }
                                         ) { item ->
-                                            PosterCard(
-                                                title = item.title,
-                                                imageUrl = item.stub.coverUrl,
-                                                modifier = Modifier.width(112.dp),
-                                                subtitle = listOfNotNull(
-                                                    item.format(null),
-                                                    item.sourceLabel
-                                                ).joinToString(" · ").ifBlank { null },
+                                            ContentCard(
+                                                item = item,
                                                 onClick = { vm.open(item) }
                                             )
                                         }
                                     }
                                 }
                             }
+                        }
 
-                            if (failedSources.isNotEmpty()) {
-                                item(key = "source-issues") {
-                                    GlassPanel(header = "Source issues") {
-                                        AFText(
-                                            text = "${failedSources.size} source" +
-                                                (if (failedSources.size == 1) "" else "s") +
-                                                " could not be searched. Everything else below " +
-                                                "is a real response.",
-                                            style = AFTheme.type.bodySmall,
-                                            color = AFTheme.colors.textMid,
-                                            onGlass = true
-                                        )
-                                        failedSources.forEach { status ->
-                                            Row(
-                                                modifier = Modifier.padding(vertical = 6.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Box(
-                                                    Modifier
-                                                        .width(6.dp)
-                                                        .height(6.dp)
-                                                        .padding(0.dp)
-                                                ) {
-                                                    AFIcon(
-                                                        icon = AFIcons.Close,
-                                                        contentDescription = null,
-                                                        tint = AFTheme.colors.failed,
-                                                        size = 14.dp
-                                                    )
-                                                }
-                                                Spacer(Modifier.width(8.dp))
-                                                Column(Modifier.weight(1f)) {
-                                                    AFText(
-                                                        text = status.sourceName,
-                                                        style = AFTheme.type.label,
-                                                        color = AFTheme.colors.textHi,
-                                                        onGlass = true,
-                                                        maxLines = 1
-                                                    )
-                                                    AFText(
-                                                        text = status.message ?: status.state.label,
-                                                        style = AFTheme.type.caption,
-                                                        color = AFTheme.colors.textLo,
-                                                        onGlass = true,
-                                                        maxLines = 2,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
-                                                }
-                                            }
-                                        }
-                                        AFTextButton(
-                                            label = "Manage extensions",
-                                            onClick = onManageExtensions
-                                        )
-                                    }
+                        if (failedSources.isNotEmpty()) {
+                            item("source-issues") {
+                                Column(Modifier.padding(top = 8.dp)) {
+                                    SectionHeader(
+                                        title = "Source issues",
+                                        subtitle = "Other sources still returned their results"
+                                    )
+                                    failedSources.forEach { ProviderStatusLine(it) }
+                                    TextButton(
+                                        onClick = onManageExtensions,
+                                        modifier = Modifier.padding(start = 8.dp)
+                                    ) { Text("Manage extensions") }
                                 }
                             }
                         }
                     }
                 }
             }
-
-            TopScrim(Modifier.align(Alignment.TopCenter))
-            BottomScrim(Modifier.align(Alignment.BottomCenter))
-
-            GlassTopCapsule(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                onBack = {
-                    focus.clearFocus()
-                    onBack()
-                }
-            ) {
-                AFText(
-                    text = "Search",
-                    style = AFTheme.type.heading,
-                    color = AFTheme.colors.textHi,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = 12.dp)
-                )
-                if (state.knownSources > 0) {
-                    AFText(
-                        text = "${state.knownSources} " +
-                            if (state.knownSources == 1) "source" else "sources",
-                        style = AFTheme.type.numeric,
-                        color = AFTheme.colors.textLo,
-                        modifier = Modifier.padding(end = 14.dp)
-                    )
-                }
-            }
-
-            GlassToastHost(
-                state = toast,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 108.dp)
-            )
         }
     }
 }
@@ -432,6 +351,7 @@ fun GlobalSearchScreen(
  * there are none the screen explains exactly what will be searched instead of showing
  * invented "trending" terms.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SearchIdle(
     history: List<String>,
@@ -444,33 +364,26 @@ private fun SearchIdle(
 ) {
     LazyColumn(
         state = listState,
-        contentPadding = PaddingValues(
-            start = 20.dp,
-            end = 20.dp,
-            top = 8.dp,
-            bottom = NAV_RESERVE
-        ),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        contentPadding = PaddingValues(bottom = 32.dp)
     ) {
         if (history.isNotEmpty()) {
             item("history-header") {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    AFText(
-                        text = "Recent searches",
-                        style = AFTheme.type.heading,
-                        color = AFTheme.colors.textHi,
-                        modifier = Modifier.weight(1f)
-                    )
-                    AFTextButton("Clear", onClearHistory)
-                }
+                SectionHeader(
+                    title = "Recent searches",
+                    actionLabel = "Clear",
+                    onAction = onClearHistory
+                )
             }
             item("history-chips") {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     history.forEach { term ->
-                        HistoryRow(
+                        HistoryChip(
                             term = term,
                             onOpen = { onUseHistory(term) },
                             onRemove = { onRemoveHistory(term) }
@@ -482,9 +395,18 @@ private fun SearchIdle(
 
         item("search-hint") {
             Column(Modifier.padding(top = 10.dp)) {
-                GlassEmpty(
+                SectionHeader(
+                    title = if (hasSources) "Search across everything" else "No source yet",
+                    subtitle = if (hasSources) {
+                        "Movies & Shows, Books & Novels and Manhwa & Manga are searched together"
+                    } else {
+                        "Connect a source to search its catalogue"
+                    }
+                )
+                EmptyState(
+                    icon = Icons.Outlined.Search,
                     title = if (hasSources) "Type a title to begin" else "Nothing to search yet",
-                    body = if (hasSources) {
+                    message = if (hasSources) {
                         "Every compatible installed source is queried at once. Results are " +
                             "grouped into the three categories, deduplicated, and always show " +
                             "the provider that returned them. Nothing is simulated."
@@ -501,51 +423,56 @@ private fun SearchIdle(
 }
 
 @Composable
-private fun HistoryRow(
+private fun HistoryChip(
     term: String,
     onOpen: () -> Unit,
     onRemove: () -> Unit
 ) {
-    val haptics = rememberHaptics()
-    GlassSurface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp),
-        tier = GlassTier.CLEAR,
-        shape = CircleShape,
-        onClick = {
-            haptics.tick()
-            onOpen()
-        },
-        onClickLabel = "Search for $term"
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = RoundedCornerShape(50)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, end = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.height(48.dp)
         ) {
-            AFIcon(AFIcons.Clock, null, tint = AFTheme.colors.textLo, size = 16.dp)
-            Spacer(Modifier.width(10.dp))
-            AFText(
-                text = term,
-                style = AFTheme.type.label,
-                color = AFTheme.colors.textHi,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            Row(
                 modifier = Modifier
-                    .weight(1f)
-                    .widthIn(max = 260.dp)
-            )
-            AFIconButton(
-                icon = AFIcons.Close,
-                contentDescription = "Remove $term from recent searches",
-                onClick = {
-                    haptics.tick()
-                    onRemove()
-                },
-                visualSize = 40.dp
-            )
+                    .clip(RoundedCornerShape(50))
+                    .clickable(onClickLabel = "Search for $term", onClick = onOpen)
+                    .padding(start = 12.dp, end = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Outlined.History,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(7.dp))
+                Text(
+                    text = term,
+                    style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 180.dp)
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .clickable(onClickLabel = "Remove $term from recent searches", onClick = onRemove),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Outlined.Close,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+            Spacer(Modifier.width(4.dp))
         }
     }
 }
