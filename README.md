@@ -89,7 +89,7 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Settings maintenance | Hub of Appearance, Library, Reading, Playback, Downloads, Extensions, Storage, Network, Backup, App updates and About with live subtitles and a settings search; Appearance now also has accent colour, corner style and app text size; Library, Reading and Playback pages apply immediately; Storage stats, clear cached files without touching the library, repository connection test (1,710 extensions in 1,194 ms) |
 | Release (R8) runtime | All paths above re-verified on a signed release build |
 | In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` confirmation |
-| Published release | [v0.11.0](https://github.com/mjt28934/AllFun/releases/tag/v0.11.0) — `AllFun-0.11.0-release.apk`, 61,700,521 bytes, SHA-256 `4615e4fc4a4cf949fb082e919f841659688c85b3e4e60c9beaea4e3876f79d48`; the workflow re-downloaded the checksum asset and compared it, verified the package, `versionCode 1100` and signer, and GitHub reports it as the latest |
+| Published release | [v0.12.0](https://github.com/mjt28934/AllFun/releases/tag/v0.12.0) — `AllFun-0.12.0-release.apk`, 61,720,833 bytes, SHA-256 `925f13f3c34ad46490b32abe81b2b118433256eba2d97d9c99b86cb711b341a3`; the workflow re-downloaded the checksum asset and compared it, verified the package, `versionCode 1200` and signer, and GitHub reports it as the latest |
 | Version | `0.12.0` (versionCode 1200) |
 | Min SDK | 26 (Android 8.0) |
 | Target SDK | 35 |
