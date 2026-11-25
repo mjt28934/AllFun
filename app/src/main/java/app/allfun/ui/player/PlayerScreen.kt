@@ -1,7 +1,6 @@
 package app.allfun.ui.player
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -25,27 +24,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.FastForward
-import androidx.compose.material.icons.outlined.FastRewind
-import androidx.compose.material.icons.outlined.FormatListBulleted
-import androidx.compose.material.icons.outlined.Pause
-import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material.icons.outlined.SkipNext
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -58,13 +36,11 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -84,8 +60,26 @@ import app.allfun.data.model.StreamInfo
 import app.allfun.data.settings.Settings
 import app.allfun.data.torrent.TorrentDataSourceFactory
 import app.allfun.ui.components.rememberViewModel
+import app.allfun.ui.glass.AFDivider
+import app.allfun.ui.glass.AFIcon
+import app.allfun.ui.glass.AFIconButton
+import app.allfun.ui.glass.AFIcons
+import app.allfun.ui.glass.AFSpinner
+import app.allfun.ui.glass.AFText
+import app.allfun.ui.glass.AFTextButton
+import app.allfun.ui.glass.AFTheme
+import app.allfun.ui.glass.GlassButton
+import app.allfun.ui.glass.GlassIconButton
+import app.allfun.ui.glass.GlassPrimaryAction
+import app.allfun.ui.glass.GlassSlider
+import app.allfun.ui.glass.GlassSurface
+import app.allfun.ui.glass.GlassTier
+import app.allfun.ui.glass.GlassTokens
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+
+/** The video canvas is neutral; the chrome is the only thing that glows. */
+private val PlayerBlack = Color(0xFF05060A)
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
@@ -225,7 +219,7 @@ fun PlayerScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(PlayerBlack)
     ) {
         AndroidView(
             factory = { ctx ->
@@ -272,54 +266,14 @@ fun PlayerScreen(
             exit = fadeOut(tween(180)),
             modifier = Modifier.align(Alignment.TopCenter)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color.Black.copy(alpha = 0.85f), Color.Transparent)
-                        )
-                    )
-                    .statusBarsPadding()
-                    .padding(horizontal = 4.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Color.White
-                    )
-                }
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = state.title,
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = state.subtitle,
-                        color = Color.White.copy(alpha = 0.7f),
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                if (state.episodeCount > 1) {
-                    IconButton(
-                        onClick = vm::nextEpisode,
-                        enabled = state.episodeIndex < state.episodeCount - 1
-                    ) {
-                        Icon(
-                            Icons.Outlined.SkipNext,
-                            contentDescription = "Next episode",
-                            tint = Color.White
-                        )
-                    }
-                }
-            }
+            PlayerTopBar(
+                title = state.title,
+                subtitle = state.subtitle,
+                showNext = state.episodeCount > 1,
+                nextEnabled = state.episodeIndex < state.episodeCount - 1,
+                onBack = onBack,
+                onNext = vm::nextEpisode
+            )
         }
 
         AnimatedVisibility(
@@ -329,35 +283,38 @@ fun PlayerScreen(
             modifier = Modifier.align(Alignment.Center)
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(26.dp),
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 SeekControl(
-                    icon = Icons.Outlined.FastRewind,
+                    icon = AFIcons.Back,
                     label = "$seekSeconds s",
                     onClick = { seekBy(-seekSeconds * 1000L) }
                 )
-                FilledIconButton(
+                GlassSurface(
+                    modifier = Modifier.size(68.dp),
+                    tier = GlassTier.CLEAR,
+                    shape = CircleShape,
+                    selected = true,
+                    shadow = true,
                     onClick = {
                         player?.let { exo ->
                             if (exo.isPlaying) exo.pause() else exo.play()
                         }
                     },
-                    modifier = Modifier.size(66.dp),
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = Color.White,
-                        contentColor = Color.Black
-                    )
+                    onClickLabel = if (isPlaying) "Pause" else "Play"
                 ) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Outlined.Pause
-                        else Icons.Outlined.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause" else "Play",
-                        modifier = Modifier.size(36.dp)
-                    )
+                    Box(Modifier.size(68.dp), contentAlignment = Alignment.Center) {
+                        AFIcon(
+                            icon = if (isPlaying) AFIcons.Pause else AFIcons.Play,
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            tint = AFTheme.colors.onAccent,
+                            size = 30.dp
+                        )
+                    }
                 }
                 SeekControl(
-                    icon = Icons.Outlined.FastForward,
+                    icon = AFIcons.Forward,
                     label = "$seekSeconds s",
                     onClick = { seekBy(seekSeconds * 1000L) }
                 )
@@ -370,87 +327,74 @@ fun PlayerScreen(
             exit = fadeOut(tween(180)),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f))
-                        )
-                    )
+            Box(
+                Modifier
                     .navigationBarsPadding()
-                    .padding(horizontal = 18.dp, vertical = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
-                val shownMs = if (scrubbing) (scrubFraction * durationMs).toLong() else positionMs
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = formatPlaybackTime(shownMs),
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                    Spacer(Modifier.weight(1f))
-                    Text(
-                        text = formatPlaybackTime(durationMs),
-                        color = Color.White.copy(alpha = 0.6f),
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                }
-                Slider(
-                    value = if (durationMs > 0) {
-                        (if (scrubbing) scrubFraction else positionMs.toFloat() / durationMs)
-                            .coerceIn(0f, 1f)
-                    } else {
-                        0f
-                    },
-                    onValueChange = {
-                        scrubbing = true
-                        scrubFraction = it
-                    },
-                    onValueChangeFinished = {
-                        if (durationMs > 0) {
-                            player?.seekTo((scrubFraction * durationMs).toLong())
-                            positionMs = (scrubFraction * durationMs).toLong()
-                        }
-                        scrubbing = false
-                    },
-                    enabled = durationMs > 0,
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color.White,
-                        activeTrackColor = Color.White,
-                        inactiveTrackColor = Color.White.copy(alpha = 0.25f)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Spacer(Modifier.weight(1f))
-                    if (state.streams.size > 1) {
-                        TextButton(onClick = vm::chooseAnotherStream) {
-                            Icon(
-                                Icons.Outlined.FormatListBulleted,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
+                GlassSurface(
+                    modifier = Modifier.fillMaxWidth(),
+                    tier = GlassTier.FROSTED,
+                    shape = RoundedCornerShape(GlassTokens.rPanel),
+                    shadow = true
+                ) {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                        val shownMs =
+                            if (scrubbing) (scrubFraction * durationMs).toLong() else positionMs
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            AFText(
+                                text = formatPlaybackTime(shownMs),
+                                style = AFTheme.type.numeric,
+                                color = AFTheme.colors.textHi,
+                                onGlass = true
                             )
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                text = "Sources (${state.streams.size})",
-                                color = Color.White
+                            Spacer(Modifier.weight(1f))
+                            AFText(
+                                text = formatPlaybackTime(durationMs),
+                                style = AFTheme.type.numeric,
+                                color = AFTheme.colors.textLo,
+                                onGlass = true
                             )
                         }
-                    }
-                    if (state.episodeCount > 1) {
-                        TextButton(
-                            onClick = vm::nextEpisode,
-                            enabled = state.episodeIndex < state.episodeCount - 1
+                        GlassSlider(
+                            value = if (durationMs > 0) {
+                                (if (scrubbing) scrubFraction
+                                else positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
+                            } else {
+                                0f
+                            },
+                            valueRange = 0f..1f,
+                            onValueChange = {
+                                scrubbing = true
+                                scrubFraction = it
+                            },
+                            onValueChangeFinished = {
+                                if (durationMs > 0) {
+                                    player?.seekTo((scrubFraction * durationMs).toLong())
+                                    positionMs = (scrubFraction * durationMs).toLong()
+                                }
+                                scrubbing = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                Icons.Outlined.SkipNext,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text("Next episode", color = Color.White)
+                            if (state.streams.size > 1) {
+                                AFTextButton(
+                                    label = "Sources (${state.streams.size})",
+                                    onClick = vm::chooseAnotherStream
+                                )
+                            }
+                            Spacer(Modifier.weight(1f))
+                            if (state.episodeCount > 1) {
+                                AFTextButton(
+                                    label = "Next episode",
+                                    onClick = vm::nextEpisode,
+                                    enabled = state.episodeIndex < state.episodeCount - 1
+                                )
+                            }
                         }
                     }
                 }
@@ -461,24 +405,38 @@ fun PlayerScreen(
             Column(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .padding(horizontal = 40.dp),
+                    .padding(horizontal = 32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                CircularProgressIndicator(color = Color.White)
-                val progress = state.torrentStatus
-                if (progress != null) {
-                    Spacer(Modifier.padding(top = 16.dp))
-                    Text(
-                        text = progress,
-                        color = Color.White.copy(alpha = 0.85f),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Spacer(Modifier.padding(top = 4.dp))
-                    Text(
-                        text = "Torrent streams start after the first pieces arrive.",
-                        color = Color.White.copy(alpha = 0.5f),
-                        style = MaterialTheme.typography.labelSmall
-                    )
+                GlassSurface(
+                    tier = GlassTier.FROSTED,
+                    shape = RoundedCornerShape(GlassTokens.rPanel)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        AFSpinner(size = 28.dp)
+                        val progress = state.torrentStatus
+                        if (progress != null) {
+                            Spacer(Modifier.height(12.dp))
+                            AFText(
+                                text = progress,
+                                style = AFTheme.type.body,
+                                color = AFTheme.colors.textHi,
+                                onGlass = true,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            AFText(
+                                text = "Torrent streams start after the first pieces arrive.",
+                                style = AFTheme.type.caption,
+                                color = AFTheme.colors.textLo,
+                                onGlass = true,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -486,64 +444,93 @@ fun PlayerScreen(
         val sourceError = state.error
         if (sourceError != null || playbackError != null) {
             var showDetails by remember { mutableStateOf(showTechnical) }
-            Column(
+            Box(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .padding(24.dp)
             ) {
-                Text(
-                    text = "Cannot play this",
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Spacer(Modifier.padding(top = 8.dp))
-                Text(
-                    text = sourceError?.message
-                        ?: "The stream could not be played. The source may be offline, " +
-                            "geo-blocked, or using a format this device cannot decode.",
-                    color = Color.White.copy(alpha = 0.75f),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Spacer(Modifier.padding(top = 20.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = onBack) { Text("Back") }
-                    OutlinedButton(onClick = {
-                        playbackError = null
-                        showDetails = false
-                        showTechnical = false
-                        vm.retry()
-                    }) { Text("Retry") }
-                }
-                if (state.streams.size > 1) {
-                    TextButton(onClick = {
-                        playbackError = null
-                        showDetails = false
-                        showTechnical = false
-                        vm.chooseAnotherStream()
-                    }) {
-                        Text("Choose another stream", color = Color.White)
-                    }
-                }
-                val technical = listOfNotNull(sourceError?.technical, playbackError)
-                    .joinToString("\n\n")
-                    .takeIf { it.isNotBlank() }
-                if (technical != null) {
-                    TextButton(onClick = {
-                        showDetails = !showDetails
-                        showTechnical = showDetails
-                    }) {
-                        Text(
-                            text = if (showDetails) "Hide technical details" else "Technical details",
-                            color = Color.White.copy(alpha = 0.7f)
+                GlassSurface(
+                    modifier = Modifier.fillMaxWidth(),
+                    tier = GlassTier.FROSTED,
+                    shape = RoundedCornerShape(GlassTokens.rPanel),
+                    shadow = true
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 26.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        AFText(
+                            text = "Cannot play this",
+                            style = AFTheme.type.title,
+                            color = AFTheme.colors.textHi,
+                            onGlass = true
                         )
-                    }
-                    if (showDetails) {
-                        Text(
-                            text = technical,
-                            color = Color.White.copy(alpha = 0.5f),
-                            style = MaterialTheme.typography.labelSmall
+                        Spacer(Modifier.height(8.dp))
+                        AFText(
+                            text = sourceError?.message
+                                ?: "The stream could not be played. The source may be offline, " +
+                                "geo-blocked, or using a format this device cannot decode.",
+                            style = AFTheme.type.body,
+                            color = AFTheme.colors.textMid,
+                            onGlass = true,
+                            textAlign = TextAlign.Center
                         )
+                        Spacer(Modifier.height(18.dp))
+                        GlassPrimaryAction(
+                            label = "Retry",
+                            onClick = {
+                                playbackError = null
+                                showDetails = false
+                                showTechnical = false
+                                vm.retry()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        GlassButton(
+                            label = "Back",
+                            onClick = onBack,
+                            icon = AFIcons.Back,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        if (state.streams.size > 1) {
+                            AFTextButton(
+                                label = "Choose another stream",
+                                onClick = {
+                                    playbackError = null
+                                    showDetails = false
+                                    showTechnical = false
+                                    vm.chooseAnotherStream()
+                                },
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                        val technical = listOfNotNull(sourceError?.technical, playbackError)
+                            .joinToString("\n\n")
+                            .takeIf { it.isNotBlank() }
+                        if (technical != null) {
+                            AFTextButton(
+                                label = if (showDetails) "Hide technical details"
+                                else "Technical details",
+                                onClick = {
+                                    showDetails = !showDetails
+                                    showTechnical = showDetails
+                                },
+                                color = AFTheme.colors.textLo
+                            )
+                            if (showDetails) {
+                                AFText(
+                                    text = technical,
+                                    style = AFTheme.type.caption,
+                                    color = AFTheme.colors.textLo,
+                                    onGlass = true,
+                                    maxLines = 6,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -559,9 +546,75 @@ fun PlayerScreen(
     }
 }
 
+@Composable
+private fun PlayerTopBar(
+    title: String,
+    subtitle: String,
+    showNext: Boolean,
+    nextEnabled: Boolean,
+    onBack: () -> Unit,
+    onNext: () -> Unit
+) {
+    GlassSurface(
+        modifier = Modifier
+            .statusBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .fillMaxWidth()
+            .height(52.dp),
+        tier = GlassTier.CLEAR,
+        shape = RoundedCornerShape(26.dp),
+        shadow = true
+    ) {
+        Row(
+            modifier = Modifier
+                .height(52.dp)
+                .padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AFIconButton(
+                icon = AFIcons.Back,
+                contentDescription = "Back",
+                onClick = onBack
+            )
+            Column(
+                Modifier
+                    .weight(1f)
+                    .padding(start = 8.dp, end = 4.dp)
+            ) {
+                AFText(
+                    text = title,
+                    style = AFTheme.type.heading,
+                    color = AFTheme.colors.textHi,
+                    onGlass = true,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (subtitle.isNotBlank()) {
+                    AFText(
+                        text = subtitle,
+                        style = AFTheme.type.caption,
+                        color = AFTheme.colors.textLo,
+                        onGlass = true,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            if (showNext) {
+                AFIconButton(
+                    icon = AFIcons.Forward,
+                    contentDescription = "Next episode",
+                    onClick = onNext,
+                    enabled = nextEnabled
+                )
+            }
+        }
+    }
+}
+
 /**
- * A round, translucent seek button with the configured skip amount under it, so the
- * player never claims "10 seconds" when Settings is set to 30.
+ * A round glass seek button with the configured skip amount under it, so the player never
+ * claims "10 seconds" when Settings is set to 30.
  */
 @Composable
 private fun SeekControl(
@@ -570,25 +623,18 @@ private fun SeekControl(
     onClick: () -> Unit
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        IconButton(
+        GlassIconButton(
+            icon = icon,
+            contentDescription = "Skip $label",
             onClick = onClick,
-            modifier = Modifier
-                .size(54.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.12f))
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = "Skip $label",
-                tint = Color.White,
-                modifier = Modifier.size(30.dp)
-            )
-        }
+            size = 54.dp
+        )
         Spacer(Modifier.height(4.dp))
-        Text(
+        AFText(
             text = label,
-            color = Color.White.copy(alpha = 0.7f),
-            style = MaterialTheme.typography.labelSmall
+            style = AFTheme.type.caption,
+            color = AFTheme.colors.textMid,
+            onGlass = true
         )
     }
 }
@@ -616,40 +662,66 @@ private fun StreamPicker(
     onChoose: (Int) -> Unit,
     onClose: () -> Unit
 ) {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.95f))
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .padding(horizontal = 16.dp)
+            .background(AFTheme.colors.bg0)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onClose) {
-                Icon(
-                    Icons.AutoMirrored.Outlined.ArrowBack,
-                    contentDescription = "Back",
-                    tint = Color.White
-                )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp)
+        ) {
+            Spacer(Modifier.height(10.dp))
+            GlassSurface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                tier = GlassTier.CLEAR,
+                shape = RoundedCornerShape(26.dp),
+                shadow = true
+            ) {
+                Row(
+                    modifier = Modifier
+                        .height(52.dp)
+                        .padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AFIconButton(
+                        icon = AFIcons.Back,
+                        contentDescription = "Back",
+                        onClick = onClose
+                    )
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .padding(start = 8.dp, end = 4.dp)
+                    ) {
+                        AFText(
+                            text = "Choose a stream",
+                            style = AFTheme.type.heading,
+                            color = AFTheme.colors.textHi,
+                            onGlass = true,
+                            maxLines = 1
+                        )
+                        AFText(
+                            text = "${streams.size} options from your add-ons",
+                            style = AFTheme.type.caption,
+                            color = AFTheme.colors.textLo,
+                            onGlass = true,
+                            maxLines = 1
+                        )
+                    }
+                }
             }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = "Choose a stream",
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    text = "${streams.size} options from your add-ons",
-                    color = Color.White.copy(alpha = 0.6f),
-                    style = MaterialTheme.typography.labelSmall
-                )
-            }
-        }
-        Spacer(Modifier.padding(top = 4.dp))
-        LazyColumn(Modifier.weight(1f)) {
-            itemsIndexed(streams, key = { index, stream -> "$index:${stream.url}" }) { index, stream ->
-                StreamRow(stream = stream, onClick = { onChoose(index) })
-                HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+            Spacer(Modifier.height(12.dp))
+            LazyColumn(Modifier.weight(1f)) {
+                itemsIndexed(streams, key = { index, stream -> "$index:${stream.url}" }) { index, stream ->
+                    StreamRow(stream = stream, onClick = { onChoose(index) })
+                    AFDivider()
+                }
             }
         }
     }
@@ -661,34 +733,32 @@ private fun StreamRow(stream: StreamInfo, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 4.dp, vertical = 12.dp)
+            .clickable(onClickLabel = "Play this stream", onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 14.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
+            AFText(
                 text = stream.name ?: if (torrent != null) "Torrent" else "Direct stream",
-                color = Color.White,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
+                style = AFTheme.type.body,
+                color = AFTheme.colors.textHi,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
-            Text(
+            AFText(
                 text = if (torrent != null) "Torrent" else "Direct",
-                color = if (torrent != null) Color(0xFF9CC7FF) else Color(0xFF9BE7B0),
-                style = MaterialTheme.typography.labelSmall
+                style = AFTheme.type.caption,
+                color = if (torrent != null) AFTheme.colors.accent else AFTheme.colors.ok
             )
         }
         stream.detail?.takeIf { it.isNotBlank() }?.let { detail ->
-            Spacer(Modifier.padding(top = 2.dp))
-            Text(
+            AFText(
                 text = detail.replace('\n', ' ').trim(),
-                color = Color.White.copy(alpha = 0.65f),
-                style = MaterialTheme.typography.bodySmall,
+                style = AFTheme.type.bodySmall,
+                color = AFTheme.colors.textMid,
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 3.dp)
             )
         }
         val meta = buildList {
@@ -696,13 +766,13 @@ private fun StreamRow(stream: StreamInfo, onClick: () -> Unit) {
             torrent?.seeds?.takeIf { it > 0 }?.let { add("$it seeds") }
         }.joinToString(" · ")
         if (meta.isNotBlank()) {
-            Spacer(Modifier.padding(top = 2.dp))
-            Text(
+            AFText(
                 text = meta,
-                color = Color.White.copy(alpha = 0.45f),
-                style = MaterialTheme.typography.labelSmall,
+                style = AFTheme.type.caption,
+                color = AFTheme.colors.textLo,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 2.dp)
             )
         }
     }

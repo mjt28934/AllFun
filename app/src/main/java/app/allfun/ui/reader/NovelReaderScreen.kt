@@ -9,12 +9,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -23,28 +21,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
-import androidx.compose.material.icons.outlined.ChevronLeft
-import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -66,7 +45,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -77,10 +56,25 @@ import app.allfun.data.settings.NovelTheme
 import app.allfun.data.settings.Settings
 import app.allfun.ui.components.ChapterPickerDialog
 import app.allfun.ui.components.rememberViewModel
+import app.allfun.ui.glass.AFIcon
+import app.allfun.ui.glass.AFIconButton
+import app.allfun.ui.glass.AFIcons
+import app.allfun.ui.glass.AFOverline
+import app.allfun.ui.glass.AFText
+import app.allfun.ui.glass.AFTextButton
+import app.allfun.ui.glass.AFTheme
+import app.allfun.ui.glass.GlassButton
+import app.allfun.ui.glass.GlassPrimaryAction
+import app.allfun.ui.glass.GlassProgress
+import app.allfun.ui.glass.GlassSegmented
+import app.allfun.ui.glass.GlassSheet
+import app.allfun.ui.glass.GlassSlider
+import app.allfun.ui.glass.GlassSurface
+import app.allfun.ui.glass.GlassTier
+import app.allfun.ui.glass.GlassTokens
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NovelReaderScreen(
     container: AppContainer,
@@ -208,7 +202,7 @@ fun NovelReaderScreen(
             }
         }
 
-        // Thin reading progress bar at the very bottom edge.
+        // Thin reading progress line at the bottom edge.
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -220,7 +214,7 @@ fun NovelReaderScreen(
                 modifier = Modifier
                     .fillMaxHeight()
                     .fillMaxWidth(fraction = state.fraction.coerceIn(0f, 1f))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                    .background(AFTheme.colors.accent.copy(alpha = 0.7f))
             )
         }
 
@@ -245,58 +239,25 @@ fun NovelReaderScreen(
             exit = slideOutVertically { it } + fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
-            Surface(color = Color(0xE60B0B10), contentColor = Color.White) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(
-                            onClick = vm::previousChapter,
-                            enabled = state.index > 0
-                        ) { Icon(Icons.Outlined.ChevronLeft, contentDescription = "Previous chapter") }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = "Chapter ${state.index + 1} of ${state.chapters.size}",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                text = "${(state.fraction.coerceIn(0f, 1f) * 100).roundToInt()}% read",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White.copy(alpha = 0.65f)
-                            )
-                        }
-                        IconButton(
-                            onClick = vm::nextChapter,
-                            enabled = state.index < state.chapters.lastIndex
-                        ) { Icon(Icons.Outlined.ChevronRight, contentDescription = "Next chapter") }
-                    }
-                }
-            }
+            NovelBottomBar(
+                hasPrevious = state.index > 0,
+                hasNext = state.index < state.chapters.lastIndex,
+                label = "Chapter ${state.index + 1} of ${state.chapters.size}",
+                fraction = state.fraction.coerceIn(0f, 1f),
+                onPrevious = vm::previousChapter,
+                onNext = vm::nextChapter
+            )
         }
 
         // The WebView shows its own "Loading chapter…" page, so no separate spinner.
 
         if (state.error != null) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    shape = MaterialTheme.shapes.large,
-                    modifier = Modifier.padding(24.dp)
-                ) {
-                    ChapterError(
-                        error = state.error ?: UserError("Could not load this chapter", null),
-                        onBack = onBack,
-                        onRetry = { vm.openChapter(state.index, state.fraction) }
-                    )
-                }
+                ChapterError(
+                    error = state.error ?: UserError("Could not load this chapter", null),
+                    onBack = onBack,
+                    onRetry = { vm.openChapter(state.index, state.fraction) }
+                )
             }
         }
     }
@@ -339,49 +300,127 @@ private fun NovelTopBar(
     onOpenSettings: () -> Unit,
     onOpenChapters: () -> Unit
 ) {
-    Surface(color = Color(0xE60B0B10), contentColor = Color.White) {
+    GlassSurface(
+        modifier = Modifier
+            .statusBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .fillMaxWidth()
+            .height(52.dp),
+        tier = GlassTier.CLEAR,
+        shape = RoundedCornerShape(26.dp),
+        shadow = true
+    ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = 4.dp, vertical = 8.dp),
+                .height(52.dp)
+                .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
+            AFIconButton(
+                icon = AFIcons.Back,
+                contentDescription = "Back",
+                onClick = onBack
+            )
+            Column(
+                Modifier
+                    .weight(1f)
+                    .padding(start = 8.dp, end = 4.dp)
+            ) {
+                AFText(
                     text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
+                    style = AFTheme.type.heading,
+                    color = AFTheme.colors.textHi,
+                    onGlass = true,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 if (chapterTitle.isNotBlank()) {
-                    Text(
+                    AFText(
                         text = chapterTitle,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.7f),
+                        style = AFTheme.type.caption,
+                        color = AFTheme.colors.textLo,
+                        onGlass = true,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
             }
-            IconButton(onClick = onOpenSettings) {
-                Icon(Icons.Outlined.Settings, contentDescription = "Reader settings")
-            }
-            IconButton(onClick = onOpenChapters) {
-                Icon(
-                    Icons.AutoMirrored.Outlined.FormatListBulleted,
-                    contentDescription = "Choose chapter"
+            AFIconButton(
+                icon = AFIcons.Sliders,
+                contentDescription = "Reader settings",
+                onClick = onOpenSettings
+            )
+            AFIconButton(
+                icon = AFIcons.List,
+                contentDescription = "Choose chapter",
+                onClick = onOpenChapters
+            )
+        }
+    }
+}
+
+@Composable
+private fun NovelBottomBar(
+    hasPrevious: Boolean,
+    hasNext: Boolean,
+    label: String,
+    fraction: Float,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit
+) {
+    Box(
+        Modifier
+            .navigationBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        GlassSurface(
+            modifier = Modifier.fillMaxWidth(),
+            tier = GlassTier.FROSTED,
+            shape = RoundedCornerShape(GlassTokens.rPanel),
+            shadow = true
+        ) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                GlassProgress(
+                    progress = fraction,
+                    modifier = Modifier.padding(top = 2.dp, bottom = 4.dp)
                 )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    AFIconButton(
+                        icon = AFIcons.Back,
+                        contentDescription = "Previous chapter",
+                        onClick = onPrevious,
+                        enabled = hasPrevious
+                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        AFText(
+                            text = label,
+                            style = AFTheme.type.label,
+                            color = AFTheme.colors.textHi,
+                            onGlass = true
+                        )
+                        AFText(
+                            text = "${(fraction * 100).roundToInt()}% read",
+                            style = AFTheme.type.caption,
+                            color = AFTheme.colors.textLo,
+                            onGlass = true
+                        )
+                    }
+                    AFIconButton(
+                        icon = AFIcons.Forward,
+                        contentDescription = "Next chapter",
+                        onClick = onNext,
+                        enabled = hasNext
+                    )
+                }
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NovelReaderSettingsSheet(
     theme: NovelTheme,
@@ -392,121 +431,77 @@ private fun NovelReaderSettingsSheet(
     onSetLineSpacing: (Float) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var fontValue by remember(theme, fontSize) { mutableStateOf(fontSize.toFloat()) }
-    var spacingValue by remember(theme, lineSpacing) { mutableStateOf(lineSpacing) }
+    var fontValue by remember(fontSize) { mutableStateOf(fontSize.toFloat()) }
+    var spacingValue by remember(lineSpacing) { mutableStateOf(lineSpacing) }
+    val themes = NovelTheme.entries
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(Modifier.padding(bottom = 24.dp)) {
-            Row(
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Outlined.Settings, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(10.dp))
-                Text("Reader settings", style = MaterialTheme.typography.titleMedium)
-            }
-            HorizontalDivider()
-
-            NovelSettingsGroup("Theme") {
-                NovelTheme.entries.forEach { option ->
-                    NovelChoice(
-                        label = option.label,
-                        selected = theme == option,
-                        onClick = { onSetTheme(option) }
-                    )
-                }
-            }
-            HorizontalDivider(Modifier.padding(horizontal = 24.dp))
-
-            NovelSettingsGroup("Text size") {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Slider(
-                        value = fontValue,
-                        onValueChange = {
-                            fontValue = it
-                            onSetFontSize(it.roundToInt())
-                        },
-                        valueRange = 70f..180f,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        text = "${fontValue.roundToInt()}%",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.width(48.dp)
-                    )
-                }
-            }
-            HorizontalDivider(Modifier.padding(horizontal = 24.dp))
-
-            NovelSettingsGroup("Line spacing") {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Slider(
-                        value = spacingValue,
-                        onValueChange = {
-                            spacingValue = it
-                            onSetLineSpacing(it)
-                        },
-                        valueRange = 1.2f..2.4f,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        text = "${(spacingValue * 10).roundToInt() / 10f}×",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.width(48.dp)
-                    )
-                }
-            }
+    GlassSheet(onDismiss = onDismiss) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AFIcon(
+                icon = AFIcons.Book,
+                contentDescription = null,
+                tint = AFTheme.colors.accent,
+                size = 20.dp
+            )
+            Spacer(Modifier.width(10.dp))
+            AFText(
+                text = "Reader settings",
+                style = AFTheme.type.title,
+                color = AFTheme.colors.textHi
+            )
         }
-    }
-}
-
-@Composable
-private fun ColumnScope.NovelSettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.padding(vertical = 6.dp)) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
+        Spacer(Modifier.height(18.dp))
+        AFOverline("Theme")
+        Spacer(Modifier.height(8.dp))
+        GlassSegmented(
+            options = themes.map { it.label },
+            selectedIndex = themes.indexOf(theme).coerceAtLeast(0),
+            onSelect = { onSetTheme(themes[it]) },
+            modifier = Modifier.fillMaxWidth()
         )
-        content()
-    }
-}
-
-@Composable
-private fun NovelChoice(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 24.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (selected) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+        Spacer(Modifier.height(18.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AFOverline("Text size", Modifier.weight(1f))
+            AFText(
+                text = "${fontValue.roundToInt()}%",
+                style = AFTheme.type.numeric,
+                color = AFTheme.colors.textMid
+            )
+        }
+        GlassSlider(
+            value = fontValue,
+            valueRange = 70f..180f,
+            onValueChange = {
+                fontValue = it
+                onSetFontSize(it.roundToInt())
+            },
+            onValueChangeFinished = {},
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AFOverline("Line spacing", Modifier.weight(1f))
+            AFText(
+                text = "${(spacingValue * 10).roundToInt() / 10f}×",
+                style = AFTheme.type.numeric,
+                color = AFTheme.colors.textMid
+            )
+        }
+        GlassSlider(
+            value = spacingValue,
+            valueRange = 1.2f..2.4f,
+            onValueChange = {
+                spacingValue = it
+                onSetLineSpacing(it)
+            },
+            onValueChangeFinished = {},
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(4.dp))
+        AFText(
+            text = "The chapter text itself uses the theme you pick; these bars stay glass.",
+            style = AFTheme.type.caption,
+            color = AFTheme.colors.textLo
         )
     }
 }
@@ -514,36 +509,63 @@ private fun NovelChoice(
 @Composable
 private fun ChapterError(error: UserError, onBack: () -> Unit, onRetry: () -> Unit) {
     var showTechnical by remember { mutableStateOf(false) }
-    Column(
-        modifier = Modifier.padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "Could not load this chapter",
-            style = MaterialTheme.typography.titleMedium
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = error.message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = onBack) { Text("Back") }
-            OutlinedButton(onClick = onRetry) { Text("Retry") }
-        }
-        val technical = error.technical
-        if (!technical.isNullOrBlank()) {
-            TextButton(onClick = { showTechnical = !showTechnical }) {
-                Text(if (showTechnical) "Hide technical details" else "Technical details")
-            }
-            if (showTechnical) {
-                Text(
-                    text = technical,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+    Box(Modifier.padding(24.dp)) {
+        GlassSurface(
+            modifier = Modifier.fillMaxWidth(),
+            tier = GlassTier.FROSTED,
+            shape = RoundedCornerShape(GlassTokens.rPanel)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                AFText(
+                    text = "Could not load this chapter",
+                    style = AFTheme.type.title,
+                    color = AFTheme.colors.textHi,
+                    onGlass = true,
+                    textAlign = TextAlign.Center
                 )
+                Spacer(Modifier.height(8.dp))
+                AFText(
+                    text = error.message,
+                    style = AFTheme.type.body,
+                    color = AFTheme.colors.textMid,
+                    onGlass = true,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(18.dp))
+                GlassPrimaryAction(
+                    label = "Retry",
+                    onClick = onRetry,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                GlassButton(
+                    label = "Back",
+                    onClick = onBack,
+                    icon = AFIcons.Back,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                val technical = error.technical
+                if (!technical.isNullOrBlank()) {
+                    AFTextButton(
+                        label = if (showTechnical) "Hide technical details" else "Technical details",
+                        onClick = { showTechnical = !showTechnical },
+                        color = AFTheme.colors.textLo,
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+                    if (showTechnical) {
+                        AFText(
+                            text = technical,
+                            style = AFTheme.type.caption,
+                            color = AFTheme.colors.textLo,
+                            onGlass = true
+                        )
+                    }
+                }
             }
         }
     }

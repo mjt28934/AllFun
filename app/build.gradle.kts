@@ -23,9 +23,9 @@ val keystoreProperties = Properties().apply {
 // matches the release it is published under. Local builds use the defaults below.
 val appVersionName = (project.findProperty("appVersionName") as String?)
     ?.removePrefix("v")
-    ?: "0.12.0"
+    ?: "0.13.0"
 val appVersionCode = (project.findProperty("appVersionCode") as String?)?.toIntOrNull()
-    ?: 1200
+    ?: 1300
 
 android {
     namespace = "app.allfun"

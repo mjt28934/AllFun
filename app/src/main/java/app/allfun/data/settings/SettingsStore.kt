@@ -52,6 +52,16 @@ enum class LibraryGrid(val label: String, val minWidth: Int) {
     LARGE("Large", 168)
 }
 
+/**
+ * How much of the glass system runs. Every level still looks like glass; High adds the
+ * grain and the sweep, Lite drops both and shortens the shadows for old devices.
+ */
+enum class GlassQuality(val label: String) {
+    HIGH("High"),
+    STANDARD("Standard"),
+    LITE("Lite")
+}
+
 enum class LibrarySort(val label: String) {
     RECENTLY_UPDATED("Recently updated"),
     RECENTLY_ADDED("Recently added"),
@@ -98,6 +108,8 @@ data class Settings(
     val accent: AccentPalette = AccentPalette.VIOLET,
     val cornerStyle: CornerStyle = CornerStyle.ROUNDED,
     val appTextSize: AppTextSize = AppTextSize.SYSTEM,
+    /** Glass rendering budget: High, Standard or Lite. */
+    val glassQuality: GlassQuality = GlassQuality.STANDARD,
     val libraryView: LibraryView = LibraryView.GRID,
     val libraryGrid: LibraryGrid = LibraryGrid.COMFORTABLE,
     val librarySort: LibrarySort = LibrarySort.RECENTLY_UPDATED,
@@ -139,6 +151,7 @@ class SettingsStore(private val context: Context) {
         val accent = stringPreferencesKey("accent_palette")
         val cornerStyle = stringPreferencesKey("corner_style")
         val appTextSize = stringPreferencesKey("app_text_size")
+        val glassQuality = stringPreferencesKey("glass_quality")
         val libraryView = stringPreferencesKey("library_view")
         val libraryGrid = stringPreferencesKey("library_grid")
         val librarySort = stringPreferencesKey("library_sort")
@@ -174,6 +187,7 @@ class SettingsStore(private val context: Context) {
                 accent = prefs[Keys.accent].toEnum(AccentPalette.VIOLET),
                 cornerStyle = prefs[Keys.cornerStyle].toEnum(CornerStyle.ROUNDED),
                 appTextSize = prefs[Keys.appTextSize].toEnum(AppTextSize.SYSTEM),
+                glassQuality = prefs[Keys.glassQuality].toEnum(GlassQuality.STANDARD),
                 libraryView = prefs[Keys.libraryView].toEnum(LibraryView.GRID),
                 libraryGrid = prefs[Keys.libraryGrid].toEnum(LibraryGrid.COMFORTABLE),
                 librarySort = prefs[Keys.librarySort].toEnum(LibrarySort.RECENTLY_UPDATED),
@@ -234,6 +248,10 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setAppTextSize(size: AppTextSize) {
         context.dataStore.edit { it[Keys.appTextSize] = size.name }
+    }
+
+    suspend fun setGlassQuality(quality: GlassQuality) {
+        context.dataStore.edit { it[Keys.glassQuality] = quality.name }
     }
 
     suspend fun setLibraryView(view: LibraryView) {

@@ -1,15 +1,14 @@
 package app.allfun.ui.extensions
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,46 +21,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Extension
-import androidx.compose.material.icons.outlined.Movie
-import androidx.compose.material.icons.outlined.PlayCircle
-import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -80,23 +44,43 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.allfun.data.AppContainer
 import app.allfun.data.content.ContentCategory
 import app.allfun.data.extension.RepoExtension
+import app.allfun.data.net.UserError
 import app.allfun.data.settings.RepositoryConfig
 import app.allfun.data.settings.RepositoryKind
-import app.allfun.ui.components.EmptyState
-import app.allfun.ui.components.IconBadge
-import app.allfun.ui.components.staggeredReveal
-import app.allfun.ui.components.LoadingState
-import app.allfun.ui.components.NoticeCard
-import app.allfun.ui.components.StatusPill
 import app.allfun.ui.components.rememberViewModel
+import app.allfun.ui.glass.AFIcons
+import app.allfun.ui.glass.AFDivider
+import app.allfun.ui.glass.AFIcon
+import app.allfun.ui.glass.AFIconButton
+import app.allfun.ui.glass.AFOverline
+import app.allfun.ui.glass.AFSpinner
+import app.allfun.ui.glass.AFText
+import app.allfun.ui.glass.AFTextButton
+import app.allfun.ui.glass.AFTheme
+import app.allfun.ui.glass.BottomScrim
+import app.allfun.ui.glass.GlassButton
+import app.allfun.ui.glass.GlassChip
+import app.allfun.ui.glass.GlassDialog
+import app.allfun.ui.glass.GlassEmpty
+import app.allfun.ui.glass.GlassPanel
+import app.allfun.ui.glass.GlassPrimaryAction
+import app.allfun.ui.glass.GlassSegmented
+import app.allfun.ui.glass.GlassSheet
+import app.allfun.ui.glass.GlassSwitch
+import app.allfun.ui.glass.GlassTextField
+import app.allfun.ui.glass.GlassToastHost
+import app.allfun.ui.glass.GlassTopCapsule
+import app.allfun.ui.glass.Section
+import app.allfun.ui.glass.SkeletonRows
+import app.allfun.ui.glass.TopScrim
+import app.allfun.ui.glass.WorldBackdrop
+import app.allfun.ui.glass.rememberGlassToastState
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 
@@ -110,10 +94,10 @@ private val tabTitles = listOf("Installed", "Discover", "Updates", "Repositories
 
 /** Category scope of the marketplace, seeded by the screen the user opened it from. */
 private enum class ExtensionScope(val label: String) {
-    ALL("All Categories"),
+    ALL("All categories"),
     VIDEO("Movies & TV"),
-    BOOK("Books & Novels"),
-    MANGA("Manhwa & Manga")
+    BOOK("Books & novels"),
+    MANGA("Manhwa & manga")
 }
 
 private fun ExtensionKind.inScope(scope: ExtensionScope): Boolean = when (scope) {
@@ -136,7 +120,9 @@ private fun ExtensionScope.defaultKindFilter(): String? = when (this) {
     else -> null
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** How a status line is toned: failures and updates read differently from plain notes. */
+private enum class RowTone { NEUTRAL, ACCENT, FAILED }
+
 @Composable
 fun ExtensionsScreen(
     container: AppContainer,
@@ -145,7 +131,7 @@ fun ExtensionsScreen(
 ) {
     val vm = rememberViewModel { ExtensionsViewModel(container) }
     val state by vm.state.collectAsStateWithLifecycle()
-    val snackbar = remember { SnackbarHostState() }
+    val toast = rememberGlassToastState()
     val searchFocus = remember { FocusRequester() }
 
     var tab by rememberSaveable {
@@ -170,7 +156,7 @@ fun ExtensionsScreen(
     var showAddStremio by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        vm.messages.collect { snackbar.showSnackbar(it) }
+        vm.messages.collect { toast.show(it) }
     }
     LaunchedEffect(state.repositoryAddTicket) {
         if (state.repositoryAddTicket > 0) showAddRepository = false
@@ -180,7 +166,7 @@ fun ExtensionsScreen(
     }
     LaunchedEffect(Unit) {
         // Opened from a category toolbar: the search is ready to type into immediately.
-        if (initialCategory != null) searchFocus.requestFocus()
+        if (initialCategory != null) runCatching { searchFocus.requestFocus() }
     }
 
     val scoped = if (scope == ExtensionScope.ALL) state
@@ -199,206 +185,219 @@ fun ExtensionsScreen(
         }
     }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) },
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .statusBarsPadding()
-                .navigationBarsPadding()
-        ) {
-            Row(
+    WorldBackdrop(section = Section.SYSTEM) {
+        Box(Modifier.fillMaxSize()) {
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 4.dp, end = 4.dp, top = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(top = 72.dp)
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                }
-                IconBadge(
-                    icon = Icons.Outlined.Extension,
-                    tint = MaterialTheme.colorScheme.primary,
-                    size = 38
+                AFText(
+                    text = summary,
+                    style = AFTheme.type.caption,
+                    color = AFTheme.colors.textLo,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 20.dp)
                 )
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = "Extensions",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = summary,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                IconButton(onClick = vm::refresh) {
-                    Icon(
-                        imageVector = Icons.Outlined.Refresh,
-                        contentDescription = "Refresh installed extensions and repositories"
-                    )
-                }
-            }
+                Spacer(Modifier.height(10.dp))
 
-            val busyLabel = state.busyLabel
-            if (busyLabel != null) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                Text(
-                    text = busyLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
-                )
-            }
-
-            ScrollableTabRow(
-                selectedTabIndex = tab,
-                edgePadding = 8.dp,
-                containerColor = Color.Transparent,
-                divider = {}
-            ) {
-                tabTitles.forEachIndexed { index, title ->
-                    val count = when (index) {
-                        TAB_INSTALLED -> scoped.installed.size
-                        TAB_UPDATES -> scoped.updates.size
-                        TAB_DISABLED -> scoped.disabled.size
-                        else -> 0
-                    }
-                    Tab(
-                        selected = tab == index,
-                        onClick = { tab = index },
-                        text = {
-                            Text(
-                                text = if (count > 0) "$title ($count)" else title,
-                                maxLines = 1
-                            )
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(tabTitles.size) { index ->
+                        val count = when (index) {
+                            TAB_INSTALLED -> scoped.installed.size
+                            TAB_UPDATES -> scoped.updates.size
+                            TAB_DISABLED -> scoped.disabled.size
+                            else -> 0
                         }
-                    )
+                        GlassChip(
+                            label = tabTitles[index],
+                            selected = tab == index,
+                            badge = count.takeIf { it > 0 },
+                            onClick = { tab = index }
+                        )
+                    }
                 }
-            }
 
-            LazyRow(
-                state = rememberLazyListState(
-                    // Opened from a category: start the strip at that category instead of
-                    // hiding the selected chip off the right edge.
-                    initialFirstVisibleItemIndex = if (initialCategory != null) scope.ordinal else 0
-                ),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(ExtensionScope.entries) { option ->
-                    FilterChip(
-                        selected = scope == option,
-                        onClick = {
-                            scope = option
-                            kindFilter = null
-                        },
-                        label = { Text(option.label) }
-                    )
-                }
-            }
-
-            if (tab == TAB_INSTALLED || tab == TAB_DISCOVER || tab == TAB_DISABLED) {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                        .focusRequester(searchFocus),
-                    placeholder = {
-                        Text(
-                            when (tab) {
-                                TAB_INSTALLED -> "Search installed extensions"
-                                TAB_DISABLED -> "Search disabled extensions"
-                                else -> "Search extensions and developers"
+                Spacer(Modifier.height(6.dp))
+                LazyRow(
+                    state = rememberLazyListState(
+                        // Opened from a category: start the strip at that category instead
+                        // of hiding the selected chip off the right edge.
+                        initialFirstVisibleItemIndex = if (initialCategory != null) {
+                            scope.ordinal
+                        } else {
+                            0
+                        }
+                    ),
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(ExtensionScope.entries) { option ->
+                        GlassChip(
+                            label = option.label,
+                            selected = scope == option,
+                            onClick = {
+                                scope = option
+                                kindFilter = null
                             }
                         )
-                    },
-                    leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                    trailingIcon = {
-                        if (query.isNotEmpty()) {
-                            IconButton(onClick = { query = "" }) {
-                                Icon(Icons.Outlined.Close, contentDescription = "Clear search")
-                            }
-                        }
-                    },
-                    singleLine = true,
-                    shape = MaterialTheme.shapes.medium
-                )
-            }
-            if (tab == TAB_DISCOVER) {
-                // Category scope already narrows the index; the All/Manga/Novels chips were
-                // redundant here and pushed the list down.
-            }
+                    }
+                }
 
-            Box(Modifier.weight(1f)) {
-                when (tab) {
-                    TAB_INSTALLED -> InstalledTab(
-                        state = scoped,
-                        query = query,
-                        onOpen = { detailInstalledKey = it.key },
-                        onToggle = { item, enabled -> vm.setEnabled(item, enabled) },
-                        onDiscover = { tab = TAB_DISCOVER }
-                    )
-
-                    TAB_UPDATES -> UpdatesTab(
-                        state = scoped,
-                        onUpdate = { item -> item.update?.let(vm::install) },
-                        onUpdateAll = vm::installAllUpdates,
-                        onCheck = vm::refresh,
-                        onOpen = { detailInstalledKey = it.key },
-                        onRepositories = { tab = TAB_REPOSITORIES }
-                    )
-
-                    TAB_DISCOVER -> DiscoverTab(
-                        state = state,
-                        query = query,
-                        kindFilter = kindFilter ?: scope.defaultKindFilter(),
-                        scope = scope,
-                        onRetryRepository = vm::retryRepository,
-                        onOpen = { detailEntryKey = it.key },
-                        onInstall = vm::install,
-                        onOpenInstalled = { detailInstalledKey = it.key },
-                        onAddStremio = {
-                            vm.clearStremioError()
-                            showAddStremio = true
+                if (tab == TAB_INSTALLED || tab == TAB_DISCOVER || tab == TAB_DISABLED) {
+                    Spacer(Modifier.height(10.dp))
+                    GlassTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        placeholder = when (tab) {
+                            TAB_INSTALLED -> "Search installed extensions"
+                            TAB_DISABLED -> "Search disabled extensions"
+                            else -> "Search extensions and developers"
                         },
-                        onInstallFeatured = vm::installFeaturedAddon,
-                        onManageRepositories = { tab = TAB_REPOSITORIES }
+                        leading = AFIcons.Search,
+                        trailing = {
+                            if (query.isNotEmpty()) {
+                                AFIconButton(
+                                    icon = AFIcons.Close,
+                                    contentDescription = "Clear search",
+                                    onClick = { query = "" },
+                                    visualSize = 32.dp
+                                )
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp)
+                            .focusRequester(searchFocus)
                     )
+                }
 
-                    TAB_REPOSITORIES -> RepositoriesTab(
-                        state = state,
-                        onRetry = vm::retryRepository,
-                        onRemove = vm::removeRepository,
-                        onAdd = {
+                state.busyLabel?.let { busy ->
+                    Row(
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        AFSpinner(size = 14.dp)
+                        Spacer(Modifier.width(8.dp))
+                        AFText(
+                            text = busy,
+                            style = AFTheme.type.caption,
+                            color = AFTheme.colors.textLo,
+                            maxLines = 2
+                        )
+                    }
+                }
+
+                Box(Modifier.weight(1f)) {
+                    when (tab) {
+                        TAB_INSTALLED -> InstalledTab(
+                            state = scoped,
+                            query = query,
+                            onOpen = { detailInstalledKey = it.key },
+                            onToggle = { item, enabled -> vm.setEnabled(item, enabled) },
+                            onDiscover = { tab = TAB_DISCOVER }
+                        )
+
+                        TAB_UPDATES -> UpdatesTab(
+                            state = scoped,
+                            onUpdate = { item -> item.update?.let(vm::install) },
+                            onUpdateAll = vm::installAllUpdates,
+                            onCheck = vm::refresh,
+                            onOpen = { detailInstalledKey = it.key },
+                            onRepositories = { tab = TAB_REPOSITORIES }
+                        )
+
+                        TAB_DISCOVER -> DiscoverTab(
+                            state = state,
+                            query = query,
+                            kindFilter = kindFilter ?: scope.defaultKindFilter(),
+                            scope = scope,
+                            onRetryRepository = vm::retryRepository,
+                            onOpen = { detailEntryKey = it.key },
+                            onInstall = vm::install,
+                            onOpenInstalled = { detailInstalledKey = it.key },
+                            onAddStremio = {
+                                vm.clearStremioError()
+                                showAddStremio = true
+                            },
+                            onInstallFeatured = vm::installFeaturedAddon,
+                            onManageRepositories = { tab = TAB_REPOSITORIES }
+                        )
+
+                        TAB_REPOSITORIES -> RepositoriesTab(
+                            state = state,
+                            onRetry = vm::retryRepository,
+                            onRemove = vm::removeRepository,
+                            onAdd = {
+                                vm.clearRepositoryError()
+                                showAddRepository = true
+                            }
+                        )
+
+                        TAB_DISABLED -> DisabledTab(
+                            state = scoped,
+                            query = query,
+                            onOpen = { detailInstalledKey = it.key },
+                            onEnable = { vm.setEnabled(it, true) },
+                            onUninstall = { pendingRemoveKey = it.key }
+                        )
+                    }
+                }
+            }
+
+            TopScrim(Modifier.align(Alignment.TopCenter))
+            BottomScrim(Modifier.align(Alignment.BottomCenter))
+
+            GlassTopCapsule(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                onBack = onBack
+            ) {
+                AFText(
+                    text = "Extensions",
+                    style = AFTheme.type.heading,
+                    color = AFTheme.colors.textHi,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 12.dp)
+                )
+                if (tab == TAB_REPOSITORIES) {
+                    AFIconButton(
+                        icon = AFIcons.Plus,
+                        contentDescription = "Add repository",
+                        onClick = {
                             vm.clearRepositoryError()
                             showAddRepository = true
                         }
                     )
-
-                    TAB_DISABLED -> DisabledTab(
-                        state = scoped,
-                        query = query,
-                        onOpen = { detailInstalledKey = it.key },
-                        onEnable = { vm.setEnabled(it, true) },
-                        onUninstall = { pendingRemoveKey = it.key }
-                    )
                 }
+                AFIconButton(
+                    icon = AFIcons.Refresh,
+                    contentDescription = "Refresh installed extensions and repositories",
+                    onClick = vm::refresh
+                )
             }
+
+            GlassToastHost(
+                state = toast,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 96.dp)
+            )
         }
     }
 
     if (showAddRepository) {
-        AddRepositoryDialog(
+        AddRepositorySheet(
             adding = state.addingRepository,
             error = state.addRepositoryError,
             onConfirm = vm::addRepository,
@@ -410,7 +409,7 @@ fun ExtensionsScreen(
     }
 
     if (showAddStremio) {
-        AddStremioDialog(
+        AddStremioSheet(
             adding = state.addingStremio,
             error = state.stremioError,
             onConfirm = vm::addStremio,
@@ -422,7 +421,7 @@ fun ExtensionsScreen(
     }
 
     if (detailInstalled != null || detailEntry != null) {
-        ExtensionDetailsDialog(
+        ExtensionDetailsSheet(
             installed = detailInstalled,
             entry = detailEntry,
             busy = state.busyKey != null,
@@ -445,41 +444,32 @@ fun ExtensionsScreen(
     }
 
     if (pendingRemove != null) {
-        AlertDialog(
-            onDismissRequest = { pendingRemoveKey = null },
-            title = { Text("Remove ${pendingRemove.name}?") },
-            text = {
-                Text(
-                    when (pendingRemove.kind) {
-                        ExtensionKind.MANGA, ExtensionKind.NOVEL ->
-                            "The extension file is deleted. Titles already in your library stay on " +
-                                "the shelf, but their chapters and pages cannot load until you " +
-                                "install the extension again."
-                        ExtensionKind.STREMIO ->
-                            "The addon is removed from Browse. Library entries from it stay, but " +
-                                "streams cannot load until you add it again."
-                        ExtensionKind.JELLYFIN ->
-                            "The server connection and its stored token are removed. Library " +
-                                "entries stay, but playback stops working until you reconnect."
-                    }
-                )
+        GlassDialog(
+            title = "Remove ${pendingRemove.name}?",
+            body = when (pendingRemove.kind) {
+                ExtensionKind.MANGA, ExtensionKind.NOVEL ->
+                    "The extension file is deleted. Titles already in your library stay on " +
+                        "the shelf, but their chapters and pages cannot load until you " +
+                        "install the extension again."
+                ExtensionKind.STREMIO ->
+                    "The addon is removed from Browse. Library entries from it stay, but " +
+                        "streams cannot load until you add it again."
+                ExtensionKind.JELLYFIN ->
+                    "The server connection and its stored token are removed. Library " +
+                        "entries stay, but playback stops working until you reconnect."
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        vm.uninstall(pendingRemove)
-                        pendingRemoveKey = null
-                    }
-                ) {
-                    Text("Remove", color = MaterialTheme.colorScheme.error)
-                }
+            confirmLabel = "Remove",
+            destructive = true,
+            onConfirm = {
+                vm.uninstall(pendingRemove)
+                pendingRemoveKey = null
             },
-            dismissButton = {
-                TextButton(onClick = { pendingRemoveKey = null }) { Text("Cancel") }
-            }
+            onDismiss = { pendingRemoveKey = null }
         )
     }
 }
+
+// ---------------------------------------------------------------- installed
 
 @Composable
 private fun InstalledTab(
@@ -490,14 +480,16 @@ private fun InstalledTab(
     onDiscover: () -> Unit
 ) {
     if (state.installed.isEmpty() && state.loadingInstalled) {
-        LoadingState("Reading installed extensions")
+        SkeletonRows(
+            count = 5,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
+        )
         return
     }
     if (state.installed.isEmpty()) {
-        EmptyState(
-            icon = Icons.Outlined.Extension,
+        GlassEmpty(
             title = "No extensions installed",
-            message = "Discover manga extensions and novel plugins from real repositories, or " +
+            body = "Discover manga extensions and novel plugins from real repositories, or " +
                 "connect a Stremio addon or Jellyfin server. Installed files stay in AllFun's " +
                 "private storage.",
             actionLabel = "Discover extensions",
@@ -513,72 +505,69 @@ private fun InstalledTab(
             item.kind.label.contains(needle, ignoreCase = true)
     }
     if (visible.isEmpty()) {
-        EmptyState(
-            icon = Icons.Outlined.Search,
+        GlassEmpty(
             title = "No installed extension matches",
-            message = "Nothing installed matches \"$needle\". Try a shorter search."
+            body = "Nothing installed matches \"$needle\". Try a shorter search."
         )
         return
     }
-    LazyColumn(contentPadding = PaddingValues(top = 6.dp, bottom = 24.dp)) {
+    LazyColumn(
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
         ExtensionKind.entries.forEach { kind ->
             val group = visible.filter { it.kind == kind }.sortedBy { it.name.lowercase() }
-            if (group.isNotEmpty()) {
-                item(key = "header-${kind.name}") {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = kind.plural,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.weight(1f)
+            if (group.isEmpty()) return@forEach
+            item(key = "group-${kind.name}") {
+                GlassPanel(header = kind.plural) {
+                    group.forEachIndexed { index, item ->
+                        ExtensionRow(
+                            name = item.name,
+                            subtitle = item.subtitle(),
+                            iconUrl = item.iconUrl,
+                            nsfw = item.nsfw,
+                            status = item.statusText(),
+                            tone = when {
+                                item.broken -> RowTone.FAILED
+                                item.update != null -> RowTone.ACCENT
+                                else -> RowTone.NEUTRAL
+                            },
+                            onClick = { onOpen(item) },
+                            trailing = {
+                                if (item.canToggle) {
+                                    GlassSwitch(
+                                        checked = item.enabled,
+                                        onCheckedChange = { enabled -> onToggle(item, enabled) },
+                                        modifier = Modifier.semantics {
+                                            contentDescription = item.name
+                                        }
+                                    )
+                                } else {
+                                    AFText(
+                                        text = if (item.enabled) "On" else "Off",
+                                        style = AFTheme.type.caption,
+                                        color = AFTheme.colors.textLo
+                                    )
+                                }
+                            }
                         )
-                        StatusPill(
-                            text = group.size.toString(),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        if (index != group.lastIndex) AFDivider()
                     }
-                }
-                itemsIndexed(group, key = { _, item -> item.key }) { index, item ->
-                    ExtensionRow(
-                        name = item.name,
-                        subtitle = item.subtitle(),
-                        iconUrl = item.iconUrl,
-                        nsfw = item.nsfw,
-                        status = item.statusText(),
-                        statusColor = when {
-                            item.broken -> MaterialTheme.colorScheme.error
-                            item.update != null -> MaterialTheme.colorScheme.secondary
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        enabled = item.enabled,
-                        onToggle = { enabled -> onToggle(item, enabled) },
-                        showSwitch = item.canToggle,
-                        onClick = { onOpen(item) },
-                        modifier = Modifier
-                            .staggeredReveal(index)
-                            .animateItem()
-                    )
                 }
             }
         }
         item(key = "signature-note") {
-            Column {
-                NoticeCard(
-                    text = "Manga extensions downloaded from a repository are checked " +
-                        "against that repository's signing key before their code is " +
-                        "loaded. Uninstalling an extension never deletes your library " +
-                        "entries."
-                )
-                Spacer(Modifier.height(8.dp))
-            }
+            NoticePanel(
+                header = "Signed files",
+                body = "Manga extensions downloaded from a repository are checked against " +
+                    "that repository's signing key before their code is loaded. " +
+                    "Uninstalling an extension never deletes your library entries."
+            )
         }
     }
 }
+
+// ---------------------------------------------------------------- updates
 
 @Composable
 private fun UpdatesTab(
@@ -591,12 +580,13 @@ private fun UpdatesTab(
 ) {
     val updates = state.updates
     if (updates.isEmpty()) {
-        EmptyState(
-            icon = if (state.loadedRepositoryCount == 0) Icons.Outlined.Extension
-            else Icons.Outlined.CheckCircle,
-            title = if (state.loadedRepositoryCount == 0) "No repositories loaded"
-            else "Everything is up to date",
-            message = if (state.loadedRepositoryCount == 0) {
+        GlassEmpty(
+            title = if (state.loadedRepositoryCount == 0) {
+                "No repositories loaded"
+            } else {
+                "Everything is up to date"
+            },
+            body = if (state.loadedRepositoryCount == 0) {
                 "Add a repository in the Repositories tab so AllFun can compare installed " +
                     "extension versions with what is published."
             } else {
@@ -608,54 +598,65 @@ private fun UpdatesTab(
         )
         return
     }
-    LazyColumn(contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)) {
-        item {
+    LazyColumn(
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item(key = "summary") {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 4.dp),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "${updates.size} ${if (updates.size == 1) "update" else "updates"} available",
-                    style = MaterialTheme.typography.titleSmall,
+                AFText(
+                    text = "${updates.size} " +
+                        if (updates.size == 1) "update available" else "updates available",
+                    style = AFTheme.type.heading,
+                    color = AFTheme.colors.textHi,
                     modifier = Modifier.weight(1f)
                 )
-                Button(onClick = onUpdateAll, enabled = state.busyKey == null) {
-                    Text("Update all")
+                AFTextButton(
+                    label = "Update all",
+                    onClick = onUpdateAll,
+                    enabled = state.busyKey == null
+                )
+            }
+        }
+        item(key = "list") {
+            GlassPanel(header = "New versions published") {
+                updates.forEachIndexed { index, item ->
+                    val entry = item.update ?: return@forEachIndexed
+                    ExtensionRow(
+                        name = item.name,
+                        subtitle = listOfNotNull(
+                            item.kind.label,
+                            "v${item.version ?: "?"} → v${entry.version ?: "?"}",
+                            item.developer
+                        ).joinToString(" · "),
+                        iconUrl = item.iconUrl ?: entry.iconUrl,
+                        nsfw = item.nsfw,
+                        status = "New version published by ${entry.repoUrl.hostLabel()}",
+                        tone = RowTone.ACCENT,
+                        onClick = { onOpen(item) },
+                        trailing = {
+                            if (state.busyKey == entry.key) {
+                                AFSpinner(size = 18.dp)
+                            } else {
+                                AFTextButton(
+                                    label = "Update",
+                                    onClick = { onUpdate(item) },
+                                    enabled = state.busyKey == null
+                                )
+                            }
+                        }
+                    )
+                    if (index != updates.lastIndex) AFDivider()
                 }
             }
         }
-        itemsIndexed(updates, key = { _, item -> item.key }) { index, item ->
-            val entry = item.update ?: return@itemsIndexed
-            ExtensionRow(
-                name = item.name,
-                subtitle = listOfNotNull(
-                    item.kind.label,
-                    "v${item.version ?: "?"} → v${entry.version ?: "?"}",
-                    item.developer
-                ).joinToString(" · "),
-                iconUrl = item.iconUrl ?: entry.iconUrl,
-                nsfw = item.nsfw,
-                status = "New version published by ${entry.repoUrl.hostLabel()}",
-                statusColor = MaterialTheme.colorScheme.secondary,
-                onClick = { onOpen(item) },
-                action = {
-                    if (state.busyKey == entry.key) {
-                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                    } else {
-                        Button(onClick = { onUpdate(item) }, enabled = state.busyKey == null) {
-                            Text("Update")
-                        }
-                    }
-                },
-                modifier = Modifier
-                    .staggeredReveal(index)
-                    .animateItem()
-            )
-        }
     }
 }
+
+// ---------------------------------------------------------------- discover
 
 @Composable
 private fun DiscoverTab(
@@ -685,7 +686,7 @@ private fun DiscoverTab(
                         entry.language?.contains(query, ignoreCase = true) == true ||
                         entry.description?.contains(query, ignoreCase = true) == true
                     )
-        }.sortedBy { it.name.lowercase() }
+        }.sortedWith(compareBy({ it.kind.ordinal }, { it.name.lowercase() }))
     }
     val failed = state.repos.filter { it.error != null }
 
@@ -702,14 +703,16 @@ private fun DiscoverTab(
     }
 
     if (visible.isEmpty() && state.repos.any { it.loading }) {
-        LoadingState("Reading repository indexes")
+        SkeletonRows(
+            count = 6,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
+        )
         return
     }
     if (visible.isEmpty() && state.repos.isEmpty()) {
-        EmptyState(
-            icon = Icons.Outlined.Extension,
+        GlassEmpty(
             title = "No repositories configured",
-            message = "Add the address of a Mihon/Komikku manga repository or an LNReader " +
+            body = "Add the address of a Mihon/Komikku manga repository or an LNReader " +
                 "plugin index to install extensions without leaving AllFun.",
             actionLabel = "Repositories",
             onAction = onManageRepositories
@@ -717,33 +720,40 @@ private fun DiscoverTab(
         return
     }
 
-    LazyColumn(contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp)) {
+    LazyColumn(
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp)
+    ) {
         if (failed.isNotEmpty()) {
             item(key = "repo-errors") {
-                Column(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    failed.forEach { repo ->
-                        RepositoryErrorRow(repo) { onRetryRepository(repo.config) }
+                GlassPanel(header = "Repository issues") {
+                    failed.forEachIndexed { index, repo ->
+                        RepoIssueRow(
+                            name = repo.name,
+                            message = repo.error?.message.orEmpty(),
+                            onRetry = { onRetryRepository(repo.config) }
+                        )
+                        if (index != failed.lastIndex) AFDivider()
                     }
                 }
+                Spacer(Modifier.height(16.dp))
             }
         }
         if (scope == ExtensionScope.ALL) {
             item(key = "video-addons") {
-                StremioInstallCard(
+                StremioPanel(
                     installedCount = state.installed.count { it.kind == ExtensionKind.STREMIO },
-                    onAdd = onAddStremio
+                    onAdd = onAddStremio,
+                    body = "Paste an addon URL to add its catalogs and streams. Only the " +
+                        "addon itself is contacted; nothing is uploaded."
                 )
+                Spacer(Modifier.height(16.dp))
             }
         }
         if (visible.isEmpty()) {
             item(key = "empty") {
-                EmptyState(
-                    icon = Icons.Outlined.Search,
+                GlassEmpty(
                     title = if (query.isNotBlank()) "No matches" else "Nothing in this filter",
-                    message = if (query.isNotBlank()) {
+                    body = if (query.isNotBlank()) {
                         "No repository extension matches \"$query\". Try a shorter search or " +
                             "another filter."
                     } else {
@@ -753,64 +763,108 @@ private fun DiscoverTab(
             }
         } else {
             item(key = "summary") {
-                Text(
+                AFText(
                     text = "${visible.size} extensions · ${state.loadedRepositoryCount} " +
-                        "${if (state.loadedRepositoryCount == 1) "repository" else "repositories"}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                        if (state.loadedRepositoryCount == 1) "repository" else "repositories",
+                    style = AFTheme.type.caption,
+                    color = AFTheme.colors.textLo,
+                    modifier = Modifier.padding(bottom = 4.dp)
                 )
             }
-            items(visible, key = { it.key }) { entry ->
-                val installed = state.installed.firstOrNull { it.key == entry.key }
-                val busy = state.busyKey == entry.key
-                ExtensionRow(
-                    name = entry.name,
-                    subtitle = listOfNotNull(
-                        entry.developer,
-                        entry.version?.takeIf { it.isNotBlank() }?.let { "v$it" },
-                        languageLabel(entry.language),
-                        entry.sourceCount.takeIf { it > 0 }
-                            ?.let { "$it ${if (it == 1) "source" else "sources"}" },
-                        entry.repoUrl.hostLabel()
-                    ).joinToString(" · "),
-                    iconUrl = entry.iconUrl,
-                    nsfw = entry.nsfw,
-                    status = when {
-                        installed?.update != null ->
-                            "Update available: v${installed.version ?: "?"} → v${entry.version ?: "?"}"
-                        installed != null -> "Installed · v${installed.version ?: "unknown"}"
-                        else -> null
-                    },
-                    statusColor = if (installed?.update != null) {
-                        MaterialTheme.colorScheme.secondary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    onClick = { onOpen(entry) },
-                    action = {
-                        when {
-                            busy -> CircularProgressIndicator(
-                                Modifier.size(20.dp),
-                                strokeWidth = 2.dp
-                            )
-                            installed == null -> TextButton(onClick = { onInstall(entry) }) {
-                                Text("Install")
-                            }
-                            installed.update != null -> Button(onClick = { onInstall(entry) }) {
-                                Text("Update")
-                            }
-                            else -> Text(
-                                text = "Installed",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 12.dp)
-                            )
-                        }
+            RepositoryKind.entries.forEach { kind ->
+                val group = visible.filter { it.kind == kind }
+                if (group.isEmpty()) return@forEach
+                item(key = "header-${kind.name}") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 14.dp, bottom = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        AFOverline(
+                            text = if (kind == RepositoryKind.MANGA) {
+                                "Manga extensions"
+                            } else {
+                                "Novel plugins"
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                        AFText(
+                            text = group.size.toString(),
+                            style = AFTheme.type.numeric,
+                            color = AFTheme.colors.textLo
+                        )
                     }
-                )
+                }
+                items(group, key = { it.key }) { entry ->
+                    val installed = state.installed.firstOrNull { it.key == entry.key }
+                    val busy = state.busyKey == entry.key
+                    DiscoverRow(
+                        entry = entry,
+                        installed = installed,
+                        busy = busy,
+                        enabled = state.busyKey == null,
+                        onOpen = { onOpen(entry) },
+                        onInstall = { onInstall(entry) }
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun DiscoverRow(
+    entry: RepoExtension,
+    installed: InstalledExtension?,
+    busy: Boolean,
+    enabled: Boolean,
+    onOpen: () -> Unit,
+    onInstall: () -> Unit
+) {
+    Column {
+        ExtensionRow(
+            name = entry.name,
+            subtitle = listOfNotNull(
+                entry.developer,
+                entry.version?.takeIf { it.isNotBlank() }?.let { "v$it" },
+                languageLabel(entry.language),
+                entry.sourceCount.takeIf { it > 0 }
+                    ?.let { "$it ${if (it == 1) "source" else "sources"}" },
+                entry.repoUrl.hostLabel()
+            ).joinToString(" · "),
+            iconUrl = entry.iconUrl,
+            nsfw = entry.nsfw,
+            status = when {
+                installed?.update != null ->
+                    "Update available: v${installed.version ?: "?"} → v${entry.version ?: "?"}"
+                installed != null -> "Installed · v${installed.version ?: "unknown"}"
+                else -> null
+            },
+            tone = if (installed?.update != null) RowTone.ACCENT else RowTone.NEUTRAL,
+            onClick = onOpen,
+            trailing = {
+                when {
+                    busy -> AFSpinner(size = 18.dp)
+                    installed == null -> AFTextButton(
+                        label = "Install",
+                        onClick = onInstall,
+                        enabled = enabled
+                    )
+                    installed.update != null -> AFTextButton(
+                        label = "Update",
+                        onClick = onInstall,
+                        enabled = enabled
+                    )
+                    else -> AFText(
+                        text = "Installed",
+                        style = AFTheme.type.caption,
+                        color = AFTheme.colors.textLo
+                    )
+                }
+            }
+        )
+        AFDivider()
     }
 }
 
@@ -887,70 +941,127 @@ private fun VideoDiscover(
     val servers = state.installed.filter { it.kind == ExtensionKind.JELLYFIN }
         .sortedBy { it.name.lowercase() }
 
-    LazyColumn(contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp)) {
+    LazyColumn(
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
         item(key = "stremio-hero") {
-            StremioInstallCard(installedCount = addons.size, onAdd = onAddStremio)
-        }
-        item(key = "directory-header") {
-            Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 2.dp)) {
-                Text(
-                    text = "Addon directory",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-                Text(
-                    text = "One tap installs the addon. Nothing is uploaded; AllFun only " +
-                        "asks the addon for its manifest.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        items(featuredAddons, key = { "featured:" + it.baseUrl }) { addon ->
-            val installed = addons.any { it.location?.trimEnd('/') == addon.baseUrl }
-            FeaturedAddonRow(
-                addon = addon,
-                installed = installed,
-                installing = state.featuredInstalling == addon.baseUrl,
-                enabled = !state.addingStremio,
-                onInstall = { onInstallFeatured(addon.name, addon.url) }
+            StremioPanel(
+                installedCount = addons.size,
+                onAdd = onAddStremio,
+                body = "Video sources come from Stremio addons. An addon can supply " +
+                    "catalogs, metadata or streams; most are installed from a URL ending " +
+                    "in /manifest.json."
             )
         }
-        if (addons.isNotEmpty()) {
-            item(key = "addons-header") { DiscoverGroupHeader("Installed addons", addons.size) }
-            items(addons, key = { it.key }) { item ->
-                ExtensionRow(
-                    name = item.name,
-                    subtitle = item.subtitle(),
-                    iconUrl = item.iconUrl,
-                    nsfw = item.nsfw,
-                    status = item.statusText(),
-                    statusColor = if (item.broken) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    onClick = { onOpenInstalled(item) }
+        item(key = "directory") {
+            GlassPanel(header = "Addon directory") {
+                AFText(
+                    text = "One tap installs the addon. Nothing is uploaded; AllFun only " +
+                        "asks the addon for its manifest.",
+                    style = AFTheme.type.caption,
+                    color = AFTheme.colors.textLo,
+                    onGlass = true,
+                    modifier = Modifier.padding(bottom = 6.dp)
                 )
+                featuredAddons.forEachIndexed { index, addon ->
+                    val installed = addons.any {
+                        it.location?.trimEnd('/') == addon.baseUrl
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                AFText(
+                                    text = addon.name,
+                                    style = AFTheme.type.body,
+                                    color = AFTheme.colors.textHi,
+                                    onGlass = true,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                AFText(
+                                    text = addon.role.label.uppercase(),
+                                    style = AFTheme.type.overline,
+                                    color = AFTheme.colors.textLo,
+                                    onGlass = true
+                                )
+                            }
+                            AFText(
+                                text = addon.description,
+                                style = AFTheme.type.caption,
+                                color = AFTheme.colors.textMid,
+                                onGlass = true,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        when {
+                            state.featuredInstalling == addon.baseUrl -> AFSpinner(size = 18.dp)
+                            installed -> AFIcon(
+                                icon = AFIcons.Check,
+                                contentDescription = "Installed",
+                                tint = AFTheme.colors.ok,
+                                size = 20.dp
+                            )
+                            else -> AFTextButton(
+                                label = "Install",
+                                onClick = { onInstallFeatured(addon.name, addon.url) },
+                                enabled = !state.addingStremio
+                            )
+                        }
+                    }
+                    if (index != featuredAddons.lastIndex) AFDivider()
+                }
+            }
+        }
+        if (addons.isNotEmpty()) {
+            item(key = "addons") {
+                GlassPanel(header = "Installed addons") {
+                    addons.forEachIndexed { index, item ->
+                        ExtensionRow(
+                            name = item.name,
+                            subtitle = item.subtitle(),
+                            iconUrl = item.iconUrl,
+                            nsfw = item.nsfw,
+                            status = item.statusText(),
+                            tone = if (item.broken) RowTone.FAILED else RowTone.NEUTRAL,
+                            onClick = { onOpenInstalled(item) }
+                        )
+                        if (index != addons.lastIndex) AFDivider()
+                    }
+                }
             }
         }
         if (servers.isNotEmpty()) {
-            item(key = "servers-header") { DiscoverGroupHeader("Jellyfin servers", servers.size) }
-            items(servers, key = { it.key }) { item ->
-                ExtensionRow(
-                    name = item.name,
-                    subtitle = item.subtitle(),
-                    iconUrl = item.iconUrl,
-                    nsfw = item.nsfw,
-                    status = item.statusText(),
-                    statusColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    onClick = { onOpenInstalled(item) }
-                )
+            item(key = "servers") {
+                GlassPanel(header = "Jellyfin servers") {
+                    servers.forEachIndexed { index, item ->
+                        ExtensionRow(
+                            name = item.name,
+                            subtitle = item.subtitle(),
+                            iconUrl = item.iconUrl,
+                            nsfw = item.nsfw,
+                            status = item.statusText(),
+                            tone = RowTone.NEUTRAL,
+                            onClick = { onOpenInstalled(item) }
+                        )
+                        if (index != servers.lastIndex) AFDivider()
+                    }
+                }
             }
         }
         item(key = "video-note") {
-            NoticeCard(
-                text = "A Stremio addon supplies catalogs, metadata or streams; most are " +
+            NoticePanel(
+                header = "How video sources work",
+                body = "A Stremio addon supplies catalogs, metadata or streams; most are " +
                     "installed from a URL ending in /manifest.json. Jellyfin servers are " +
                     "connected with the + button on the Movies screen."
             )
@@ -959,143 +1070,50 @@ private fun VideoDiscover(
 }
 
 @Composable
-private fun StremioInstallCard(installedCount: Int, onAdd: () -> Unit) {
-    Surface(
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
-        shape = MaterialTheme.shapes.large,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-    ) {
-        Column(Modifier.padding(18.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconBadge(
-                    icon = Icons.Outlined.Extension,
-                    tint = MaterialTheme.colorScheme.primary,
-                    size = 40
-                )
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = "Stremio addons",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = when (installedCount) {
-                            0 -> "No addons installed"
-                            1 -> "1 addon installed"
-                            else -> "$installedCount addons installed"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            Spacer(Modifier.height(10.dp))
-            Text(
-                text = "Paste an addon URL to add its catalogs and streams. Only the addon " +
-                    "itself is contacted; nothing is uploaded.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(12.dp))
-            Button(onClick = onAdd, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Outlined.Add, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Install Stremio addon")
-            }
-        }
-    }
-}
-
-@Composable
-private fun FeaturedAddonRow(
-    addon: FeaturedAddon,
-    installed: Boolean,
-    installing: Boolean,
-    enabled: Boolean,
-    onInstall: () -> Unit
+private fun StremioPanel(
+    installedCount: Int,
+    onAdd: () -> Unit,
+    body: String
 ) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-        shape = MaterialTheme.shapes.medium,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconBadge(
-                icon = when (addon.role) {
-                    AddonRole.METADATA -> Icons.Outlined.Movie
-                    AddonRole.STREAMS -> Icons.Outlined.PlayCircle
-                    AddonRole.SUBTITLES -> Icons.Outlined.Extension
-                },
-                tint = MaterialTheme.colorScheme.primary,
-                size = 36
+    GlassPanel(header = "Stremio addons") {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AFIcon(
+                icon = AFIcons.Clapper,
+                contentDescription = null,
+                tint = AFTheme.colors.accent,
+                size = 22.dp
             )
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = addon.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = addon.role.label,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.secondary
-                    )
-                }
-                Text(
-                    text = addon.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
+                AFText(
+                    text = when (installedCount) {
+                        0 -> "No addons installed"
+                        1 -> "1 addon installed"
+                        else -> "$installedCount addons installed"
+                    },
+                    style = AFTheme.type.body,
+                    color = AFTheme.colors.textHi,
+                    onGlass = true
+                )
+                AFText(
+                    text = body,
+                    style = AFTheme.type.caption,
+                    color = AFTheme.colors.textLo,
+                    onGlass = true,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Spacer(Modifier.width(10.dp))
-            when {
-                installing -> CircularProgressIndicator(
-                    modifier = Modifier.size(22.dp),
-                    strokeWidth = 2.dp
-                )
-                installed -> Icon(
-                    imageVector = Icons.Outlined.CheckCircle,
-                    contentDescription = "Installed",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                else -> Button(onClick = onInstall, enabled = enabled) {
-                    Text("Install")
-                }
-            }
         }
+        AFTextButton(
+            label = "Install Stremio addon",
+            onClick = onAdd,
+            modifier = Modifier.padding(top = 4.dp)
+        )
     }
 }
 
-@Composable
-private fun DiscoverGroupHeader(title: String, count: Int) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.secondary,
-            modifier = Modifier.weight(1f)
-        )
-        StatusPill(text = count.toString(), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
+// ---------------------------------------------------------------- repositories
 
 @Composable
 private fun RepositoriesTab(
@@ -1104,49 +1122,165 @@ private fun RepositoriesTab(
     onRemove: (RepositoryConfig) -> Unit,
     onAdd: () -> Unit
 ) {
-    LazyColumn(contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)) {
-        item {
-            Text(
+    LazyColumn(
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item(key = "intro") {
+            AFText(
                 text = "A repository is a JSON index. Manga repositories use the " +
                     "Mihon/Komikku index format; novel repositories use LNReader's " +
-                    "plugins.min.json array. AllFun reads the index before saving the address, so " +
-                    "a broken or unrelated URL is rejected immediately.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                    "plugins.min.json array. AllFun reads the index before saving the " +
+                    "address, so a broken or unrelated URL is rejected immediately.",
+                style = AFTheme.type.caption,
+                color = AFTheme.colors.textLo
             )
         }
         items(state.repos, key = { "${it.config.kind}:${it.config.url}" }) { repo ->
-            RepositoryCard(
+            RepositoryPanel(
                 repo = repo,
                 onRetry = { onRetry(repo.config) },
                 onRemove = if (repo.builtIn) null else ({ onRemove(repo.config) })
             )
         }
-        item {
-            Column {
-                Spacer(Modifier.height(10.dp))
-                OutlinedButton(
-                    onClick = onAdd,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                ) {
-                    Icon(Icons.Outlined.Add, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Add repository")
-                }
-                Spacer(Modifier.height(10.dp))
-                NoticeCard(
-                    text = "Signing keys are read from the manga repository's index. When a " +
-                        "repository publishes one, AllFun refuses an APK whose certificate does " +
-                        "not match before loading any of its code."
-                )
-                Spacer(Modifier.height(8.dp))
-            }
+        item(key = "add") {
+            GlassButton(
+                label = "Add repository",
+                onClick = onAdd,
+                icon = AFIcons.Plus,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        item(key = "note") {
+            NoticePanel(
+                header = "Signing keys",
+                body = "Signing keys are read from the manga repository's index. When a " +
+                    "repository publishes one, AllFun refuses an APK whose certificate does " +
+                    "not match before loading any of its code."
+            )
         }
     }
 }
+
+@Composable
+private fun RepositoryPanel(
+    repo: RepositoryState,
+    onRetry: () -> Unit,
+    onRemove: (() -> Unit)?
+) {
+    var showTechnical by remember(repo.config) { mutableStateOf(false) }
+    GlassPanel(header = repo.name) {
+        Row(verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f)) {
+                AFText(
+                    text = repo.kindLabel + if (repo.builtIn) " · built in" else " · custom",
+                    style = AFTheme.type.caption,
+                    color = AFTheme.colors.textLo,
+                    onGlass = true
+                )
+                AFText(
+                    text = repo.config.url,
+                    style = AFTheme.type.caption,
+                    color = AFTheme.colors.textMid,
+                    onGlass = true,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+            if (onRemove != null) {
+                AFIconButton(
+                    icon = AFIcons.Trash,
+                    contentDescription = "Remove ${repo.name}",
+                    onClick = onRemove,
+                    visualSize = 36.dp
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        when {
+            repo.loading -> Row(verticalAlignment = Alignment.CenterVertically) {
+                AFSpinner(size = 14.dp)
+                Spacer(Modifier.width(8.dp))
+                AFText(
+                    text = "Reading index",
+                    style = AFTheme.type.caption,
+                    color = AFTheme.colors.textLo,
+                    onGlass = true
+                )
+            }
+
+            repo.error != null -> {
+                AFText(
+                    text = repo.error.message,
+                    style = AFTheme.type.caption,
+                    color = AFTheme.colors.failed,
+                    onGlass = true
+                )
+                Row {
+                    AFTextButton(label = "Retry", onClick = onRetry)
+                    if (!repo.error.technical.isNullOrBlank()) {
+                        AFTextButton(
+                            label = if (showTechnical) "Hide technical details"
+                            else "Technical details",
+                            onClick = { showTechnical = !showTechnical }
+                        )
+                    }
+                }
+                if (showTechnical && !repo.error.technical.isNullOrBlank()) {
+                    AFText(
+                        text = repo.error.technical.orEmpty(),
+                        style = AFTheme.type.caption,
+                        color = AFTheme.colors.textLo,
+                        onGlass = true,
+                        maxLines = 6,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            else -> AFText(
+                text = "${repo.extensionCount} " +
+                    if (repo.extensionCount == 1) "extension available" else "extensions available",
+                style = AFTheme.type.caption,
+                color = AFTheme.colors.ok,
+                onGlass = true
+            )
+        }
+    }
+}
+
+@Composable
+private fun RepoIssueRow(name: String, message: String, onRetry: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            AFText(
+                text = "Could not read $name",
+                style = AFTheme.type.body,
+                color = AFTheme.colors.textHi,
+                onGlass = true,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            AFText(
+                text = message,
+                style = AFTheme.type.caption,
+                color = AFTheme.colors.failed,
+                onGlass = true,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        AFTextButton(label = "Retry", onClick = onRetry)
+    }
+}
+
+// ---------------------------------------------------------------- disabled
 
 @Composable
 private fun DisabledTab(
@@ -1158,11 +1292,11 @@ private fun DisabledTab(
 ) {
     val disabled = state.disabled
     if (disabled.isEmpty()) {
-        EmptyState(
-            icon = Icons.Outlined.Extension,
+        GlassEmpty(
             title = "Nothing is disabled",
-            message = "Disabled extensions keep their files and library entries but are hidden " +
-                "from the categories and stop receiving updates until you enable them again."
+            body = "Disabled extensions keep their files and library entries but are " +
+                "hidden from the categories and stop receiving updates until you enable " +
+                "them again."
         )
         return
     }
@@ -1173,49 +1307,63 @@ private fun DisabledTab(
             item.developer?.contains(needle, ignoreCase = true) == true ||
             item.kind.label.contains(needle, ignoreCase = true)
     }
-    LazyColumn(contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)) {
-        item {
-            Text(
+    LazyColumn(
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item(key = "intro") {
+            AFText(
                 text = "Disabled sources are hidden from the categories and search. Their " +
                     "library entries stay readable only if the content was already imported.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                style = AFTheme.type.caption,
+                color = AFTheme.colors.textLo
             )
         }
         if (visible.isEmpty()) {
-            item {
-                EmptyState(
-                    icon = Icons.Outlined.Search,
+            item(key = "empty") {
+                GlassEmpty(
                     title = "No disabled extension matches",
-                    message = "Nothing disabled matches \"$needle\". Try a shorter search."
+                    body = "Nothing disabled matches \"$needle\". Try a shorter search."
                 )
             }
-        }
-        items(visible.sortedBy { it.name.lowercase() }, key = { it.key }) { item ->
-            ExtensionRow(
-                name = item.name,
-                subtitle = item.subtitle(),
-                iconUrl = item.iconUrl,
-                nsfw = item.nsfw,
-                status = "Disabled",
-                statusColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                onClick = { onOpen(item) },
-                action = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = { onEnable(item) }) { Text("Enable") }
-                        IconButton(onClick = { onUninstall(item) }) {
-                            Icon(
-                                Icons.Outlined.Delete,
-                                contentDescription = "Remove ${item.name}"
-                            )
-                        }
+        } else {
+            item(key = "list") {
+                GlassPanel(header = "Disabled extensions") {
+                    val sorted = visible.sortedBy { it.name.lowercase() }
+                    sorted.forEachIndexed { index, item ->
+                        ExtensionRow(
+                            name = item.name,
+                            subtitle = item.subtitle(),
+                            iconUrl = item.iconUrl,
+                            nsfw = item.nsfw,
+                            status = "Disabled",
+                            tone = RowTone.NEUTRAL,
+                            onClick = { onOpen(item) },
+                            trailing = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    AFTextButton(
+                                        label = "Enable",
+                                        onClick = { onEnable(item) }
+                                    )
+                                    AFIconButton(
+                                        icon = AFIcons.Trash,
+                                        contentDescription = "Remove ${item.name}",
+                                        onClick = { onUninstall(item) },
+                                        tint = AFTheme.colors.failed,
+                                        visualSize = 36.dp
+                                    )
+                                }
+                            }
+                        )
+                        if (index != sorted.lastIndex) AFDivider()
                     }
                 }
-            )
+            }
         }
     }
 }
+
+// ---------------------------------------------------------------- shared rows
 
 @Composable
 private fun ExtensionRow(
@@ -1224,78 +1372,77 @@ private fun ExtensionRow(
     iconUrl: String?,
     nsfw: Boolean,
     status: String?,
-    statusColor: Color,
+    tone: RowTone,
     onClick: () -> Unit,
-    enabled: Boolean? = null,
-    onToggle: ((Boolean) -> Unit)? = null,
-    showSwitch: Boolean = false,
-    action: (@Composable () -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    trailing: (@Composable () -> Unit)? = null
 ) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        shape = MaterialTheme.shapes.large,
-        border = BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
-        ),
+    val colors = AFTheme.colors
+    val haptics = app.allfun.ui.glass.rememberHaptics()
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .clickable(onClickLabel = "Open details for $name", onClick = onClick)
-                .heightIn(min = 72.dp)
-                .padding(start = 14.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            ExtensionAvatar(iconUrl, name, Modifier.size(46.dp))
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = name,
-                        style = MaterialTheme.typography.titleSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    if (nsfw) {
-                        Spacer(Modifier.width(6.dp))
-                        StatusPill(
-                            text = "18+",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
+            .heightIn(min = 64.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClickLabel = "Open details for $name",
+                onClick = {
+                    haptics.tick()
+                    onClick()
                 }
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+            )
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ExtensionAvatar(iconUrl, name, Modifier.size(42.dp))
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AFText(
+                    text = name,
+                    style = AFTheme.type.body,
+                    color = colors.textHi,
+                    onGlass = true,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
-                if (status != null) {
-                    Spacer(Modifier.height(5.dp))
-                    StatusPill(text = status, tint = statusColor, maxLines = 2)
+                if (nsfw) {
+                    Spacer(Modifier.width(6.dp))
+                    AFText(
+                        text = "18+",
+                        style = AFTheme.type.overline,
+                        color = colors.failed,
+                        onGlass = true
+                    )
                 }
             }
-            when {
-                action != null -> action()
-                enabled != null && onToggle != null && showSwitch -> Switch(
-                    checked = enabled,
-                    onCheckedChange = onToggle,
-                    modifier = Modifier.semantics { contentDescription = name }
-                )
-                enabled != null -> Text(
-                    text = if (enabled) "On" else "Off",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 8.dp)
+            AFText(
+                text = subtitle,
+                style = AFTheme.type.caption,
+                color = colors.textLo,
+                onGlass = true,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (status != null) {
+                AFText(
+                    text = status,
+                    style = AFTheme.type.caption,
+                    color = when (tone) {
+                        RowTone.NEUTRAL -> colors.textLo
+                        RowTone.ACCENT -> colors.accent
+                        RowTone.FAILED -> colors.failed
+                    },
+                    onGlass = true,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 3.dp)
                 )
             }
         }
+        trailing?.invoke()
     }
 }
 
@@ -1304,7 +1451,7 @@ private fun ExtensionAvatar(url: String?, name: String, modifier: Modifier) {
     Box(
         modifier = modifier
             .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceVariant),
+            .background(AFTheme.colors.bg1),
         contentAlignment = Alignment.Center
     ) {
         if (url.isNullOrBlank()) {
@@ -1327,130 +1474,31 @@ private fun ExtensionAvatar(url: String?, name: String, modifier: Modifier) {
 
 @Composable
 private fun Initials(name: String) {
-    Text(
+    AFText(
         text = name.take(1).uppercase(),
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.primary
+        style = AFTheme.type.heading,
+        color = AFTheme.colors.accent
     )
 }
 
 @Composable
-private fun RepositoryCard(
-    repo: RepositoryState,
-    onRetry: () -> Unit,
-    onRemove: (() -> Unit)?
-) {
-    var showTechnical by remember(repo.config) { mutableStateOf(false) }
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        shape = MaterialTheme.shapes.large,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-    ) {
-        Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp)) {
-            Row(verticalAlignment = Alignment.Top) {
-                Column(Modifier.weight(1f)) {
-                    Text(repo.name, style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        text = repo.kindLabel + if (repo.builtIn) " · built in" else " · custom",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                if (onRemove != null) {
-                    IconButton(onClick = onRemove) {
-                        Icon(
-                            Icons.Outlined.Delete,
-                            contentDescription = "Remove ${repo.name}"
-                        )
-                    }
-                }
-            }
-            Text(
-                text = repo.config.url,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(end = 8.dp, top = 2.dp)
-            )
-            Spacer(Modifier.height(6.dp))
-            when {
-                repo.loading -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = "Reading index",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                repo.error != null -> {
-                    Text(
-                        text = repo.error.message,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    Row {
-                        TextButton(onClick = onRetry) { Text("Retry") }
-                        TextButton(onClick = { showTechnical = !showTechnical }) {
-                            Text(if (showTechnical) "Hide technical details" else "Technical details")
-                        }
-                    }
-                    if (showTechnical && !repo.error.technical.isNullOrBlank()) {
-                        Text(
-                            text = repo.error.technical,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                    }
-                }
-
-                else -> Text(
-                    text = "${repo.extensionCount} " +
-                        (if (repo.extensionCount == 1) "extension" else "extensions") + " available",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-            }
-        }
+private fun NoticePanel(header: String, body: String) {
+    GlassPanel(header = header) {
+        AFText(
+            text = body,
+            style = AFTheme.type.caption,
+            color = AFTheme.colors.textLo,
+            onGlass = true
+        )
     }
 }
 
-@Composable
-private fun RepositoryErrorRow(repo: RepositoryState, onRetry: () -> Unit) {
-    Surface(
-        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f),
-        shape = MaterialTheme.shapes.medium,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = "Could not read ${repo.name}",
-                    style = MaterialTheme.typography.titleSmall
-                )
-                Text(
-                    text = repo.error?.message.orEmpty(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            TextButton(onClick = onRetry) { Text("Retry") }
-        }
-    }
-}
+// ---------------------------------------------------------------- forms
 
 @Composable
-private fun AddRepositoryDialog(
+private fun AddRepositorySheet(
     adding: Boolean,
-    error: app.allfun.data.net.UserError?,
+    error: UserError?,
     onConfirm: (RepositoryKind, String) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -1458,162 +1506,165 @@ private fun AddRepositoryDialog(
     var url by remember { mutableStateOf("") }
     var showTechnical by remember { mutableStateOf(false) }
 
-    AlertDialog(
-        onDismissRequest = { if (!adding) onDismiss() },
-        title = { Text("Add repository") },
-        text = {
-            Column {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    RepositoryKind.entries.forEach { option ->
-                        FilterChip(
-                            selected = kind == option,
-                            onClick = { kind = option },
-                            label = {
-                                Text(
-                                    when (option) {
-                                        RepositoryKind.MANGA -> "Manga"
-                                        RepositoryKind.NOVEL -> "Novel"
-                                    }
-                                )
-                            }
-                        )
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    label = { Text("Index URL") },
-                    placeholder = {
-                        Text(
-                            if (kind == RepositoryKind.MANGA) {
-                                "https://example.com/index.json"
-                            } else {
-                                "https://example.com/plugins.min.json"
-                            }
-                        )
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+    GlassSheet(onDismiss = { if (!adding) onDismiss() }) {
+        AFText(
+            text = "Add repository",
+            style = AFTheme.type.title,
+            color = AFTheme.colors.textHi
+        )
+        Spacer(Modifier.height(6.dp))
+        AFText(
+            text = "AllFun reads the index first, so a broken or unrelated address is " +
+                "rejected before anything is saved.",
+            style = AFTheme.type.caption,
+            color = AFTheme.colors.textLo
+        )
+        Spacer(Modifier.height(14.dp))
+        GlassSegmented(
+            options = RepositoryKind.entries.map {
+                if (it == RepositoryKind.MANGA) "Manga" else "Novel"
+            },
+            selectedIndex = RepositoryKind.entries.indexOf(kind).coerceAtLeast(0),
+            onSelect = { kind = RepositoryKind.entries[it] },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(12.dp))
+        GlassTextField(
+            value = url,
+            onValueChange = { url = it },
+            placeholder = if (kind == RepositoryKind.MANGA) {
+                "https://example.com/index.json"
+            } else {
+                "https://example.com/plugins.min.json"
+            },
+            enabled = !adding,
+            modifier = Modifier.fillMaxWidth()
+        )
+        if (error != null) {
+            Spacer(Modifier.height(8.dp))
+            AFText(
+                text = error.message,
+                style = AFTheme.type.bodySmall,
+                color = AFTheme.colors.failed
+            )
+            if (!error.technical.isNullOrBlank()) {
+                AFTextButton(
+                    label = if (showTechnical) "Hide technical details"
+                    else "Technical details",
+                    onClick = { showTechnical = !showTechnical },
+                    color = AFTheme.colors.textLo
                 )
-                if (error != null) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = error.message,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
+                if (showTechnical) {
+                    AFText(
+                        text = error.technical.orEmpty(),
+                        style = AFTheme.type.caption,
+                        color = AFTheme.colors.textLo,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    if (!error.technical.isNullOrBlank()) {
-                        TextButton(onClick = { showTechnical = !showTechnical }) {
-                            Text(if (showTechnical) "Hide technical details" else "Technical details")
-                        }
-                        if (showTechnical) {
-                            Text(
-                                text = error.technical,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(kind, url) },
-                enabled = !adding && url.isNotBlank()
-            ) {
-                if (adding) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Checking")
-                } else {
-                    Text("Add")
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !adding) { Text("Cancel") }
         }
-    )
+        Spacer(Modifier.height(16.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            GlassButton(
+                label = "Cancel",
+                onClick = onDismiss,
+                enabled = !adding,
+                modifier = Modifier.weight(1f)
+            )
+            GlassPrimaryAction(
+                label = if (adding) "Checking" else "Add",
+                onClick = { onConfirm(kind, url) },
+                loading = adding,
+                enabled = !adding && url.isNotBlank(),
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+    }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddStremioDialog(
+private fun AddStremioSheet(
     adding: Boolean,
-    error: app.allfun.data.net.UserError?,
+    error: UserError?,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     var url by remember { mutableStateOf("") }
     var showTechnical by remember { mutableStateOf(false) }
 
-    AlertDialog(
-        onDismissRequest = { if (!adding) onDismiss() },
-        title = { Text("Install Stremio addon") },
-        text = {
-            Column {
-                Text(
-                    text = "Enter the addon's manifest URL, for example a Stremio addon " +
-                        "page's Install link, or the addon's base URL.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+    GlassSheet(onDismiss = { if (!adding) onDismiss() }) {
+        AFText(
+            text = "Install Stremio addon",
+            style = AFTheme.type.title,
+            color = AFTheme.colors.textHi
+        )
+        Spacer(Modifier.height(6.dp))
+        AFText(
+            text = "Enter the addon's manifest URL, for example a Stremio addon page's " +
+                "Install link, or the addon's base URL.",
+            style = AFTheme.type.caption,
+            color = AFTheme.colors.textLo
+        )
+        Spacer(Modifier.height(14.dp))
+        GlassTextField(
+            value = url,
+            onValueChange = { url = it },
+            placeholder = "https://addon.example.com/manifest.json",
+            enabled = !adding,
+            modifier = Modifier.fillMaxWidth()
+        )
+        if (error != null) {
+            Spacer(Modifier.height(8.dp))
+            AFText(
+                text = error.message,
+                style = AFTheme.type.bodySmall,
+                color = AFTheme.colors.failed
+            )
+            if (!error.technical.isNullOrBlank()) {
+                AFTextButton(
+                    label = if (showTechnical) "Hide technical details"
+                    else "Technical details",
+                    onClick = { showTechnical = !showTechnical },
+                    color = AFTheme.colors.textLo
                 )
-                Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    label = { Text("Addon URL") },
-                    placeholder = { Text("https://addon.example.com/manifest.json") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                if (error != null) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = error.message,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
+                if (showTechnical) {
+                    AFText(
+                        text = error.technical.orEmpty(),
+                        style = AFTheme.type.caption,
+                        color = AFTheme.colors.textLo,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    if (!error.technical.isNullOrBlank()) {
-                        TextButton(onClick = { showTechnical = !showTechnical }) {
-                            Text(if (showTechnical) "Hide technical details" else "Technical details")
-                        }
-                        if (showTechnical) {
-                            Text(
-                                text = error.technical,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(url) },
-                enabled = !adding && url.isNotBlank()
-            ) {
-                if (adding) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Checking")
-                } else {
-                    Text("Install")
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !adding) { Text("Cancel") }
         }
-    )
+        Spacer(Modifier.height(16.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            GlassButton(
+                label = "Cancel",
+                onClick = onDismiss,
+                enabled = !adding,
+                modifier = Modifier.weight(1f)
+            )
+            GlassPrimaryAction(
+                label = if (adding) "Checking" else "Install",
+                onClick = { onConfirm(url) },
+                loading = adding,
+                enabled = !adding && url.isNotBlank(),
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+    }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+// ---------------------------------------------------------------- details
+
 @Composable
-private fun ExtensionDetailsDialog(
+private fun ExtensionDetailsSheet(
     installed: InstalledExtension?,
     entry: RepoExtension?,
     busy: Boolean,
@@ -1625,202 +1676,198 @@ private fun ExtensionDetailsDialog(
     val name = installed?.name ?: entry?.name ?: "Extension"
     val kindLabel = installed?.kind?.label
         ?: entry?.kind?.let {
-            if (it == RepositoryKind.MANGA) ExtensionKind.MANGA.label else ExtensionKind.NOVEL.label
+            if (it == RepositoryKind.MANGA) ExtensionKind.MANGA.label
+            else ExtensionKind.NOVEL.label
         }
         ?: "Extension"
     val version = installed?.version ?: entry?.version
     val developer = installed?.developer ?: entry?.developer
     val description = installed?.description ?: entry?.description
     val permissions = installed?.permissions.orEmpty()
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-    ) {
+    GlassSheet(onDismiss = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .heightIn(max = 560.dp)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 28.dp)
         ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    ExtensionAvatar(installed?.iconUrl ?: entry?.iconUrl, name, Modifier.size(52.dp))
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(name, style = MaterialTheme.typography.titleLarge)
-                        Text(
-                            text = listOfNotNull(kindLabel, version?.let { "v$it" })
-                                .joinToString(" · "),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Outlined.Close, contentDescription = "Close details")
-                    }
-                }
-
-                if (installed?.broken == true) {
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        text = "The file for this extension is missing. Reinstall it, or remove " +
-                            "the extension and its orphaned sources.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ExtensionAvatar(installed?.iconUrl ?: entry?.iconUrl, name, Modifier.size(52.dp))
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    AFText(
+                        text = name,
+                        style = AFTheme.type.title,
+                        color = AFTheme.colors.textHi,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    AFText(
+                        text = listOfNotNull(kindLabel, version?.let { "v$it" })
+                            .joinToString(" · "),
+                        style = AFTheme.type.caption,
+                        color = AFTheme.colors.textLo
                     )
                 }
+                AFIconButton(
+                    icon = AFIcons.Close,
+                    contentDescription = "Close details",
+                    onClick = onDismiss
+                )
+            }
 
-                if (developer != null) {
-                    Spacer(Modifier.height(10.dp))
-                    DetailLine("Developer", developer)
-                }
-                if (description != null) {
-                    Spacer(Modifier.height(6.dp))
-                    DetailLine("About", description)
-                }
-                if (entry?.site != null) {
-                    Spacer(Modifier.height(6.dp))
-                    DetailLine("Site", entry.site)
-                }
-                val repoUrl = installed?.repoUrl ?: entry?.repoUrl
-                if (repoUrl != null) {
-                    Spacer(Modifier.height(6.dp))
-                    DetailLine("Repository", repoUrl)
-                }
-                if (entry != null && entry.sourceCount > 0) {
-                    Spacer(Modifier.height(6.dp))
-                    DetailLine("Sources", "${entry.sourceCount}")
-                }
-                val location = installed?.location
-                if (location != null && installed.kind != ExtensionKind.MANGA) {
+            if (installed?.broken == true) {
+                Spacer(Modifier.height(10.dp))
+                AFText(
+                    text = "The file for this extension is missing. Reinstall it, or remove " +
+                        "the extension and its orphaned sources.",
+                    style = AFTheme.type.bodySmall,
+                    color = AFTheme.colors.failed
+                )
+            }
+
+            developer?.let {
+                Spacer(Modifier.height(12.dp))
+                DetailLine("Developer", it)
+            }
+            description?.let {
+                Spacer(Modifier.height(6.dp))
+                DetailLine("About", it)
+            }
+            entry?.site?.let {
+                Spacer(Modifier.height(6.dp))
+                DetailLine("Site", it)
+            }
+            (installed?.repoUrl ?: entry?.repoUrl)?.let {
+                Spacer(Modifier.height(6.dp))
+                DetailLine("Repository", it)
+            }
+            if (entry != null && entry.sourceCount > 0) {
+                Spacer(Modifier.height(6.dp))
+                DetailLine("Sources", entry.sourceCount.toString())
+            }
+            installed?.location?.let { location ->
+                if (installed.kind != ExtensionKind.MANGA) {
                     Spacer(Modifier.height(6.dp))
                     DetailLine("Location", location)
                 }
-                installed?.let {
-                    Spacer(Modifier.height(6.dp))
-                    DetailLine("Status", if (it.enabled) "Enabled" else "Disabled")
-                }
+            }
+            installed?.let {
+                Spacer(Modifier.height(6.dp))
+                DetailLine("Status", if (it.enabled) "Enabled" else "Disabled")
+            }
 
-                Spacer(Modifier.height(14.dp))
-                HorizontalDivider()
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = "Permissions",
-                    style = MaterialTheme.typography.titleSmall
-                )
-                Spacer(Modifier.height(4.dp))
-                if (permissions.isEmpty()) {
-                    Text(
-                        text = if (installed?.kind == ExtensionKind.MANGA) {
+            Spacer(Modifier.height(14.dp))
+            AFDivider()
+            Spacer(Modifier.height(12.dp))
+            AFOverline("Permissions")
+            Spacer(Modifier.height(4.dp))
+            if (permissions.isEmpty()) {
+                AFText(
+                    text = when {
+                        installed?.kind == ExtensionKind.MANGA ->
                             "This package declares no Android permissions."
-                        } else if (installed == null && entry != null) {
-                            "Permissions are read from the installed package. AllFun verifies " +
-                                "the publisher's signing key before loading manga extension code."
+                        installed == null && entry != null ->
+                            "Permissions are read from the installed package. AllFun " +
+                                "verifies the publisher's signing key before loading manga " +
+                                "extension code."
+                        else -> "No permissions recorded for this source."
+                    },
+                    style = AFTheme.type.caption,
+                    color = AFTheme.colors.textLo
+                )
+            } else {
+                permissions.forEach { permission ->
+                    AFText(
+                        text = "• $permission",
+                        style = AFTheme.type.caption,
+                        color = AFTheme.colors.textLo
+                    )
+                }
+            }
+            if (installed?.kind == ExtensionKind.MANGA) {
+                Spacer(Modifier.height(6.dp))
+                AFText(
+                    text = "Declared permissions are informational. Extension code runs " +
+                        "inside AllFun with AllFun's own permissions; Android does not " +
+                        "grant these declarations separately.",
+                    style = AFTheme.type.caption,
+                    color = AFTheme.colors.textLo,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            if (entry != null) {
+                Spacer(Modifier.height(16.dp))
+                val availableUpdate = installed == null || installed.update != null
+                if (availableUpdate) {
+                    GlassPrimaryAction(
+                        label = if (installed == null) {
+                            "Install ${entry.name}"
                         } else {
-                            "No permissions recorded for this source."
+                            "Update to v${entry.version ?: "new version"}"
                         },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        onClick = onInstall,
+                        loading = busy,
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 } else {
-                    permissions.forEach { permission ->
-                        Text(
-                            text = "• $permission",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                if (installed?.kind == ExtensionKind.MANGA) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = "Declared permissions are informational. Extension code runs " +
-                            "inside AllFun with AllFun's own permissions; Android does not grant " +
-                            "these declarations separately.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    AFText(
+                        text = "Installed from this repository · " +
+                            "v${installed?.version ?: "unknown"}",
+                        style = AFTheme.type.caption,
+                        color = AFTheme.colors.ok
                     )
                 }
-
-                Spacer(Modifier.height(16.dp))
-                if (entry != null) {
-                    val availableUpdate = installed == null || installed.update != null
-                    if (availableUpdate) {
-                        Button(
-                            onClick = onInstall,
-                            enabled = !busy,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            if (busy) {
-                                CircularProgressIndicator(
-                                    Modifier.size(18.dp),
-                                    strokeWidth = 2.dp
-                                )
-                                Spacer(Modifier.width(8.dp))
-                            }
-                            Text(
-                                if (installed == null) {
-                                    "Install ${entry.name}"
-                                } else {
-                                    "Update to v${entry.version ?: "new version"}"
-                                }
-                            )
-                        }
-                    } else {
-                        Text(
-                            text = "Installed from this repository · v${installed?.version ?: "unknown"}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                    }
-                }
-                if (installed != null) {
-                    if (installed.canToggle) {
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedButton(
-                            onClick = { onToggle(!installed.enabled) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(if (installed.enabled) "Disable" else "Enable")
-                        }
-                    }
+            }
+            if (installed != null) {
+                if (installed.canToggle) {
                     Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = onUninstall,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Text("Uninstall")
-                    }
+                    GlassButton(
+                        label = if (installed.enabled) "Disable" else "Enable",
+                        onClick = { onToggle(!installed.enabled) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
-                Spacer(Modifier.height(4.dp))
-                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                    Text("Close")
-                }
+                Spacer(Modifier.height(8.dp))
+                AFTextButton(
+                    label = "Uninstall",
+                    onClick = onUninstall,
+                    color = AFTheme.colors.failed
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            AFTextButton(
+                label = "Close",
+                onClick = onDismiss,
+                color = AFTheme.colors.textLo
+            )
         }
     }
 }
 
 @Composable
 private fun DetailLine(label: String, value: String) {
-    Row {
-        Text(
-            text = "$label: ",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+    Row(Modifier.fillMaxWidth()) {
+        AFText(
+            text = label,
+            style = AFTheme.type.caption,
+            color = AFTheme.colors.textLo,
+            modifier = Modifier.width(92.dp)
         )
-        Text(
+        AFText(
             text = value,
-            style = MaterialTheme.typography.bodySmall,
+            style = AFTheme.type.bodySmall,
+            color = AFTheme.colors.textMid,
             modifier = Modifier.weight(1f)
         )
     }
 }
+
+// ---------------------------------------------------------------- helpers
 
 private fun InstalledExtension.subtitle(): String = listOfNotNull(
     kind.label,

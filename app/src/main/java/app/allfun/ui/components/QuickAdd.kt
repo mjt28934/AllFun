@@ -1,46 +1,37 @@
-package app.allfun.ui.components
+﻿package app.allfun.ui.components
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Code
-import androidx.compose.material.icons.outlined.Dns
-import androidx.compose.material.icons.outlined.Extension
-import androidx.compose.material.icons.outlined.Link
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.allfun.data.AppContainer
 import app.allfun.data.net.userMessage
+import app.allfun.ui.glass.AFIcons
+import app.allfun.ui.glass.AFText
+import app.allfun.ui.glass.AFTheme
+import app.allfun.ui.glass.GlassPromptDialog
+import app.allfun.ui.glass.GlassPromptField
+import app.allfun.ui.glass.GlassSheet
+import app.allfun.ui.glass.AFTextButton
+import app.allfun.ui.glass.SheetRow
+import app.allfun.ui.glass.AFIcon
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -52,16 +43,14 @@ private enum class QuickAddDialog { NONE, STREMIO, JELLYFIN }
  * One entry point for adding something new without leaving the current category: a Stremio
  * add-on, a Jellyfin server, a manga extension APK or an LNReader plugin. Extension discovery
  * stays on the Extensions screen, where repositories and updates live.
+ *
+ * The view model is hoisted by the host screen so a message is never lost when the sheet
+ * closes mid-import.
  */
 @Composable
-fun QuickAddButton(
-    container: AppContainer,
-    snackbar: SnackbarHostState,
-    modifier: Modifier = Modifier
-) {
-    val vm = rememberViewModel { QuickAddViewModel(container) }
-    var expanded by remember { mutableStateOf(false) }
+fun GlassQuickAdd(vm: QuickAddViewModel, onDismiss: () -> Unit) {
     var dialog by remember { mutableStateOf(QuickAddDialog.NONE) }
+    var sheetVisible by remember { mutableStateOf(true) }
 
     val extensionPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -71,181 +60,109 @@ fun QuickAddButton(
         ActivityResultContracts.OpenDocument()
     ) { uri -> uri?.let(vm::importNovelPlugin) }
 
-    LaunchedEffect(Unit) {
-        vm.messages.collect { snackbar.showSnackbar(it) }
+    fun open(next: QuickAddDialog) {
+        dialog = next
+        sheetVisible = false
     }
 
-    Box {
-        IconButton(onClick = { expanded = true }, modifier = modifier) {
-            Icon(Icons.Outlined.Add, contentDescription = "Add a source")
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            QuickAddItem(
-                icon = Icons.Outlined.Link,
+    if (sheetVisible) {
+        GlassSheet(onDismiss = onDismiss) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    AFText("Add a source", style = AFTheme.type.title, color = AFTheme.colors.textHi)
+                    Spacer(Modifier.height(4.dp))
+                    AFText(
+                        "Everything you add feeds the three categories automatically.",
+                        style = AFTheme.type.bodySmall,
+                        color = AFTheme.colors.textLo
+                    )
+                }
+                AFTextButton("Close", onDismiss)
+            }
+            Spacer(Modifier.height(10.dp))
+            SheetRow(
                 title = "Stremio addon",
-                subtitle = "Play films and episodes from a manifest URL"
-            ) {
-                expanded = false
-                dialog = QuickAddDialog.STREMIO
-            }
-            QuickAddItem(
-                icon = Icons.Outlined.Dns,
+                subtitle = "Play films and episodes from a manifest URL",
+                leading = { AFIcon(AFIcons.Link, null, tint = AFTheme.colors.textMid, size = 20.dp) },
+                onClick = { open(QuickAddDialog.STREMIO) }
+            )
+            SheetRow(
                 title = "Jellyfin server",
-                subtitle = "Stream movies and shows from your own server"
-            ) {
-                expanded = false
-                dialog = QuickAddDialog.JELLYFIN
-            }
-            QuickAddItem(
-                icon = Icons.Outlined.Extension,
-                title = "Manga extension (.apk)",
-                subtitle = "Install a Tachiyomi/Komikku file from this device"
-            ) {
-                expanded = false
-                extensionPicker.launch(arrayOf("*/*"))
-            }
-            QuickAddItem(
-                icon = Icons.Outlined.Code,
-                title = "Novel plugin (.js)",
-                subtitle = "Install an LNReader plugin file"
-            ) {
-                expanded = false
-                novelPicker.launch(
-                    arrayOf("text/javascript", "application/javascript", "text/plain", "*/*")
-                )
-            }
+                subtitle = "Stream movies and shows from your own server",
+                leading = { AFIcon(AFIcons.Server, null, tint = AFTheme.colors.textMid, size = 20.dp) },
+                onClick = { open(QuickAddDialog.JELLYFIN) }
+            )
+            SheetRow(
+                title = "Manga extension",
+                subtitle = "Install a Tachiyomi / Komikku .apk from this device",
+                leading = { AFIcon(AFIcons.Folder, null, tint = AFTheme.colors.textMid, size = 20.dp) },
+                onClick = {
+                    sheetVisible = false
+                    extensionPicker.launch(arrayOf("*/*"))
+                }
+            )
+            SheetRow(
+                title = "Novel plugin",
+                subtitle = "Install an LNReader .js plugin file",
+                leading = { AFIcon(AFIcons.Code, null, tint = AFTheme.colors.textMid, size = 20.dp) },
+                onClick = {
+                    sheetVisible = false
+                    novelPicker.launch(
+                        arrayOf("text/javascript", "application/javascript", "text/plain", "*/*")
+                    )
+                }
+            )
+            Spacer(Modifier.height(8.dp))
         }
     }
 
     when (dialog) {
-        QuickAddDialog.STREMIO -> TextPromptDialog(
+        QuickAddDialog.STREMIO -> GlassPromptDialog(
             title = "Add a Stremio addon",
-            label = "Manifest URL",
-            placeholder = "https://example.com/manifest.json",
+            body = "Paste the manifest URL. The addon's own catalogue becomes searchable here.",
+            fields = listOf(
+                GlassPromptField(
+                    label = "Manifest URL",
+                    placeholder = "https://example.com/manifest.json",
+                    keyboard = KeyboardType.Uri
+                )
+            ),
             confirmLabel = "Add",
-            onConfirm = { vm.addStremio(it); dialog = QuickAddDialog.NONE },
-            onDismiss = { dialog = QuickAddDialog.NONE }
+            onConfirm = {
+                vm.addStremio(it.first().trim())
+                dialog = QuickAddDialog.NONE
+                onDismiss()
+            },
+            onDismiss = onDismiss
         )
 
-        QuickAddDialog.JELLYFIN -> JellyfinDialog(
-            onConfirm = { url, user, pass ->
-                vm.addJellyfin(url, user, pass)
+        QuickAddDialog.JELLYFIN -> GlassPromptDialog(
+            title = "Connect Jellyfin",
+            body = "Your server stays on your network; credentials are stored on this device.",
+            fields = listOf(
+                GlassPromptField(
+                    label = "Server URL",
+                    placeholder = "http://192.168.1.10:8096",
+                    keyboard = KeyboardType.Uri
+                ),
+                GlassPromptField(label = "Username", placeholder = "Username"),
+                GlassPromptField(label = "Password", placeholder = "Password", secret = true)
+            ),
+            confirmLabel = "Connect",
+            onConfirm = {
+                vm.addJellyfin(it[0].trim(), it[1].trim(), it[2])
                 dialog = QuickAddDialog.NONE
+                onDismiss()
             },
-            onDismiss = { dialog = QuickAddDialog.NONE }
+            onDismiss = onDismiss,
+            confirmEnabled = { it.size >= 2 && it[0].isNotBlank() && it[1].isNotBlank() }
         )
 
         QuickAddDialog.NONE -> Unit
     }
-}
-
-@Composable
-private fun QuickAddItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit
-) {
-    DropdownMenuItem(
-        onClick = onClick,
-        leadingIcon = {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-        },
-        text = {
-            Column {
-                Text(title, style = MaterialTheme.typography.titleSmall)
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    )
-}
-
-@Composable
-private fun TextPromptDialog(
-    title: String,
-    label: String,
-    placeholder: String,
-    confirmLabel: String,
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var value by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            OutlinedTextField(
-                value = value,
-                onValueChange = { value = it },
-                label = { Text(label) },
-                placeholder = { Text(placeholder) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(value.trim()) },
-                enabled = value.isNotBlank()
-            ) { Text(confirmLabel) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
-}
-
-@Composable
-private fun JellyfinDialog(
-    onConfirm: (String, String, String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var url by remember { mutableStateOf("") }
-    var user by remember { mutableStateOf("") }
-    var pass by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Connect Jellyfin") },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    label = { Text("Server URL") },
-                    placeholder = { Text("http://192.168.1.10:8096") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = user,
-                    onValueChange = { user = it },
-                    label = { Text("Username") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = pass,
-                    onValueChange = { pass = it },
-                    label = { Text("Password") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(url.trim(), user.trim(), pass) },
-                enabled = url.isNotBlank() && user.isNotBlank()
-            ) { Text("Connect") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
 }
 
 /**
@@ -253,7 +170,7 @@ private fun JellyfinDialog(
  * extensions and connected servers keep feeding the three categories through the same
  * SourceHub calls.
  */
-private class QuickAddViewModel(private val container: AppContainer) : ViewModel() {
+class QuickAddViewModel(private val container: AppContainer) : ViewModel() {
 
     private val _messages = Channel<String>(Channel.BUFFERED)
     val messages = _messages.receiveAsFlow()
