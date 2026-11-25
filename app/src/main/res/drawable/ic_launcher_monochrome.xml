@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Themed icons are tinted from this alpha mask, so this layer is deliberately
+         simplified: one solid card with the play mark punched out (even-odd). The stacked
+         cards of the coloured layer turn into a tangle of crossing outlines at 48dp. -->
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.86"
+        android:scaleY="0.86">
+        <group
+            android:pivotX="54"
+            android:pivotY="54"
+            android:rotation="-7">
+            <path
+                android:fillType="evenOdd"
+                android:fillColor="#FFFFFFFF"
+                android:strokeColor="#FFFFFFFF"
+                android:strokeWidth="3"
+                android:strokeLineJoin="round"
+                android:pathData="M46,30 L62,30 A14,14 0 0 1 76,44 L76,64 A14,14 0 0 1 62,78 L46,78 A14,14 0 0 1 32,64 L32,44 A14,14 0 0 1 46,30 Z M44,41 L44,67 L66,54 Z" />
+        </group>
+    </group>
+</vector>

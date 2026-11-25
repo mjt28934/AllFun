@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -91,6 +92,7 @@ import app.allfun.data.settings.RepositoryConfig
 import app.allfun.data.settings.RepositoryKind
 import app.allfun.ui.components.EmptyState
 import app.allfun.ui.components.IconBadge
+import app.allfun.ui.components.staggeredReveal
 import app.allfun.ui.components.LoadingState
 import app.allfun.ui.components.NoticeCard
 import app.allfun.ui.components.StatusPill
@@ -541,7 +543,7 @@ private fun InstalledTab(
                         )
                     }
                 }
-                items(group, key = { it.key }) { item ->
+                itemsIndexed(group, key = { _, item -> item.key }) { index, item ->
                     ExtensionRow(
                         name = item.name,
                         subtitle = item.subtitle(),
@@ -556,7 +558,10 @@ private fun InstalledTab(
                         enabled = item.enabled,
                         onToggle = { enabled -> onToggle(item, enabled) },
                         showSwitch = item.canToggle,
-                        onClick = { onOpen(item) }
+                        onClick = { onOpen(item) },
+                        modifier = Modifier
+                            .staggeredReveal(index)
+                            .animateItem()
                     )
                 }
             }
@@ -621,8 +626,8 @@ private fun UpdatesTab(
                 }
             }
         }
-        items(updates, key = { it.key }) { item ->
-            val entry = item.update ?: return@items
+        itemsIndexed(updates, key = { _, item -> item.key }) { index, item ->
+            val entry = item.update ?: return@itemsIndexed
             ExtensionRow(
                 name = item.name,
                 subtitle = listOfNotNull(
@@ -643,7 +648,10 @@ private fun UpdatesTab(
                             Text("Update")
                         }
                     }
-                }
+                },
+                modifier = Modifier
+                    .staggeredReveal(index)
+                    .animateItem()
             )
         }
     }
@@ -1221,7 +1229,8 @@ private fun ExtensionRow(
     enabled: Boolean? = null,
     onToggle: ((Boolean) -> Unit)? = null,
     showSwitch: Boolean = false,
-    action: (@Composable () -> Unit)? = null
+    action: (@Composable () -> Unit)? = null,
+    modifier: Modifier = Modifier
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainer,
@@ -1230,7 +1239,7 @@ private fun ExtensionRow(
             1.dp,
             MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
         ),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
     ) {

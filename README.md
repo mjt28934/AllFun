@@ -43,8 +43,8 @@ Verify the checksum, then open the APK. Releases are signed with one fixed certi
 each version installs over the previous one and keeps the library:
 
 ```powershell
-(Get-FileHash .\AllFun-0.11.0-release.apk -Algorithm SHA256).Hash.ToLower()
-Get-Content .\AllFun-0.11.0-release.apk.sha256
+(Get-FileHash .\AllFun-0.12.0-release.apk -Algorithm SHA256).Hash.ToLower()
+Get-Content .\AllFun-0.12.0-release.apk.sha256
 ```
 
 From inside the app, **Settings → About → App Updates** does the same work without a
@@ -59,10 +59,12 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | `:app:assembleDebug` | **BUILD SUCCESSFUL** |
 | `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking |
 | `:app:testDebugUnitTest` | **66 tests pass** — serialization compatibility (generic, polymorphic, defaults, unknown fields), semantic version comparison, release JSON parsing, checksum-file parsing, category/dedupe/format mapping, category sorting, provider-description Markdown flattening, Tachiyomi page conversion, magnet/infohash identity, torrent quality ranking and tracker fallback, Stremio resource support, download queue order/pause/grouping, chapter sort/filter |
-| APK metadata | `app.allfun`, `versionCode 1100`, `versionName 0.11.0`, v2 signature, `CN=AllFun` |
+| APK metadata | `app.allfun`, `versionCode 1200`, `versionName 0.12.0`, v2 signature, `CN=AllFun` |
 | Runtime, Android 15 / API 35 (emulator) | 0.9.2 baseline: signed builds installed over the previous release on the same signer with the library, extensions and settings kept → five destinations, the Library without a scope row, Settings as a hub with working sub-screens and search, three-column search results; empty and error states; no crash |
 | 0.10.0 verification | `:app:compileDebugKotlin`, `:app:testDebugUnitTest` (65 tests), `:app:lintDebug` and `:app:assembleRelease` pass locally; the release workflow repeated the unit tests, built and verified the signed APK before publishing |
 | 0.11.0 verification | `:app:compileDebugKotlin`, `:app:testDebugUnitTest` (66 tests), `:app:lintDebug` and `:app:assembleRelease` pass locally; the release workflow repeats the unit tests and verifies the signed APK before publishing |
+| 0.12.0 verification | `:app:compileDebugKotlin`, `:app:testDebugUnitTest` (66 tests), `:app:lintDebug`, `:app:assembleDebug` and `:app:assembleRelease` pass locally; the release workflow repeats the unit tests and verifies the signed APK before publishing |
+| Interface | Aurora pass: floating bottom bar with a travelling gradient pill and haptics, animated Material colour roles, page transitions, collapsing category hero with a segmented sort bar, immersive detail/reader headers, staggered grids and lists, gradient progress, animated empty states, and a new layered adaptive icon with a dedicated monochrome layer |
 | Movie playback fallback | A Cinemeta catalogue card with no `meta` answer still opens with one playable unit built from the card's own id, so stream addons are usable; series and books never receive a synthetic unit |
 | Download queue | More than `concurrentDownloads` queued chapters keep starting as earlier workers finish, without cancelling and re-tapping; a completed worker re-pumps the queue itself |
 | Catalogue-only addons | An addon declaring `resources: ["catalog"]` (Streaming Catalogs shape) renders its shelf, and its titles open with metadata from Cinemeta instead of failing with "returned a web page"; no `meta` request is sent to an addon that does not declare it |
@@ -88,7 +90,7 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Release (R8) runtime | All paths above re-verified on a signed release build |
 | In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` confirmation |
 | Published release | [v0.11.0](https://github.com/mjt28934/AllFun/releases/tag/v0.11.0) — `AllFun-0.11.0-release.apk`, 61,700,521 bytes, SHA-256 `4615e4fc4a4cf949fb082e919f841659688c85b3e4e60c9beaea4e3876f79d48`; the workflow re-downloaded the checksum asset and compared it, verified the package, `versionCode 1100` and signer, and GitHub reports it as the latest |
-| Version | `0.11.0` (versionCode 1100) |
+| Version | `0.12.0` (versionCode 1200) |
 | Min SDK | 26 (Android 8.0) |
 | Target SDK | 35 |
 

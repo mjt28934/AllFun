@@ -10,8 +10,11 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -55,9 +58,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -154,57 +160,72 @@ private val tabs = listOf(
 private val tabRoutes = tabs.map { it.route }.toSet()
 
 /**
- * The app's own bottom bar: a single tinted pill slides to the selected destination while
- * icons and labels cross-fade colour. It is built here instead of Material's
- * NavigationBar so the indicator can actually move with the selection.
+ * The app's own bottom bar: a floating, softly bordered surface with one tinted pill that
+ * glides to the selected destination. It is built here instead of Material's NavigationBar
+ * so the indicator can actually travel, and so the bar reads as a piece of the content
+ * rather than a system chrome strip.
  */
 @Composable
 private fun AllFunBottomBar(currentRoute: String?, onSelect: (Tab) -> Unit) {
     val reduceMotion = LocalReduceMotion.current
     val selectedIndex = tabs.indexOfFirst { it.route == currentRoute }.coerceAtLeast(0)
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        tonalElevation = 3.dp
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
-        BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .height(64.dp)
+        Surface(
+            shape = RoundedCornerShape(26.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.97f),
+            border = BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+            ),
+            shadowElevation = 12.dp
         ) {
-            val itemWidth = maxWidth / tabs.size
-            val pillWidth = 52.dp
-            val target = itemWidth * selectedIndex + (itemWidth - pillWidth) / 2
-            val offset by animateDpAsState(
-                targetValue = target,
-                animationSpec = if (reduceMotion) snap()
-                else Motion.settle(),
-                label = "tabPill"
-            )
-            // The indicator sits behind the icon only: the label stays outside it, so a
-            // scaled label at a large font size can never be clipped by the pill. Its y
-            // follows the icon, which moves as the label grows with the system font scale.
-            val labelHeight = with(LocalDensity.current) { 11.sp.toDp() } * 1.45f
-            val iconTop = (64.dp - (22.dp + 3.dp + labelHeight)) / 2
-            Box(
+            BoxWithConstraints(
                 modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .offset(x = offset, y = iconTop - 4.dp)
-                    .width(pillWidth)
-                    .height(30.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
-            )
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                    .fillMaxWidth()
+                    .height(64.dp)
             ) {
-                tabs.forEach { tab ->
-                    TabItem(
-                        tab = tab,
-                        selected = tab.route == currentRoute,
-                        onClick = { onSelect(tab) }
-                    )
+                val itemWidth = maxWidth / tabs.size
+                val indicatorWidth = itemWidth - 10.dp
+                val target = itemWidth * selectedIndex + 5.dp
+                val offset by animateDpAsState(
+                    targetValue = target,
+                    animationSpec = if (reduceMotion) snap() else Motion.settle(),
+                    label = "tabPill"
+                )
+                // The indicator covers the icon and label together, so the selected tab
+                // reads as one object instead of a circle floating above text.
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .offset(x = offset)
+                        .width(indicatorWidth)
+                        .height(50.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
+                                    MaterialTheme.colorScheme.tertiary.copy(alpha = 0.10f)
+                                )
+                            )
+                        )
+                )
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    tabs.forEach { tab ->
+                        TabItem(
+                            tab = tab,
+                            selected = tab.route == currentRoute,
+                            onClick = { onSelect(tab) }
+                        )
+                    }
                 }
             }
         }
@@ -218,6 +239,7 @@ private fun RowScope.TabItem(
     onClick: () -> Unit
 ) {
     val reduceMotion = LocalReduceMotion.current
+    val haptic = LocalHapticFeedback.current
     val tint by animateColorAsState(
         targetValue = if (selected) MaterialTheme.colorScheme.primary
         else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -229,7 +251,12 @@ private fun RowScope.TabItem(
         animationSpec = if (reduceMotion) snap() else Motion.bounce(),
         label = "tabScale"
     )
-    // Tabs show no ripple/hover rectangle: the moving ring is the only selection
+    val labelAlpha by animateFloatAsState(
+        targetValue = if (selected) 1f else 0.74f,
+        animationSpec = if (reduceMotion) snap() else tween(Motion.MEDIUM),
+        label = "tabLabelAlpha"
+    )
+    // Tabs show no ripple/hover rectangle: the moving pill is the only selection
     // feedback, so no grey box flashes under a finger or the mouse.
     val interaction = remember { MutableInteractionSource() }
     Column(
@@ -241,7 +268,12 @@ private fun RowScope.TabItem(
                 interactionSource = interaction,
                 indication = null,
                 role = Role.Tab,
-                onClick = onClick
+                onClick = {
+                    if (!selected) {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                    onClick()
+                }
             ),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -261,11 +293,12 @@ private fun RowScope.TabItem(
         Text(
             text = tab.label,
             style = MaterialTheme.typography.labelSmall,
-            fontSize = 11.sp,
+            fontSize = 10.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
             color = tint,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.graphicsLayer { alpha = labelAlpha }
         )
     }
 }
@@ -304,12 +337,19 @@ fun AllFunRoot(container: AppContainer) {
                     fadeIn(tween(Motion.MEDIUM, easing = Motion.EaseOut)) +
                         slideInHorizontally(tween(Motion.MEDIUM, easing = Motion.EaseOut)) {
                             if (forward) it / 2 else -it / 2
-                        }
+                        } +
+                        scaleIn(
+                            animationSpec = tween(Motion.SLOW, easing = Motion.EaseOut),
+                            initialScale = 0.97f
+                        )
                 }
-                else -> fadeIn(tween(Motion.MEDIUM, easing = Motion.EaseOut)) +
-                    slideInHorizontally(tween(Motion.MEDIUM, easing = Motion.EaseOut)) {
-                        it / 6
-                    }
+                // Detail, search and reader screens open like a card being lifted out of
+                // the list: a short scale from just under full size, plus a fade.
+                else -> fadeIn(tween(Motion.SLOW, easing = Motion.EaseOut)) +
+                    scaleIn(
+                        animationSpec = tween(Motion.EMPHASIZED, easing = Motion.Emphasized),
+                        initialScale = 0.92f
+                    )
             }
         }
         val exitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
@@ -322,20 +362,36 @@ fun AllFunRoot(container: AppContainer) {
                     fadeOut(tween(Motion.MEDIUM, easing = Motion.EaseOut)) +
                         slideOutHorizontally(tween(Motion.MEDIUM, easing = Motion.EaseOut)) {
                             if (forward) -it / 2 else it / 2
-                        }
+                        } +
+                        scaleOut(
+                            animationSpec = tween(Motion.SLOW, easing = Motion.EaseOut),
+                            targetScale = 0.97f
+                        )
                 }
-                else -> fadeOut(tween(Motion.FAST))
+                else -> fadeOut(tween(Motion.MEDIUM, easing = Motion.EaseOut)) +
+                    scaleOut(
+                        animationSpec = tween(Motion.SLOW, easing = Motion.Emphasized),
+                        targetScale = 1.04f
+                    )
             }
         }
         val popEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
             if (reduceMotion) EnterTransition.None
             else fadeIn(tween(Motion.MEDIUM, easing = Motion.EaseOut)) +
-                slideInHorizontally(tween(Motion.MEDIUM, easing = Motion.EaseOut)) { -it / 8 }
+                slideInHorizontally(tween(Motion.MEDIUM, easing = Motion.EaseOut)) { -it / 8 } +
+                scaleIn(
+                    animationSpec = tween(Motion.SLOW, easing = Motion.EaseOut),
+                    initialScale = 0.97f
+                )
         }
         val popExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
             if (reduceMotion) ExitTransition.None
             else fadeOut(tween(Motion.FAST)) +
-                slideOutHorizontally(tween(Motion.MEDIUM, easing = Motion.EaseOut)) { it / 6 }
+                slideOutHorizontally(tween(Motion.MEDIUM, easing = Motion.EaseOut)) { it / 6 } +
+                scaleOut(
+                    animationSpec = tween(Motion.SLOW, easing = Motion.EaseOut),
+                    targetScale = 1.02f
+                )
         }
 
         Scaffold(

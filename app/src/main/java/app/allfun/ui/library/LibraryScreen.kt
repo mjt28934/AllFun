@@ -1,21 +1,28 @@
 package app.allfun.ui.library
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.CollectionsBookmark
@@ -45,6 +52,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -55,6 +65,7 @@ import app.allfun.ui.components.EmptyState
 import app.allfun.ui.components.MediaCard
 import app.allfun.ui.components.MediaListRow
 import app.allfun.ui.components.rememberViewModel
+import app.allfun.ui.components.staggeredReveal
 import app.allfun.ui.formatBytes
 import app.allfun.ui.theme.LocalReduceMotion
 import java.text.DateFormat
@@ -83,8 +94,34 @@ fun LibraryScreen(
                 .padding(start = 20.dp, end = 8.dp, top = 16.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(15.dp))
+                    .background(
+                        Brush.linearGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.26f),
+                                MaterialTheme.colorScheme.tertiary.copy(alpha = 0.14f)
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.CollectionsBookmark,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(23.dp)
+                )
+            }
+            Spacer(Modifier.width(13.dp))
             Column(Modifier.weight(1f)) {
-                Text(text = "Library", style = MaterialTheme.typography.headlineMedium)
+                Text(
+                    text = "Library",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
+                )
                 Text(
                     text = buildString {
                         append("${state.all.size} ")
@@ -228,7 +265,7 @@ fun LibraryScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(18.dp)
                 ) {
-                    items(state.items, key = { it.media.id }) { row ->
+                    itemsIndexed(state.items, key = { _, row -> row.media.id }) { index, row ->
                         MediaCard(
                             media = row.media,
                             progress = row.fraction,
@@ -236,13 +273,15 @@ fun LibraryScreen(
                             fillWidth = true,
                             downloadLabel = state.downloads[row.media.id]?.badge(),
                             caption = state.downloads[row.media.id]?.detail(),
-                            modifier = if (reduceMotion) Modifier else Modifier.animateItem()
+                            modifier = Modifier
+                                .staggeredReveal(index)
+                                .then(if (reduceMotion) Modifier else Modifier.animateItem())
                         )
                     }
                 }
             } else {
                 LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
-                    items(state.items, key = { it.media.id }) { row ->
+                    itemsIndexed(state.items, key = { _, row -> row.media.id }) { index, row ->
                         val download = state.downloads[row.media.id]
                         MediaListRow(
                             media = row.media,
@@ -253,7 +292,9 @@ fun LibraryScreen(
                             onRemoveDownload = download
                                 ?.takeIf { it.completed > 0 }
                                 ?.let { { pendingRemove = row.media.id } },
-                            modifier = if (reduceMotion) Modifier else Modifier.animateItem()
+                            modifier = Modifier
+                                .staggeredReveal(index)
+                                .then(if (reduceMotion) Modifier else Modifier.animateItem())
                         )
                     }
                 }

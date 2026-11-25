@@ -1,8 +1,13 @@
 package app.allfun.ui.detail
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,11 +18,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -52,8 +59,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,6 +70,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.semantics
@@ -85,6 +95,7 @@ import app.allfun.ui.components.SectionHeader
 import app.allfun.ui.components.accent
 import app.allfun.ui.components.accentColor
 import app.allfun.ui.components.rememberViewModel
+import app.allfun.ui.components.staggeredReveal
 import app.allfun.ui.countLabel
 import app.allfun.ui.formatDuration
 import app.allfun.ui.formatBytes
@@ -184,16 +195,43 @@ private fun MoviesDetailScreen(
         vm.clearSwitch()
     }
 
+    val listState = rememberLazyListState()
+    val collapsed by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 96
+        }
+    }
+    val barColor by animateColorAsState(
+        targetValue = if (collapsed) {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.97f)
+        } else {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.42f)
+        },
+        animationSpec = if (LocalReduceMotion.current) {
+            androidx.compose.animation.core.snap()
+        } else {
+            tween(Motion.MEDIUM, easing = Motion.EaseOut)
+        },
+        label = "detailBar"
+    )
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = barColor),
                 title = {
-                    Text(
-                        text = media?.title.orEmpty(),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    AnimatedVisibility(
+                        visible = collapsed,
+                        enter = fadeIn(tween(Motion.FAST)),
+                        exit = fadeOut(tween(Motion.FAST))
+                    ) {
+                        Text(
+                            text = media?.title.orEmpty(),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -277,14 +315,13 @@ private fun MoviesDetailScreen(
         val isCurrent = progress?.episodeId == resume?.id
 
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
+            modifier = Modifier.fillMaxSize(),
+            state = listState,
             contentPadding = PaddingValues(bottom = 32.dp)
         ) {
-            item { DetailHero(item, category) }
+            item(key = "hero") { DetailHero(item, category) }
 
-            item {
+            item(key = "actions") {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -294,7 +331,10 @@ private fun MoviesDetailScreen(
                     Button(
                         onClick = { onOpen(mediaId, resume?.id, item.kind) },
                         enabled = resume != null,
-                        modifier = Modifier.weight(1f)
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 52.dp)
                     ) {
                         Icon(
                             imageVector = if (item.kind.isVideo) Icons.Filled.PlayArrow
@@ -310,7 +350,11 @@ private fun MoviesDetailScreen(
                             }
                         )
                     }
-                    OutlinedButton(onClick = { vm.toggleLibrary() }) {
+                    OutlinedButton(
+                        onClick = { vm.toggleLibrary() },
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.heightIn(min = 52.dp)
+                    ) {
                         Icon(
                             imageVector = if (item.inLibrary) Icons.Filled.Bookmark
                             else Icons.Outlined.BookmarkBorder,
@@ -453,7 +497,8 @@ private fun MoviesDetailScreen(
                             onDownload = { vm.download(episode.id) },
                             onCancelDownload = vm::cancelDownload,
                             onRetryDownload = vm::retryDownload,
-                            onRemoveDownload = { pendingRemove = it }
+                            onRemoveDownload = { pendingRemove = it },
+                            modifier = Modifier.animateItem()
                         )
                     }
                 }
@@ -470,7 +515,8 @@ private fun MoviesDetailScreen(
                         onDownload = { vm.download(episode.id) },
                         onCancelDownload = vm::cancelDownload,
                         onRetryDownload = vm::retryDownload,
-                        onRemoveDownload = { pendingRemove = it }
+                        onRemoveDownload = { pendingRemove = it },
+                        modifier = Modifier.animateItem()
                     )
                 }
             }
@@ -506,13 +552,14 @@ private fun MoviesDetailScreen(
 private fun DetailHero(media: MediaEntity, category: ContentCategory) {
     val accent = category.accent()
     val format = formatLabel(media, category)
+    val background = MaterialTheme.colorScheme.background
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(238.dp)
+            .heightIn(min = 300.dp)
             .background(
                 Brush.verticalGradient(
-                    listOf(accent.copy(alpha = 0.24f), Color.Transparent)
+                    listOf(accent.copy(alpha = 0.30f), Color.Transparent)
                 )
             )
     ) {
@@ -527,8 +574,23 @@ private fun DetailHero(media: MediaEntity, category: ContentCategory) {
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            0f to Color.Black.copy(alpha = 0.25f),
-                            1f to Color.Black.copy(alpha = 0.86f)
+                            0f to Color.Black.copy(alpha = 0.42f),
+                            0.32f to Color.Black.copy(alpha = 0.16f),
+                            0.68f to background.copy(alpha = 0.78f),
+                            1f to background
+                        )
+                    )
+            )
+        } else {
+            // No backdrop: a soft accent bloom still gives the header depth instead of a
+            // flat band of colour.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(260.dp)
+                    .background(
+                        Brush.radialGradient(
+                            listOf(accent.copy(alpha = 0.26f), Color.Transparent)
                         )
                     )
             )
@@ -536,15 +598,21 @@ private fun DetailHero(media: MediaEntity, category: ContentCategory) {
         Row(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(16.dp),
+                .padding(start = 16.dp, end = 16.dp, top = 96.dp, bottom = 18.dp),
             verticalAlignment = Alignment.Bottom
         ) {
             Box(
                 modifier = Modifier
-                    .width(112.dp)
-                    .height(168.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .width(118.dp)
+                    .height(177.dp)
+                    .shadow(20.dp, RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(14.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .border(
+                        width = 1.dp,
+                        color = Color.White.copy(alpha = 0.16f),
+                        shape = RoundedCornerShape(14.dp)
+                    )
             ) {
                 CoverImage(
                     url = media.coverUrl,
@@ -556,12 +624,12 @@ private fun DetailHero(media: MediaEntity, category: ContentCategory) {
             Column(Modifier.weight(1f)) {
                 Text(
                     text = media.title,
-                    fontSize = 22.sp,
+                    style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
@@ -683,13 +751,14 @@ private fun SourceSection(
         }
     }
     Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-        state.options.forEach { option ->
+        state.options.forEachIndexed { index, option ->
             SourceOptionRow(
                 option = option,
                 category = category,
                 enabled = !state.switching,
                 streamProviders = streamMode,
-                onUse = { onUse(option) }
+                onUse = { onUse(option) },
+                modifier = Modifier.staggeredReveal(index)
             )
         }
         if (state.options.isEmpty() && !state.loading) {
@@ -706,16 +775,22 @@ internal fun SourceOptionRow(
     category: ContentCategory,
     enabled: Boolean,
     streamProviders: Boolean = false,
-    onUse: () -> Unit
+    onUse: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Surface(
-        color = if (option.isPrimary || option.isPreferred) {
+    val surfaceColor by animateColorAsState(
+        targetValue = if (option.isPrimary || option.isPreferred) {
             category.accent().copy(alpha = 0.10f)
         } else {
             MaterialTheme.colorScheme.surfaceContainer
         },
+        animationSpec = tween(Motion.MEDIUM, easing = Motion.EaseOut),
+        label = "sourceRowColor"
+    )
+    Surface(
+        color = surfaceColor,
         shape = MaterialTheme.shapes.medium,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 3.dp)
             .then(
@@ -794,7 +869,8 @@ private fun EpisodeRow(
     onDownload: () -> Unit,
     onCancelDownload: (String) -> Unit,
     onRetryDownload: (String) -> Unit,
-    onRemoveDownload: (DownloadEntity) -> Unit
+    onRemoveDownload: (DownloadEntity) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val fraction = if (total != null && total > 0L && position != null) {
         (position.toFloat() / total.toFloat()).coerceIn(0f, 1f)
@@ -802,40 +878,54 @@ private fun EpisodeRow(
     val status = download?.status
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(start = 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            modifier = Modifier
-                .size(38.dp)
-                .clip(CircleShape)
-                .background(
-                    if (fraction > 0f) kind.accentColor().copy(alpha = 0.22f)
-                    else MaterialTheme.colorScheme.surfaceVariant
-                ),
+            modifier = Modifier.size(40.dp),
             contentAlignment = Alignment.Center
         ) {
-            if (episode.number <= 0.0) {
-                // Providers that only expose titles leave the numeric index unset. A topic
-                // icon reads better than the placeholder number "-1".
-                Icon(
-                    imageVector = if (kind.isVideo) Icons.Filled.PlayArrow
-                    else Icons.AutoMirrored.Outlined.MenuBook,
-                    contentDescription = null,
-                    tint = if (fraction > 0f) kind.accentColor()
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
+            if (fraction > 0f) {
+                CircularProgressIndicator(
+                    progress = { fraction },
+                    modifier = Modifier.fillMaxSize(),
+                    color = kind.accentColor(),
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    strokeWidth = 2.dp
                 )
-            } else {
-                Text(
-                    text = formatNumber(episode.number),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (fraction > 0f) kind.accentColor()
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (fraction > 0f) kind.accentColor().copy(alpha = 0.22f)
+                        else MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (episode.number <= 0.0) {
+                    // Providers that only expose titles leave the numeric index unset. A
+                    // topic icon reads better than the placeholder number "-1".
+                    Icon(
+                        imageVector = if (kind.isVideo) Icons.Filled.PlayArrow
+                        else Icons.AutoMirrored.Outlined.MenuBook,
+                        contentDescription = null,
+                        tint = if (fraction > 0f) kind.accentColor()
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                } else {
+                    Text(
+                        text = formatNumber(episode.number),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (fraction > 0f) kind.accentColor()
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
         Spacer(Modifier.width(12.dp))

@@ -3,7 +3,9 @@ package app.allfun.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -55,6 +57,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.allfun.ui.theme.LocalReduceMotion
 import app.allfun.ui.theme.Motion
+import kotlinx.coroutines.delay
 
 /**
  * Subtle press feedback shared by every tappable card. The card scales down a little
@@ -266,5 +269,59 @@ fun IconBadge(
             tint = tint,
             modifier = Modifier.size((size * 0.5f).dp)
         )
+    }
+}
+
+/**
+ * Cascades a card into place once, when it first reaches the viewport. The delay is
+ * derived from its position, so a grid resolves as a wave instead of every poster
+ * appearing on the same frame. Long lists only stagger their first rows: after that the
+ * effect would be a scroll tax rather than a flourish.
+ */
+@Composable
+fun Modifier.staggeredReveal(
+    index: Int,
+    from: Dp = 18.dp,
+    maxStaggerIndex: Int = 11
+): Modifier {
+    if (LocalReduceMotion.current) return this
+    val anim = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        delay(Motion.stagger(index.coerceAtMost(maxStaggerIndex)))
+        anim.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(Motion.MEDIUM + 60, easing = Motion.EaseOut)
+        )
+    }
+    return graphicsLayer {
+        val value = anim.value
+        alpha = value
+        translationY = (1f - value) * from.toPx()
+        val scale = 0.985f + 0.015f * value
+        scaleX = scale
+        scaleY = scale
+    }
+}
+
+/**
+ * A slow breathing scale for live indicators (a running download, a playing item). It is
+ * deliberately small: the point is "this is moving", not a flashing badge.
+ */
+@Composable
+fun Modifier.livePulse(active: Boolean, maxScale: Float = 1.12f): Modifier {
+    if (!active || LocalReduceMotion.current) return this
+    val transition = rememberInfiniteTransition(label = "livePulse")
+    val scale by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = maxScale,
+        animationSpec = infiniteRepeatable(
+            animation = tween(920, easing = Motion.EaseInOut),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "livePulseScale"
+    )
+    return graphicsLayer {
+        scaleX = scale
+        scaleY = scale
     }
 }

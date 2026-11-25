@@ -148,6 +148,22 @@ fun GlobalSearchScreen(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(start = 4.dp)
                 )
+                Spacer(Modifier.weight(1f))
+                if (state.knownSources > 0) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = if (state.knownSources == 1) "1 source"
+                            else "${state.knownSources} sources",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
             }
 
             OutlinedTextField(
@@ -167,7 +183,7 @@ fun GlobalSearchScreen(
                     }
                 },
                 singleLine = true,
-                shape = CircleShape,
+                shape = RoundedCornerShape(18.dp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(
                     onSearch = {

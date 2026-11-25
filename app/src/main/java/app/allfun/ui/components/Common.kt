@@ -1,8 +1,14 @@
 package app.allfun.ui.components
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -40,13 +46,17 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -147,7 +157,11 @@ fun FallbackCover(title: String, modifier: Modifier = Modifier) {
     }
 }
 
-/** Progress bar whose value glides to the stored position instead of snapping. */
+/**
+ * Progress bar whose value glides to the stored position instead of snapping. The fill
+ * carries the app's accent gradient rather than a flat colour, so a long download or a
+ * reading position reads as part of the same design language.
+ */
 @Composable
 fun AnimatedProgress(
     progress: Float,
@@ -164,11 +178,8 @@ fun AnimatedProgress(
         else androidx.compose.animation.core.tween(520, easing = Motion.EaseOut),
         label = "progress"
     )
-    LinearProgressIndicator(
-        progress = { animated },
-        color = color,
-        trackColor = trackColor,
-        drawStopIndicator = {},
+    val endColor = MaterialTheme.colorScheme.secondary
+    Canvas(
         modifier = modifier
             .fillMaxWidth()
             .height(height.dp)
@@ -176,7 +187,17 @@ fun AnimatedProgress(
             .semantics {
                 stateDescription = "${(target * 100).roundToInt()}% complete"
             }
-    )
+    ) {
+        val radius = CornerRadius(size.height / 2f)
+        drawRoundRect(color = trackColor, cornerRadius = radius)
+        if (animated > 0f) {
+            drawRoundRect(
+                brush = Brush.horizontalGradient(listOf(color, endColor)),
+                size = Size(size.width * animated, size.height),
+                cornerRadius = radius
+            )
+        }
+    }
 }
 
 @Composable
@@ -218,6 +239,11 @@ fun MediaCard(
                 .aspectRatio(2f / 3f)
                 .clip(MaterialTheme.shapes.medium)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.08f),
+                    shape = MaterialTheme.shapes.medium
+                )
         ) {
             CoverImage(
                 url = media.coverUrl,
@@ -233,6 +259,20 @@ fun MediaCard(
                         Brush.verticalGradient(
                             0f to Color.Black.copy(alpha = 0.42f),
                             1f to Color.Transparent
+                        )
+                    )
+            )
+            // The bottom scrim gives the offline/progress chips a floor to sit on and
+            // stops a bright poster edge from swallowing them.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(64.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.Transparent,
+                            1f to Color.Black.copy(alpha = 0.52f)
                         )
                     )
             )
@@ -492,7 +532,14 @@ fun SectionHeader(
                     .width(3.dp)
                     .height(18.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(MaterialTheme.colorScheme.primary)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primary,
+                                MaterialTheme.colorScheme.tertiary
+                            )
+                        )
+                    )
             )
             Spacer(Modifier.width(10.dp))
             Column {
@@ -549,6 +596,19 @@ fun EmptyState(
     secondaryActionLabel: String? = null,
     onSecondaryAction: (() -> Unit)? = null
 ) {
+    val reduceMotion = LocalReduceMotion.current
+    val appear = remember { Animatable(if (reduceMotion) 1f else 0f) }
+    LaunchedEffect(Unit) {
+        if (!reduceMotion) {
+            appear.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(
+                    dampingRatio = 0.62f,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            )
+        }
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -558,6 +618,12 @@ fun EmptyState(
         Box(
             modifier = Modifier
                 .size(64.dp)
+                .graphicsLayer {
+                    val value = appear.value
+                    alpha = value
+                    scaleX = 0.72f + 0.28f * value
+                    scaleY = 0.72f + 0.28f * value
+                }
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center

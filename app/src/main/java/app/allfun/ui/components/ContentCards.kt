@@ -1,6 +1,7 @@
 package app.allfun.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -101,6 +102,11 @@ fun ContentCard(
                 .aspectRatio(2f / 3f)
                 .clip(MaterialTheme.shapes.medium)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.08f),
+                    shape = MaterialTheme.shapes.medium
+                )
         ) {
             CoverImage(
                 url = item.stub.coverUrl,
@@ -115,6 +121,18 @@ fun ContentCard(
                         Brush.verticalGradient(
                             0f to Color.Black.copy(alpha = 0.40f),
                             1f to Color.Transparent
+                        )
+                    )
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(64.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.Transparent,
+                            1f to Color.Black.copy(alpha = 0.55f)
                         )
                     )
             )
@@ -196,6 +214,7 @@ fun ContentCard(
         Text(
             text = item.title,
             style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis

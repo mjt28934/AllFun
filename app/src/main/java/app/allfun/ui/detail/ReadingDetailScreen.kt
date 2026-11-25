@@ -1,9 +1,14 @@
 package app.allfun.ui.detail
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +29,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -107,6 +114,7 @@ import app.allfun.data.model.MediaKind
 import app.allfun.ui.components.CoverImage
 import app.allfun.ui.components.SectionHeader
 import app.allfun.ui.components.accent
+import app.allfun.ui.components.staggeredReveal
 import app.allfun.ui.formatDuration
 import app.allfun.ui.formatNumber
 import app.allfun.ui.theme.LocalReduceMotion
@@ -174,16 +182,47 @@ internal fun ReadingDetailScreen(
     val allDownloaded = episodes.isNotEmpty() &&
         downloads.count { it.status == DownloadStatus.COMPLETED } == episodes.size
 
+    // The title bar starts transparent over the header and gains its surface once the
+    // header has scrolled away, mirroring the video detail page.
+    val listState = rememberLazyListState()
+    val collapsed by remember {
+        androidx.compose.runtime.derivedStateOf {
+            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 96
+        }
+    }
+    val barColor by animateColorAsState(
+        targetValue = if (collapsed) {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.97f)
+        } else {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.42f)
+        },
+        animationSpec = if (LocalReduceMotion.current) {
+            androidx.compose.animation.core.snap()
+        } else {
+            tween(Motion.MEDIUM, easing = Motion.EaseOut)
+        },
+        label = "readingBar"
+    )
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
+                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                    containerColor = barColor
+                ),
                 title = {
-                    Text(
-                        text = media.title,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    AnimatedVisibility(
+                        visible = collapsed,
+                        enter = fadeIn(tween(Motion.FAST)),
+                        exit = fadeOut(tween(Motion.FAST))
+                    ) {
+                        Text(
+                            text = media.title,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -243,9 +282,8 @@ internal fun ReadingDetailScreen(
         }
     ) { padding ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
+            modifier = Modifier.fillMaxSize(),
+            state = listState,
             contentPadding = PaddingValues(bottom = 96.dp)
         ) {
             item {
@@ -297,7 +335,7 @@ internal fun ReadingDetailScreen(
                     )
                 }
             } else {
-                items(visibleChapters, key = { it.id }) { chapter ->
+                itemsIndexed(visibleChapters, key = { _, chapter -> chapter.id }) { index, chapter ->
                     ReadingChapterRow(
                         chapter = chapter,
                         kind = media.kind,
@@ -309,7 +347,10 @@ internal fun ReadingDetailScreen(
                         onDownload = { vm.download(chapter.id) },
                         onCancelDownload = vm::cancelDownload,
                         onRetryDownload = vm::retryDownload,
-                        onRemoveDownload = { pendingRemove = it }
+                        onRemoveDownload = { pendingRemove = it },
+                        modifier = Modifier
+                            .staggeredReveal(index)
+                            .animateItem()
                     )
                 }
             }
@@ -727,7 +768,8 @@ private fun ReadingChapterRow(
     onDownload: () -> Unit,
     onCancelDownload: (String) -> Unit,
     onRetryDownload: (String) -> Unit,
-    onRemoveDownload: (DownloadEntity) -> Unit
+    onRemoveDownload: (DownloadEntity) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val status = download?.status
     val read = chapter.read
@@ -736,7 +778,7 @@ private fun ReadingChapterRow(
         ?.let { (it * 100).toInt() }
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(start = 16.dp, top = 12.dp, end = 8.dp, bottom = 12.dp),

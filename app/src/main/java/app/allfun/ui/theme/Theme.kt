@@ -1,6 +1,8 @@
 package app.allfun.ui.theme
 
 import android.os.Build
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ColorScheme
@@ -277,6 +279,72 @@ private fun shapesFor(style: CornerStyle): Shapes = when (style) {
 }
 
 /**
+ * A colour that travels to its new value instead of jumping. Switching accent palette or
+ * light/dark now blends across every screen rather than flashing a new theme into place.
+ */
+@Composable
+private fun animatedColor(target: Color, label: String): Color =
+    animateColorAsState(
+        targetValue = target,
+        animationSpec = tween(Motion.MEDIUM, easing = Motion.EaseInOut),
+        label = label
+    ).value
+
+@Composable
+private fun animatedScheme(target: ColorScheme): ColorScheme {
+    if (LocalReduceMotion.current) return target
+    // Every role is animated, not just the accents: a dark-to-light switch would otherwise
+    // show new dark text over a still-dark background for a fifth of a second.
+    return target.copy(
+        primary = animatedColor(target.primary, "primary"),
+        onPrimary = animatedColor(target.onPrimary, "onPrimary"),
+        primaryContainer = animatedColor(target.primaryContainer, "primaryContainer"),
+        onPrimaryContainer = animatedColor(target.onPrimaryContainer, "onPrimaryContainer"),
+        inversePrimary = animatedColor(target.inversePrimary, "inversePrimary"),
+        secondary = animatedColor(target.secondary, "secondary"),
+        onSecondary = animatedColor(target.onSecondary, "onSecondary"),
+        secondaryContainer = animatedColor(target.secondaryContainer, "secondaryContainer"),
+        onSecondaryContainer = animatedColor(
+            target.onSecondaryContainer,
+            "onSecondaryContainer"
+        ),
+        tertiary = animatedColor(target.tertiary, "tertiary"),
+        onTertiary = animatedColor(target.onTertiary, "onTertiary"),
+        tertiaryContainer = animatedColor(target.tertiaryContainer, "tertiaryContainer"),
+        onTertiaryContainer = animatedColor(target.onTertiaryContainer, "onTertiaryContainer"),
+        background = animatedColor(target.background, "background"),
+        onBackground = animatedColor(target.onBackground, "onBackground"),
+        surface = animatedColor(target.surface, "surface"),
+        onSurface = animatedColor(target.onSurface, "onSurface"),
+        surfaceVariant = animatedColor(target.surfaceVariant, "surfaceVariant"),
+        onSurfaceVariant = animatedColor(target.onSurfaceVariant, "onSurfaceVariant"),
+        surfaceTint = animatedColor(target.surfaceTint, "surfaceTint"),
+        inverseSurface = animatedColor(target.inverseSurface, "inverseSurface"),
+        inverseOnSurface = animatedColor(target.inverseOnSurface, "inverseOnSurface"),
+        error = animatedColor(target.error, "error"),
+        onError = animatedColor(target.onError, "onError"),
+        errorContainer = animatedColor(target.errorContainer, "errorContainer"),
+        onErrorContainer = animatedColor(target.onErrorContainer, "onErrorContainer"),
+        outline = animatedColor(target.outline, "outline"),
+        outlineVariant = animatedColor(target.outlineVariant, "outlineVariant"),
+        scrim = animatedColor(target.scrim, "scrim"),
+        surfaceBright = animatedColor(target.surfaceBright, "surfaceBright"),
+        surfaceDim = animatedColor(target.surfaceDim, "surfaceDim"),
+        surfaceContainer = animatedColor(target.surfaceContainer, "surfaceContainer"),
+        surfaceContainerHigh = animatedColor(target.surfaceContainerHigh, "surfaceContainerHigh"),
+        surfaceContainerHighest = animatedColor(
+            target.surfaceContainerHighest,
+            "surfaceContainerHighest"
+        ),
+        surfaceContainerLow = animatedColor(target.surfaceContainerLow, "surfaceContainerLow"),
+        surfaceContainerLowest = animatedColor(
+            target.surfaceContainerLowest,
+            "surfaceContainerLowest"
+        )
+    )
+}
+
+/**
  * The user's explicit setting or the platform's "remove animations" developer option.
  * Android exposes that as an animator duration scale of zero.
  */
@@ -333,7 +401,7 @@ fun AllFunTheme(settings: Settings, content: @Composable () -> Unit) {
         else Density(density.density, density.fontScale * fontScale)
     ) {
         MaterialTheme(
-            colorScheme = scheme,
+            colorScheme = animatedScheme(scheme),
             typography = AppTypography,
             shapes = shapesFor(settings.cornerStyle),
             content = content

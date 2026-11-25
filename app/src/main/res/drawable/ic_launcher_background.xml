@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Deep indigo field instead of a flat fill: the launcher crops this to a circle,
+         squircle or rounded square, and the diagonal light keeps all three interesting. -->
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="108"
+                android:endY="108">
+                <item android:offset="0" android:color="#FF2A1F5E" />
+                <item android:offset="0.52" android:color="#FF151226" />
+                <item android:offset="1" android:color="#FF09090F" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Aurora glow behind the mark, strongest at the top right. -->
+    <path android:pathData="M78,4 m-52,0 a52,52 0 1,0 104,0 a52,52 0 1,0 -104,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="78"
+                android:centerY="4"
+                android:gradientRadius="56">
+                <item android:offset="0" android:color="#8C7C5CFF" />
+                <item android:offset="0.6" android:color="#2E7C5CFF" />
+                <item android:offset="1" android:color="#007C5CFF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- A cooler counter-glow at the bottom left keeps the field from reading as one hue. -->
+    <path android:pathData="M14,104 m-46,0 a46,46 0 1,0 92,0 a46,46 0 1,0 -92,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="14"
+                android:centerY="104"
+                android:gradientRadius="48">
+                <item android:offset="0" android:color="#4D22D3EE" />
+                <item android:offset="1" android:color="#0022D3EE" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

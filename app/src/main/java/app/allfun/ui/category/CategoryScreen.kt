@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -11,10 +12,15 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -22,21 +28,30 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -44,6 +59,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Refresh
@@ -53,6 +69,7 @@ import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -71,6 +88,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -82,8 +100,11 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -91,6 +112,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -115,6 +137,7 @@ import app.allfun.ui.components.StatusPill
 import app.allfun.ui.components.accent
 import app.allfun.ui.components.icon
 import app.allfun.ui.components.rememberViewModel
+import app.allfun.ui.components.staggeredReveal
 import app.allfun.ui.theme.LocalReduceMotion
 import app.allfun.ui.theme.Motion
 
@@ -197,6 +220,15 @@ fun CategoryScreen(
         animationSpec = tween(if (reduceMotion) 0 else Motion.MEDIUM),
         label = "searchBlur"
     )
+    // The hero lives inside the grid so it scrolls with the titles instead of eating a
+    // fixed band of every screen. The top bar watches the grid to swap its small label for
+    // the category name once the hero has left.
+    val gridState = rememberLazyGridState()
+    val heroCollapsed by remember {
+        derivedStateOf {
+            gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 88
+        }
+    }
 
     BackHandler(enabled = searchVisible) {
         if (state.query.isNotEmpty()) vm.clearSearch() else searchOpen = false
@@ -217,15 +249,12 @@ fun CategoryScreen(
                     .fillMaxSize()
                     .blur(searchBlur)
             ) {
-            CategoryHeader(
+            CategoryTopBar(
                 container = container,
                 snackbar = snackbar,
                 category = category,
                 state = state,
-                sourceCount = state.feed?.sources.orEmpty().size,
-                issueCount = issues.size,
-                titleCount = visibleItems.size,
-                searchOpen = searchVisible,
+                collapsed = heroCollapsed,
                 onOpenSearch = {
                     searchOpen = true
                 },
@@ -241,7 +270,7 @@ fun CategoryScreen(
                 )
             }
 
-            if (state.hasActiveFilters) {
+            AnimatedVisibility(visible = state.hasActiveFilters) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -260,7 +289,7 @@ fun CategoryScreen(
                 }
             }
 
-            if (state.refreshing) {
+            AnimatedVisibility(visible = state.refreshing) {
                 LinearProgressIndicator(
                     Modifier
                         .fillMaxWidth()
@@ -307,7 +336,8 @@ fun CategoryScreen(
                         onLoadMore = vm::loadMore,
                         onClearFilters = vm::clearFilters,
                         onRetry = vm::refresh,
-                        onManageExtensions = onOpenExtensions
+                        onManageExtensions = onOpenExtensions,
+                        gridState = gridState
                     )
                 }
             }
@@ -539,155 +569,339 @@ private fun SearchHint(category: ContentCategory, onOpenGlobalSearch: () -> Unit
 }
 
 /**
- * The two orders readers actually ask for (Popular / Latest) plus the two structural ones,
- * one tap away from the grid. Short labels keep all four on one line at phone widths.
+ * A segmented control rather than loose chips: the four orders are one object, the
+ * selection travels between them, and every label stays visible without scrolling.
  */
 @Composable
 private fun CategorySortBar(
     sort: CategorySort,
     onSort: (CategorySort) -> Unit
 ) {
-    LazyRow(
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+    val reduceMotion = LocalReduceMotion.current
+    val options = CategorySort.entries
+    val selectedIndex = options.indexOf(sort).coerceAtLeast(0)
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .height(42.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
     ) {
-        items(CategorySort.entries) { option ->
-            FilterChip(
-                selected = sort == option,
-                onClick = { onSort(option) },
-                label = { Text(option.shortLabel) },
-                leadingIcon = when (option) {
-                    CategorySort.POPULAR -> {
-                        {
+        val itemWidth = maxWidth / options.size
+        val offset by animateDpAsState(
+            targetValue = itemWidth * selectedIndex,
+            animationSpec = if (reduceMotion) androidx.compose.animation.core.snap()
+            else Motion.settle(),
+            label = "sortPill"
+        )
+        Box(
+            modifier = Modifier
+                .offset(x = offset)
+                .width(itemWidth)
+                .fillMaxHeight()
+                .padding(3.dp)
+                .clip(RoundedCornerShape(11.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
+        )
+        Row(Modifier.fillMaxSize()) {
+            options.forEach { option ->
+                val selected = option == sort
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .selectable(
+                            selected = selected,
+                            role = Role.Tab,
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { onSort(option) }
+                        ),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    when (option) {
+                        CategorySort.POPULAR -> {
                             Icon(
                                 Icons.AutoMirrored.Outlined.TrendingUp,
-                                contentDescription = null
+                                contentDescription = null,
+                                tint = if (selected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(13.dp)
                             )
+                            Spacer(Modifier.width(4.dp))
                         }
+                        CategorySort.LATEST -> {
+                            Icon(
+                                Icons.Outlined.Schedule,
+                                contentDescription = null,
+                                tint = if (selected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        else -> Unit
                     }
-                    CategorySort.LATEST -> {
-                        { Icon(Icons.Outlined.Schedule, contentDescription = null) }
-                    }
-                    else -> null
+                    Text(
+                        text = option.shortLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                        color = if (selected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
                 }
-            )
+            }
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * The fixed strip above the grid. It holds the actions and a label that changes once the
+ * hero scrolls away, so the category name is always somewhere on screen without a second
+ * permanent title band.
+ */
 @Composable
-private fun CategoryHeader(
+private fun CategoryTopBar(
     container: AppContainer,
     snackbar: SnackbarHostState,
     category: ContentCategory,
     state: CategoryViewModel.UiState,
-    sourceCount: Int,
-    issueCount: Int,
-    titleCount: Int,
-    searchOpen: Boolean,
+    collapsed: Boolean,
     onOpenSearch: () -> Unit,
     onOpenFilters: () -> Unit,
     onRefresh: () -> Unit,
     onOpenExtensions: () -> Unit
 ) {
-    Column(
+    val reduceMotion = LocalReduceMotion.current
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, end = 4.dp, top = 10.dp, bottom = 2.dp)
+            .padding(start = 20.dp, end = 2.dp, top = 8.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        // Title and tagline own the full width; the five catalogue actions share one row
-        // below them. Previously search/filter/refresh sat beside the title and
-        // extensions/add on the tagline, so the controls were split across two rows.
-        Text(
-            text = category.label,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            text = category.tagline,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(end = 4.dp, top = 2.dp)
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onOpenSearch) {
-                Icon(
-                    Icons.Outlined.Search,
-                    contentDescription = "Search ${category.label}",
-                    tint = if (searchOpen) category.accent()
-                    else MaterialTheme.colorScheme.onSurface
+        AnimatedContent(
+            targetState = collapsed,
+            transitionSpec = {
+                fadeIn(tween(if (reduceMotion) 0 else 180)) togetherWith
+                    fadeOut(tween(if (reduceMotion) 0 else 110))
+            },
+            label = "categoryTopLabel",
+            modifier = Modifier.weight(1f)
+        ) { isCollapsed ->
+            if (isCollapsed) {
+                Text(
+                    text = category.label,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-            }
-            IconButton(onClick = onOpenFilters) {
-                Box {
-                    Icon(
-                        Icons.Outlined.Tune,
-                        contentDescription = "Filter ${category.label}",
-                        tint = if (state.hasActiveFilters) category.accent()
-                        else MaterialTheme.colorScheme.onSurface
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(category.accent())
                     )
-                    if (state.hasActiveFilters) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .size(7.dp)
-                                .clip(CircleShape)
-                                .background(category.accent())
-                        )
-                    }
+                    Spacer(Modifier.width(7.dp))
+                    Text(
+                        text = "BROWSE",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = category.accent(),
+                        letterSpacing = 2.sp
+                    )
                 }
             }
-            IconButton(onClick = onRefresh, enabled = !state.refreshing) {
-                Icon(Icons.Outlined.Refresh, contentDescription = "Refresh category")
-            }
-            IconButton(onClick = onOpenExtensions) {
+        }
+        IconButton(onClick = onOpenSearch, modifier = Modifier.size(40.dp)) {
+            Icon(
+                Icons.Outlined.Search,
+                contentDescription = "Search ${category.label}",
+                modifier = Modifier.size(21.dp)
+            )
+        }
+        IconButton(onClick = onOpenFilters, modifier = Modifier.size(40.dp)) {
+            Box {
                 Icon(
-                    Icons.Outlined.Extension,
-                    contentDescription = "Extensions for ${category.label}"
+                    Icons.Outlined.Tune,
+                    contentDescription = "Filter ${category.label}",
+                    tint = if (state.hasActiveFilters) category.accent()
+                    else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(21.dp)
                 )
-            }
-            // Quick add sits beside the Extensions entry: add-ons and plugins are installed
-            // from here, while repositories and updates stay on the Extensions screen.
-            QuickAddButton(container = container, snackbar = snackbar)
-        }
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            StatusPill(
-                text = if (titleCount == 1) "1 title" else "$titleCount titles",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            StatusPill(
-                text = when (sourceCount) {
-                    0 -> "No source"
-                    1 -> "1 source"
-                    else -> "$sourceCount sources"
-                },
-                tint = if (sourceCount == 0) MaterialTheme.colorScheme.onSurfaceVariant
-                else MaterialTheme.colorScheme.secondary
-            )
-            if (issueCount > 0) {
-                StatusPill(
-                    text = if (issueCount == 1) "1 issue" else "$issueCount issues",
-                    tint = MaterialTheme.colorScheme.error
-                )
-            }
-            if (state.hasActiveFilters) {
-                StatusPill(text = "Filtered", tint = category.accent())
+                if (state.hasActiveFilters) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(category.accent())
+                    )
+                }
             }
         }
+        RefreshAction(refreshing = state.refreshing, onClick = onRefresh)
+        IconButton(onClick = onOpenExtensions, modifier = Modifier.size(40.dp)) {
+            Icon(
+                Icons.Outlined.Extension,
+                contentDescription = "Extensions for ${category.label}",
+                modifier = Modifier.size(21.dp)
+            )
+        }
+        // Quick add sits beside the Extensions entry: add-ons and plugins are installed
+        // from here, while repositories and updates stay on the Extensions screen.
+        QuickAddButton(container = container, snackbar = snackbar)
+    }
+}
+
+/** The refresh arrow turns while a request is actually running, then settles upright. */
+@Composable
+private fun RefreshAction(refreshing: Boolean, onClick: () -> Unit) {
+    val reduceMotion = LocalReduceMotion.current
+    val rotation = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(refreshing, reduceMotion) {
+        if (refreshing && !reduceMotion) {
+            rotation.animateTo(
+                targetValue = 360f,
+                animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                    animation = tween(900, easing = androidx.compose.animation.core.LinearEasing)
+                )
+            )
+        } else {
+            rotation.snapTo(0f)
+        }
+    }
+    IconButton(
+        onClick = onClick,
+        enabled = !refreshing,
+        modifier = Modifier.size(40.dp)
+    ) {
+        Icon(
+            Icons.Outlined.Refresh,
+            contentDescription = "Refresh category",
+            modifier = Modifier
+                .size(21.dp)
+                .graphicsLayer { rotationZ = rotation.value }
+        )
+    }
+}
+
+/**
+ * The category's own cover: an accent wash, a large title and the real counts. It lives
+ * inside the grid, so it leaves the screen as the reader scrolls instead of reserving a
+ * band forever. Its glow drifts a little slower than the content for depth.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CategoryHero(
+    category: ContentCategory,
+    titleCount: Int,
+    sourceCount: Int,
+    issueCount: Int,
+    filtered: Boolean,
+    scrollOffset: Int
+) {
+    val accent = category.accent()
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 6.dp)
+            .clip(RoundedCornerShape(26.dp))
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        accent.copy(alpha = 0.30f),
+                        accent.copy(alpha = 0.10f),
+                        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f)
+                    )
+                )
+            )
+    ) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .offset(x = 42.dp, y = (-52).dp)
+                .size(200.dp)
+                .graphicsLayer { translationY = scrollOffset * 0.16f }
+                .background(
+                    Brush.radialGradient(
+                        listOf(accent.copy(alpha = 0.36f), Color.Transparent)
+                    )
+                )
+        )
+        Column(Modifier.padding(20.dp)) {
+            Text(
+                text = "COLLECTION",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = accent,
+                letterSpacing = 2.sp
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = category.label,
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = category.tagline,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(14.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                HeroStat(if (titleCount == 1) "1 title" else "$titleCount titles")
+                HeroStat(
+                    text = when (sourceCount) {
+                        0 -> "No source"
+                        1 -> "1 source"
+                        else -> "$sourceCount sources"
+                    },
+                    tint = if (sourceCount == 0) MaterialTheme.colorScheme.onSurfaceVariant
+                    else accent
+                )
+                if (issueCount > 0) {
+                    HeroStat(
+                        text = if (issueCount == 1) "1 issue" else "$issueCount issues",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+                if (filtered) HeroStat(text = "Filtered", tint = accent)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeroStat(
+    text: String,
+    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(tint.copy(alpha = 0.12f))
+            .padding(horizontal = 9.dp, vertical = 4.dp)
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = tint,
+            maxLines = 1
+        )
     }
 }
 
@@ -727,15 +941,32 @@ private fun CategorySections(
     onLoadMore: () -> Unit,
     onClearFilters: () -> Unit,
     onRetry: () -> Unit,
-    onManageExtensions: () -> Unit
+    onManageExtensions: () -> Unit,
+    gridState: LazyGridState
 ) {
     val libraryRows = if (category.isVideo) watchlist else favorites
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = GRID_MIN_CELL),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 32.dp),
+        state = gridState,
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 32.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        item(span = { GridItemSpan(maxLineSpan) }, key = "hero") {
+            CategoryHero(
+                category = category,
+                titleCount = visibleItems.size,
+                sourceCount = state.feed?.sources.orEmpty().size,
+                issueCount = unmatched.size,
+                filtered = state.hasActiveFilters,
+                scrollOffset = if (gridState.firstVisibleItemIndex == 0) {
+                    gridState.firstVisibleItemScrollOffset
+                } else {
+                    0
+                }
+            )
+        }
+
         if (state.feed?.sources.isNullOrEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Column {
@@ -773,7 +1004,10 @@ private fun CategorySections(
                     media = row.media,
                     progress = row.fraction,
                     onClick = { onOpenLibraryMedia(row.media.id) },
-                    fillWidth = true
+                    fillWidth = true,
+                    modifier = Modifier
+                        .staggeredReveal(0)
+                        .animateItem()
                 )
             }
         }
@@ -808,16 +1042,19 @@ private fun CategorySections(
                 )
             }
         } else {
-            items(
+            itemsIndexed(
                 visibleItems,
-                key = { it.primary.sourceId + "|" + it.primary.key }
-            ) { item ->
+                key = { _, item -> item.primary.sourceId + "|" + item.primary.key }
+            ) { index, item ->
                 ContentCard(
                     item = item,
                     details = state.detailsFor(item),
                     onClick = { onOpen(item) },
                     fillWidth = true,
-                    downloadLabel = if (refId(item.primary) in downloadedMedia) "Offline" else null
+                    downloadLabel = if (refId(item.primary) in downloadedMedia) "Offline" else null,
+                    modifier = Modifier
+                        .staggeredReveal(index)
+                        .animateItem()
                 )
             }
         }
@@ -863,12 +1100,17 @@ private fun CategoryGridFooter(
             ) {
                 CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
             }
-            state.canLoadMore -> OutlinedButton(
+            state.canLoadMore -> FilledTonalButton(
                 onClick = onLoadMore,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(min = 48.dp)
                     .padding(vertical = 4.dp)
-            ) { Text("Load more titles") }
+            ) {
+                Icon(Icons.Outlined.ExpandMore, contentDescription = null)
+                Spacer(Modifier.width(6.dp))
+                Text("Load more titles")
+            }
         }
         Text(
             text = "Titles come from your installed ${category.shortLabel.lowercase()} sources.",

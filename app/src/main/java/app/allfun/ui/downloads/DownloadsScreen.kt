@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -61,6 +62,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -69,8 +71,10 @@ import app.allfun.data.AppContainer
 import app.allfun.data.db.DownloadEntity
 import app.allfun.data.db.DownloadStatus
 import app.allfun.data.download.QueueOrder
+import app.allfun.ui.components.AnimatedProgress
 import app.allfun.ui.components.EmptyState
 import app.allfun.ui.components.rememberViewModel
+import app.allfun.ui.components.staggeredReveal
 import app.allfun.ui.formatBytes
 import java.text.DateFormat
 import java.util.Date
@@ -251,7 +255,19 @@ fun DownloadsScreen(
                 }
             }
 
-            state.groups.forEach { group ->
+            if (state.rows.isNotEmpty()) {
+                item("summary") {
+                    DownloadSummary(
+                        active = state.activeCount,
+                        saved = state.completed.size,
+                        failed = state.failed.size,
+                        paused = state.paused,
+                        concurrent = state.concurrent
+                    )
+                }
+            }
+
+            state.groups.forEachIndexed { groupIndex, group ->
                 stickyHeader(key = "group:${group.mediaId}") {
                     GroupHeader(
                         group = group,
@@ -263,7 +279,7 @@ fun DownloadsScreen(
                         onShow = { vm.openMedia(group.mediaId) }
                     )
                 }
-                items(group.rows, key = { it.key }) { row ->
+                itemsIndexed(group.rows, key = { _, row -> row.key }) { index, row ->
                     DownloadRow(
                         row = row,
                         onMoveTop = { vm.moveToTop(row.key) },
@@ -276,7 +292,10 @@ fun DownloadsScreen(
                         onResume = { vm.resume(row.key) },
                         onRetry = { vm.retry(row.key) },
                         onCancel = { pendingCancel = row },
-                        onRemove = { pendingRemove = row }
+                        onRemove = { pendingRemove = row },
+                        modifier = Modifier
+                            .staggeredReveal(index + groupIndex)
+                            .animateItem()
                     )
                 }
             }
@@ -572,17 +591,92 @@ private fun GroupHeader(
         )
         val progress = group.progress
         if (progress != null && group.active.isNotEmpty()) {
-            LinearProgressIndicator(
-                progress = { progress / 100f },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(2.dp),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant
+            AnimatedProgress(
+                progress = progress / 100f,
+                modifier = Modifier.padding(horizontal = 12.dp),
+                height = 3
             )
+            Spacer(Modifier.height(6.dp))
         } else {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         }
+    }
+}
+
+/**
+ * A one-glance answer to "what is the queue doing?" before the groups start: how many
+ * parts are moving, how many are on disk, and how many need attention.
+ */
+@Composable
+private fun DownloadSummary(
+    active: Int,
+    saved: Int,
+    failed: Int,
+    paused: Boolean,
+    concurrent: Int
+) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "QUEUE",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = when {
+                        paused -> "Paused"
+                        active == 0 -> "Idle"
+                        active == 1 -> "1 downloading"
+                        else -> "$active downloading"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (paused) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = " · $concurrent at a time",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                SummaryStat("Active", active, MaterialTheme.colorScheme.primary)
+                SummaryStat("Saved", saved, MaterialTheme.colorScheme.secondary)
+                SummaryStat(
+                    "Failed",
+                    failed,
+                    if (failed > 0) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SummaryStat(label: String, value: Int, tint: Color) {
+    Column {
+        Text(
+            text = value.toString(),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = tint
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -599,11 +693,12 @@ private fun DownloadRow(
     onResume: () -> Unit,
     onRetry: () -> Unit,
     onCancel: () -> Unit,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     var menu by remember { mutableStateOf(false) }
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)
     ) {
@@ -776,14 +871,10 @@ private fun DownloadRow(
         if (row.status == DownloadStatus.RUNNING) {
             Spacer(Modifier.height(4.dp))
             if (row.progress in 0..100) {
-                LinearProgressIndicator(
-                    progress = { row.progress / 100f },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(2.dp)
-                        .padding(start = 44.dp, end = 44.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                AnimatedProgress(
+                    progress = row.progress / 100f,
+                    modifier = Modifier.padding(start = 44.dp, end = 44.dp),
+                    height = 3
                 )
             } else {
                 LinearProgressIndicator(
