@@ -92,7 +92,7 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | Release (R8) runtime | All paths above re-verified on a signed release build |
 | In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` confirmation |
 | Previous release | [v0.12.0](https://github.com/mjt28934/AllFun/releases/tag/v0.12.0) — `AllFun-0.12.0-release.apk`, SHA-256 `925f13f3c34ad46490b32abe81b2b118433256eba2d97d9c99b86cb711b341a3` |
-| Current release | [v0.12.1](https://github.com/mjt28934/AllFun/releases/tag/v0.12.1) — `AllFun-0.12.1-release.apk`, 61,997,109 bytes, SHA-256 `0cf78eb62b6a271b55ff5c55fbe007b2a620a2f194f15e83823a92f28089c632` |
+| Current release | [v0.12.2](https://github.com/mjt28934/AllFun/releases/tag/v0.12.2) — `AllFun-0.12.2-release.apk`, 61,997,109 bytes, SHA-256 `926a8f577a8113974e007819c0876fef13052f7a034f6c9e7d7fc70ab32011c2` |
 | Version | `0.12.2` (versionCode 1202) |
 | Min SDK | 26 (Android 8.0) |
 | Target SDK | 35 |
