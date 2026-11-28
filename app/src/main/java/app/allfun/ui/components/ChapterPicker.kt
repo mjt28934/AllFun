@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import app.allfun.data.db.EpisodeEntity
+import app.allfun.ui.theme.AllFun
 
 /**
  * Chapter switcher for long serials. A menu with hundreds of entries is unusable, so this
@@ -62,7 +63,7 @@ fun ChapterPickerDialog(
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh
+            color = AllFun.colors.surface2
         ) {
             Column(Modifier.padding(vertical = 12.dp)) {
                 Row(
@@ -74,7 +75,7 @@ fun ChapterPickerDialog(
                         Text(
                             text = "${chapters.size} ${if (chapters.size == 1) "chapter" else "chapters"}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = AllFun.colors.textSecondary
                         )
                     }
                     IconButton(onClick = onDismiss) {
@@ -96,7 +97,7 @@ fun ChapterPickerDialog(
                     Text(
                         text = "No chapter matches \"$query\".",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = AllFun.colors.textSecondary,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp)
                     )
                 } else {
@@ -117,7 +118,7 @@ fun ChapterPickerDialog(
                                     }
                                     .background(
                                         if (selected) {
-                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                            AllFun.colors.accent.copy(alpha = 0.12f)
                                         } else {
                                             androidx.compose.ui.graphics.Color.Transparent
                                         }
@@ -129,9 +130,9 @@ fun ChapterPickerDialog(
                                     text = chapter.title,
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = if (selected) {
-                                        MaterialTheme.colorScheme.primary
+                                        AllFun.colors.accent
                                     } else {
-                                        MaterialTheme.colorScheme.onSurface
+                                        AllFun.colors.textPrimary
                                     },
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
@@ -142,7 +143,7 @@ fun ChapterPickerDialog(
                                     Icon(
                                         Icons.Outlined.Check,
                                         contentDescription = "Current chapter",
-                                        tint = MaterialTheme.colorScheme.primary
+                                        tint = AllFun.colors.accent
                                     )
                                 }
                             }

@@ -1,6 +1,7 @@
 package app.allfun.ui.search
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,28 +25,20 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -54,24 +47,31 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.allfun.data.AppContainer
 import app.allfun.data.content.ContentCategory
+import app.allfun.ui.components.AllFunButton
+import app.allfun.ui.components.AllFunButtonVariant
+import app.allfun.ui.components.AllFunChip
+import app.allfun.ui.components.AppTopBar
 import app.allfun.ui.components.ContentCard
 import app.allfun.ui.components.ContentReveal
+import app.allfun.ui.components.EmptyIllustration
 import app.allfun.ui.components.EmptyState
 import app.allfun.ui.components.ErrorState
 import app.allfun.ui.components.GridSkeleton
 import app.allfun.ui.components.LoadingState
 import app.allfun.ui.components.ProviderStatusLine
+import app.allfun.ui.components.SearchField
 import app.allfun.ui.components.SectionHeader
 import app.allfun.ui.components.rememberViewModel
+import app.allfun.ui.theme.AllFun
+import app.allfun.ui.theme.AllFunType
+import app.allfun.ui.theme.LocalAllFunRadii
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -133,107 +133,69 @@ fun GlobalSearchScreen(
                 .padding(padding)
                 .statusBarsPadding()
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 4.dp, end = 16.dp, top = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
-                }
-                Text(
-                    text = "Search",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 4.dp)
-                )
-                Spacer(Modifier.weight(1f))
-                if (state.knownSources > 0) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = if (state.knownSources == 1) "1 source"
-                            else "${state.knownSources} sources",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
+            AppTopBar(
+                title = "Search",
+                meta = when (state.knownSources) {
+                    0 -> null
+                    1 -> "1 source"
+                    else -> "${state.knownSources} sources"
+                },
+                onBack = onBack
+            )
 
-            OutlinedTextField(
+            SearchField(
                 value = state.query,
                 onValueChange = vm::setQuery,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-                    .focusRequester(focusRequester),
-                placeholder = { Text("Movies, shows, books, novels, manga…") },
-                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (state.query.isNotEmpty()) {
-                        IconButton(onClick = { vm.setQuery("") }) {
-                            Icon(Icons.Outlined.Close, contentDescription = "Clear search")
-                        }
-                    }
+                placeholder = "Movies, shows, books, novels, manga…",
+                focusRequester = focusRequester,
+                onSearch = {
+                    vm.submit()
+                    focus.clearFocus()
                 },
-                singleLine = true,
-                shape = RoundedCornerShape(18.dp),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(
-                    onSearch = {
-                        vm.submit()
-                        focus.clearFocus()
-                    }
-                )
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
             )
 
             LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 2.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 item {
-                    FilterChip(
+                    AllFunChip(
+                        label = "Everything",
                         selected = state.categoryFilter == null,
-                        onClick = { vm.setCategory(null) },
-                        label = { Text("Everything") }
+                        onClick = { vm.setCategory(null) }
                     )
                 }
                 items(ContentCategory.entries) { category ->
-                    FilterChip(
+                    AllFunChip(
+                        label = category.shortLabel,
                         selected = state.categoryFilter == category,
-                        onClick = { vm.setCategory(category) },
-                        label = { Text(category.shortLabel) }
+                        onClick = { vm.setCategory(category) }
                     )
                 }
             }
 
             if (state.availableSources.size > 1) {
                 LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    contentPadding = PaddingValues(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     item {
-                        FilterChip(
+                        AllFunChip(
+                            label = "All sources",
                             selected = state.sourceFilter == null,
-                            onClick = { vm.setSource(null) },
-                            label = { Text("All sources") }
+                            onClick = { vm.setSource(null) }
                         )
                     }
                     items(state.availableSources, key = { it.first }) { (sourceId, sourceName) ->
-                        FilterChip(
+                        AllFunChip(
+                            label = sourceName,
                             selected = state.sourceFilter == sourceId,
                             onClick = {
                                 vm.setSource(
                                     if (state.sourceFilter == sourceId) null else sourceId
                                 )
-                            },
-                            label = { Text(sourceName, maxLines = 1) }
+                            }
                         )
                     }
                 }
@@ -243,8 +205,9 @@ fun GlobalSearchScreen(
                 LinearProgressIndicator(
                     Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .clip(CircleShape)
+                        .padding(horizontal = 20.dp),
+                    color = AllFun.colors.accent,
+                    trackColor = AllFun.colors.hairline
                 )
             }
 
@@ -274,10 +237,10 @@ fun GlobalSearchScreen(
                     state.searched && state.total == 0 -> EmptyState(
                         icon = Icons.Outlined.Search,
                         title = "No results",
-                        message = "No installed source returned \"${state.query}\". " +
-                            "Search only reports real responses; nothing is simulated.",
-                        actionLabel = "Manage extensions",
-                        onAction = onManageExtensions
+                        message = "No installed source found results for \u201C${state.query}\u201D.",
+                        actionLabel = "Add a source",
+                        onAction = onManageExtensions,
+                        illustration = EmptyIllustration.LOUPE
                     )
 
                     else -> LazyColumn(
@@ -287,10 +250,10 @@ fun GlobalSearchScreen(
                         item {
                             Text(
                                 text = "${state.total} ${if (state.total == 1) "result" else "results"} " +
-                                    "for \"${state.query}\"",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                                    "for \u201C${state.query}\u201D",
+                                style = AllFunType.mono,
+                                color = AllFun.colors.textSecondary,
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
                             )
                         }
 
@@ -307,7 +270,7 @@ fun GlobalSearchScreen(
                             item("row-${category.name}") {
                                 ContentReveal {
                                     LazyRow(
-                                        contentPadding = PaddingValues(horizontal = 16.dp),
+                                        contentPadding = PaddingValues(horizontal = 20.dp),
                                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                                     ) {
                                         items(
@@ -332,10 +295,11 @@ fun GlobalSearchScreen(
                                         subtitle = "Other sources still returned their results"
                                     )
                                     failedSources.forEach { ProviderStatusLine(it) }
-                                    TextButton(
+                                    AllFunButton(
+                                        text = "Manage extensions",
                                         onClick = onManageExtensions,
-                                        modifier = Modifier.padding(start = 8.dp)
-                                    ) { Text("Manage extensions") }
+                                        variant = AllFunButtonVariant.TEXT
+                                    )
                                 }
                             }
                         }
@@ -378,7 +342,7 @@ private fun SearchIdle(
                 FlowRow(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                        .padding(horizontal = 20.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -411,11 +375,12 @@ private fun SearchIdle(
                             "grouped into the three categories, deduplicated, and always show " +
                             "the provider that returned them. Nothing is simulated."
                     } else {
-                        "Extensions, addons and servers contribute to the three categories. " +
+                        "Extensions, add-ons and servers contribute to the three categories. " +
                             "Install one and search will query it directly."
                     },
                     actionLabel = if (hasSources) null else "Manage extensions",
-                    onAction = if (hasSources) null else onManageExtensions
+                    onAction = if (hasSources) null else onManageExtensions,
+                    illustration = if (hasSources) EmptyIllustration.LOUPE else EmptyIllustration.PLUG
                 )
             }
         }
@@ -428,51 +393,50 @@ private fun HistoryChip(
     onOpen: () -> Unit,
     onRemove: () -> Unit
 ) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        shape = RoundedCornerShape(50)
+    val radii = LocalAllFunRadii.current
+    val shape = RoundedCornerShape(radii.chip)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(shape)
+            .border(1.dp, AllFun.colors.hairline, shape)
+            .height(48.dp)
     ) {
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.height(48.dp)
+            modifier = Modifier
+                .clickable(onClickLabel = "Search for $term", onClick = onOpen)
+                .padding(start = 12.dp, end = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .clickable(onClickLabel = "Search for $term", onClick = onOpen)
-                    .padding(start = 12.dp, end = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Outlined.History,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(Modifier.width(7.dp))
-                Text(
-                    text = term,
-                    style = MaterialTheme.typography.labelLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 180.dp)
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .clickable(onClickLabel = "Remove $term from recent searches", onClick = onRemove),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Outlined.Close,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(14.dp)
-                )
-            }
-            Spacer(Modifier.width(4.dp))
+            Icon(
+                Icons.Outlined.History,
+                contentDescription = null,
+                tint = AllFun.colors.textTertiary,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(Modifier.width(7.dp))
+            Text(
+                text = term,
+                style = MaterialTheme.typography.labelLarge,
+                color = AllFun.colors.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 180.dp)
+            )
         }
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clickable(onClickLabel = "Remove $term from recent searches", onClick = onRemove),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Outlined.Close,
+                contentDescription = null,
+                tint = AllFun.colors.textTertiary,
+                modifier = Modifier.size(14.dp)
+            )
+        }
+        Spacer(Modifier.width(4.dp))
     }
 }

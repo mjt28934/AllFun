@@ -59,7 +59,7 @@ data class LibraryUiState(
     val query: String = "",
     val sort: LibrarySort = LibrarySort.RECENTLY_UPDATED,
     val view: LibraryView = LibraryView.GRID,
-    val grid: LibraryGrid = LibraryGrid.COMFORTABLE
+    val grid: LibraryGrid = LibraryGrid.COMPACT
 )
 
 class LibraryViewModel(private val container: AppContainer) : ViewModel() {

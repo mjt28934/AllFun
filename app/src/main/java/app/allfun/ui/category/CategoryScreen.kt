@@ -69,16 +69,12 @@ import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -123,21 +119,34 @@ import app.allfun.data.content.ProviderStatus
 import app.allfun.data.content.category
 import app.allfun.data.content.refId
 import app.allfun.data.db.LibraryRow
+import app.allfun.ui.components.AllFunButton
+import app.allfun.ui.components.AllFunButtonVariant
+import app.allfun.ui.components.AllFunChip
+import app.allfun.ui.components.AllFunSheet
+import app.allfun.ui.components.AllFunTabs
+import app.allfun.ui.components.AppTopBar
 import app.allfun.ui.components.ContentCard
+import app.allfun.ui.components.EmptyIllustration
+import app.allfun.ui.components.EmptyIllustrationArt
 import app.allfun.ui.components.EmptyState
 import app.allfun.ui.components.ErrorState
 import app.allfun.ui.components.GridSkeleton
 import app.allfun.ui.components.LoadingState
 import app.allfun.ui.components.MediaCard
 import app.allfun.ui.components.NoticeCard
+import app.allfun.ui.components.Overline
 import app.allfun.ui.components.ProviderStatusLine
 import app.allfun.ui.components.QuickAddButton
+import app.allfun.ui.components.SearchField
 import app.allfun.ui.components.SectionHeader
 import app.allfun.ui.components.StatusPill
+import app.allfun.ui.components.TopBarAction
 import app.allfun.ui.components.accent
 import app.allfun.ui.components.icon
 import app.allfun.ui.components.rememberViewModel
 import app.allfun.ui.components.staggeredReveal
+import app.allfun.ui.theme.AllFun
+import app.allfun.ui.theme.AllFunType
 import app.allfun.ui.theme.LocalReduceMotion
 import app.allfun.ui.theme.Motion
 
@@ -258,9 +267,7 @@ fun CategoryScreen(
                 onOpenSearch = {
                     searchOpen = true
                 },
-                onOpenFilters = vm::openFilters,
-                onRefresh = vm::refresh,
-                onOpenExtensions = onOpenExtensions
+                onOpenFilters = vm::openFilters
             )
 
             if (phase == CategoryPhase.SECTIONS) {
@@ -285,7 +292,11 @@ fun CategoryScreen(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
-                    TextButton(onClick = vm::clearFilters) { Text("Clear") }
+                    AllFunButton(
+                        text = "Clear",
+                        onClick = vm::clearFilters,
+                        variant = AllFunButtonVariant.TEXT
+                    )
                 }
             }
 
@@ -307,11 +318,19 @@ fun CategoryScreen(
 
                     CategoryPhase.NO_SOURCES -> EmptyState(
                         icon = Icons.Outlined.Extension,
-                        title = "No ${category.shortLabel.lowercase()} sources yet",
-                        message = "Install a source or add-on and its titles will appear here " +
-                            "automatically. Sources never become separate tabs.",
-                        actionLabel = "Manage extensions",
-                        onAction = onOpenExtensions
+                        title = when (category) {
+                            ContentCategory.BOOKS -> "No book sources"
+                            ContentCategory.MANGA -> "No manga sources"
+                            ContentCategory.MOVIES -> "No video sources"
+                        },
+                        message = when (category) {
+                            ContentCategory.BOOKS -> "Install a novel plugin to browse and read here."
+                            ContentCategory.MANGA -> "Install a manga extension to browse and read here."
+                            ContentCategory.MOVIES -> "Add a Stremio addon or Jellyfin server to browse here."
+                        },
+                        actionLabel = "Add a source",
+                        onAction = onOpenExtensions,
+                        illustration = EmptyIllustration.PLUG
                     )
 
                     CategoryPhase.ERROR -> ErrorState(
@@ -368,7 +387,7 @@ fun CategoryScreen(
     }
 
     if (state.filtersOpen) {
-        ModalBottomSheet(onDismissRequest = vm::closeFilters) {
+        AllFunSheet(title = "Sort & filter", onDismiss = vm::closeFilters) {
             FilterSheet(
                 category = category,
                 state = state,
@@ -459,48 +478,18 @@ private fun CategorySearchOverlay(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.82f))
+                .background(AllFun.colors.surface1.copy(alpha = 0.82f))
                 .navigationBarsPadding()
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 4.dp, end = 14.dp, top = 6.dp, bottom = 2.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onClose) {
-                    Icon(
-                        Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "Close search"
-                    )
-                }
-                OutlinedTextField(
-                    value = state.query,
-                    onValueChange = onQuery,
-                    modifier = Modifier
-                        .weight(1f)
-                        .focusRequester(searchFocus),
-                    placeholder = { Text("Search ${category.label.lowercase()}") },
-                    leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                    trailingIcon = {
-                        if (state.query.isNotEmpty()) {
-                            IconButton(onClick = { onQuery("") }) {
-                                Icon(Icons.Outlined.Close, contentDescription = "Clear search")
-                            }
-                        }
-                    },
-                    singleLine = true,
-                    shape = CircleShape,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        focusedBorderColor = category.accent(),
-                        unfocusedBorderColor = Color.Transparent
-                    ),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() })
-                )
-            }
+            SearchField(
+                value = state.query,
+                onValueChange = onQuery,
+                placeholder = "Search ${category.label.lowercase()}",
+                onBack = onClose,
+                focusRequester = searchFocus,
+                onSearch = { focus.clearFocus() },
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+            )
 
             if (state.query.isBlank()) {
                 SearchHint(category, onOpenGlobalSearch)
@@ -529,42 +518,33 @@ private fun SearchHint(category: ContentCategory, onOpenGlobalSearch: () -> Unit
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 36.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .padding(start = 20.dp, end = 20.dp, top = 64.dp),
+        horizontalAlignment = Alignment.Start
     ) {
-        Box(
-            modifier = Modifier
-                .size(64.dp)
-                .clip(CircleShape)
-                .background(category.accent().copy(alpha = 0.14f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                Icons.Outlined.Search,
-                contentDescription = null,
-                tint = category.accent(),
-                modifier = Modifier.size(28.dp)
-            )
-        }
+        EmptyIllustrationArt(
+            kind = EmptyIllustration.LOUPE,
+            modifier = Modifier.size(width = 120.dp, height = 80.dp)
+        )
         Spacer(Modifier.height(16.dp))
         Text(
             text = "Search ${category.label.lowercase()}",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
+            style = MaterialTheme.typography.headlineSmall,
+            color = AllFun.colors.textPrimary
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
         Text(
             text = "Every installed source is asked at once. Results appear here without " +
                 "leaving the category.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
+            style = MaterialTheme.typography.bodyLarge,
+            color = AllFun.colors.textSecondary,
+            modifier = Modifier.fillMaxWidth(0.85f)
         )
-        Spacer(Modifier.height(14.dp))
-        TextButton(onClick = onOpenGlobalSearch) {
-            Text("Search every category instead")
-        }
+        Spacer(Modifier.height(12.dp))
+        AllFunButton(
+            text = "Search every category",
+            onClick = onOpenGlobalSearch,
+            variant = AllFunButtonVariant.TEXT
+        )
     }
 }
 
@@ -577,85 +557,13 @@ private fun CategorySortBar(
     sort: CategorySort,
     onSort: (CategorySort) -> Unit
 ) {
-    val reduceMotion = LocalReduceMotion.current
     val options = CategorySort.entries
-    val selectedIndex = options.indexOf(sort).coerceAtLeast(0)
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .height(42.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer)
-    ) {
-        val itemWidth = maxWidth / options.size
-        val offset by animateDpAsState(
-            targetValue = itemWidth * selectedIndex,
-            animationSpec = if (reduceMotion) androidx.compose.animation.core.snap()
-            else Motion.settle(),
-            label = "sortPill"
-        )
-        Box(
-            modifier = Modifier
-                .offset(x = offset)
-                .width(itemWidth)
-                .fillMaxHeight()
-                .padding(3.dp)
-                .clip(RoundedCornerShape(11.dp))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
-        )
-        Row(Modifier.fillMaxSize()) {
-            options.forEach { option ->
-                val selected = option == sort
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .selectable(
-                            selected = selected,
-                            role = Role.Tab,
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = { onSort(option) }
-                        ),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    when (option) {
-                        CategorySort.POPULAR -> {
-                            Icon(
-                                Icons.AutoMirrored.Outlined.TrendingUp,
-                                contentDescription = null,
-                                tint = if (selected) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Spacer(Modifier.width(4.dp))
-                        }
-                        CategorySort.LATEST -> {
-                            Icon(
-                                Icons.Outlined.Schedule,
-                                contentDescription = null,
-                                tint = if (selected) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Spacer(Modifier.width(4.dp))
-                        }
-                        else -> Unit
-                    }
-                    Text(
-                        text = option.shortLabel,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                        color = if (selected) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
-                    )
-                }
-            }
-        }
-    }
+    AllFunTabs(
+        labels = options.map { it.shortLabel },
+        selectedIndex = options.indexOf(sort).coerceAtLeast(0),
+        onSelect = { index -> onSort(options[index]) },
+        modifier = Modifier.padding(horizontal = 20.dp)
+    )
 }
 
 /**
@@ -671,92 +579,32 @@ private fun CategoryTopBar(
     state: CategoryViewModel.UiState,
     collapsed: Boolean,
     onOpenSearch: () -> Unit,
-    onOpenFilters: () -> Unit,
-    onRefresh: () -> Unit,
-    onOpenExtensions: () -> Unit
+    onOpenFilters: () -> Unit
 ) {
-    val reduceMotion = LocalReduceMotion.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 20.dp, end = 2.dp, top = 8.dp, bottom = 2.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        AnimatedContent(
-            targetState = collapsed,
-            transitionSpec = {
-                fadeIn(tween(if (reduceMotion) 0 else 180)) togetherWith
-                    fadeOut(tween(if (reduceMotion) 0 else 110))
-            },
-            label = "categoryTopLabel",
-            modifier = Modifier.weight(1f)
-        ) { isCollapsed ->
-            if (isCollapsed) {
-                Text(
-                    text = category.label,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            } else {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(category.accent())
-                    )
-                    Spacer(Modifier.width(7.dp))
-                    Text(
-                        text = "BROWSE",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = category.accent(),
-                        letterSpacing = 2.sp
-                    )
-                }
-            }
-        }
-        IconButton(onClick = onOpenSearch, modifier = Modifier.size(40.dp)) {
-            Icon(
-                Icons.Outlined.Search,
+    AppTopBar(
+        title = category.shortLabel,
+        meta = buildString {
+            val count = state.feed?.sources?.size ?: 0
+            append(count)
+            append(if (count == 1) " source" else " sources")
+        },
+        collapsed = collapsed,
+        actions = {
+            TopBarAction(
+                icon = Icons.Outlined.Search,
                 contentDescription = "Search ${category.label}",
-                modifier = Modifier.size(21.dp)
+                onClick = onOpenSearch
             )
-        }
-        IconButton(onClick = onOpenFilters, modifier = Modifier.size(40.dp)) {
-            Box {
-                Icon(
-                    Icons.Outlined.Tune,
-                    contentDescription = "Filter ${category.label}",
-                    tint = if (state.hasActiveFilters) category.accent()
-                    else MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(21.dp)
-                )
-                if (state.hasActiveFilters) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(category.accent())
-                    )
-                }
-            }
-        }
-        RefreshAction(refreshing = state.refreshing, onClick = onRefresh)
-        IconButton(onClick = onOpenExtensions, modifier = Modifier.size(40.dp)) {
-            Icon(
-                Icons.Outlined.Extension,
-                contentDescription = "Extensions for ${category.label}",
-                modifier = Modifier.size(21.dp)
+            TopBarAction(
+                icon = Icons.Outlined.Tune,
+                contentDescription = "Filter ${category.label}",
+                onClick = onOpenFilters,
+                tint = if (state.hasActiveFilters) AllFun.colors.accent
+                else AllFun.colors.textSecondary
             )
+            QuickAddButton(container = container, snackbar = snackbar)
         }
-        // Quick add sits beside the Extensions entry: add-ons and plugins are installed
-        // from here, while repositories and updates stay on the Extensions screen.
-        QuickAddButton(container = container, snackbar = snackbar)
-    }
+    )
 }
 
 /** The refresh arrow turns while a request is actually running, then settles upright. */
@@ -792,11 +640,9 @@ private fun RefreshAction(refreshing: Boolean, onClick: () -> Unit) {
 }
 
 /**
- * The category's own cover: an accent wash, a large title and the real counts. It lives
- * inside the grid, so it leaves the screen as the reader scrolls instead of reserving a
- * band forever. Its glow drifts a little slower than the content for depth.
+ * The category's own heading: a serif title, one honest count line and two text actions.
+ * It lives inside the grid, so it leaves the screen as the reader scrolls.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CategoryHero(
     category: ContentCategory,
@@ -804,104 +650,61 @@ private fun CategoryHero(
     sourceCount: Int,
     issueCount: Int,
     filtered: Boolean,
-    scrollOffset: Int
+    onRefresh: () -> Unit,
+    onManageExtensions: () -> Unit
 ) {
-    val accent = category.accent()
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 6.dp)
-            .clip(RoundedCornerShape(26.dp))
-            .background(
-                Brush.linearGradient(
-                    listOf(
-                        accent.copy(alpha = 0.30f),
-                        accent.copy(alpha = 0.10f),
-                        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f)
-                    )
-                )
-            )
-    ) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .offset(x = 42.dp, y = (-52).dp)
-                .size(200.dp)
-                .graphicsLayer { translationY = scrollOffset * 0.16f }
-                .background(
-                    Brush.radialGradient(
-                        listOf(accent.copy(alpha = 0.36f), Color.Transparent)
-                    )
-                )
-        )
-        Column(Modifier.padding(20.dp)) {
-            Text(
-                text = "COLLECTION",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = accent,
-                letterSpacing = 2.sp
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = category.label,
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = category.tagline,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.height(14.dp))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                HeroStat(if (titleCount == 1) "1 title" else "$titleCount titles")
-                HeroStat(
-                    text = when (sourceCount) {
-                        0 -> "No source"
-                        1 -> "1 source"
-                        else -> "$sourceCount sources"
-                    },
-                    tint = if (sourceCount == 0) MaterialTheme.colorScheme.onSurfaceVariant
-                    else accent
-                )
-                if (issueCount > 0) {
-                    HeroStat(
-                        text = if (issueCount == 1) "1 issue" else "$issueCount issues",
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
-                if (filtered) HeroStat(text = "Filtered", tint = accent)
-            }
-        }
-    }
-}
-
-@Composable
-private fun HeroStat(
-    text: String,
-    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant
-) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(tint.copy(alpha = 0.12f))
-            .padding(horizontal = 9.dp, vertical = 4.dp)
+            .padding(top = 8.dp, bottom = 8.dp)
     ) {
         Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
-            color = tint,
-            maxLines = 1
+            text = category.label,
+            style = MaterialTheme.typography.displaySmall,
+            color = AllFun.colors.textPrimary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
         )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = category.tagline,
+            style = MaterialTheme.typography.bodySmall,
+            color = AllFun.colors.textSecondary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = buildList {
+                add(if (titleCount == 1) "1 title" else "$titleCount titles")
+                add(
+                    when (sourceCount) {
+                        0 -> "no source"
+                        1 -> "1 source"
+                        else -> "$sourceCount sources"
+                    }
+                )
+                if (issueCount > 0) {
+                    add(if (issueCount == 1) "1 issue" else "$issueCount issues")
+                }
+                if (filtered) add("filtered")
+            }.joinToString(" · "),
+            style = AllFunType.mono,
+            color = if (issueCount > 0) AllFun.colors.danger else AllFun.colors.textTertiary
+        )
+        Spacer(Modifier.height(4.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            AllFunButton(
+                text = "Refresh",
+                onClick = onRefresh,
+                variant = AllFunButtonVariant.TEXT
+            )
+            AllFunButton(
+                text = "Sources",
+                onClick = onManageExtensions,
+                variant = AllFunButtonVariant.TEXT
+            )
+        }
     }
 }
 
@@ -959,11 +762,8 @@ private fun CategorySections(
                 sourceCount = state.feed?.sources.orEmpty().size,
                 issueCount = unmatched.size,
                 filtered = state.hasActiveFilters,
-                scrollOffset = if (gridState.firstVisibleItemIndex == 0) {
-                    gridState.firstVisibleItemScrollOffset
-                } else {
-                    0
-                }
+                onRefresh = onRetry,
+                onManageExtensions = onManageExtensions
             )
         }
 
@@ -975,10 +775,12 @@ private fun CategorySections(
                             "Your saved titles stay available below; connect a source to " +
                             "browse and search the whole category."
                     )
-                    TextButton(
+                    AllFunButton(
+                        text = "Manage extensions",
                         onClick = onManageExtensions,
+                        variant = AllFunButtonVariant.TEXT,
                         modifier = Modifier.padding(start = 8.dp)
-                    ) { Text("Manage extensions") }
+                    )
                 }
             }
         }
@@ -1038,7 +840,12 @@ private fun CategorySections(
                             "results again."
                     },
                     actionLabel = if (state.allItems.isEmpty()) "Refresh" else "Clear filters",
-                    onAction = if (state.allItems.isEmpty()) onRetry else onClearFilters
+                    onAction = if (state.allItems.isEmpty()) onRetry else onClearFilters,
+                    illustration = if (state.allItems.isEmpty()) {
+                        EmptyIllustration.PLUG
+                    } else {
+                        EmptyIllustration.SHELF
+                    }
                 )
             }
         } else {
@@ -1088,7 +895,7 @@ private fun CategoryGridFooter(
             Text(
                 text = it,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.error
+                color = AllFun.colors.danger
             )
         }
         when {
@@ -1100,22 +907,20 @@ private fun CategoryGridFooter(
             ) {
                 CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
             }
-            state.canLoadMore -> FilledTonalButton(
+            state.canLoadMore -> AllFunButton(
+                text = "Load more titles",
                 onClick = onLoadMore,
+                variant = AllFunButtonVariant.SECONDARY,
+                icon = Icons.Outlined.ExpandMore,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 48.dp)
                     .padding(vertical = 4.dp)
-            ) {
-                Icon(Icons.Outlined.ExpandMore, contentDescription = null)
-                Spacer(Modifier.width(6.dp))
-                Text("Load more titles")
-            }
+            )
         }
         Text(
             text = "Titles come from your installed ${category.shortLabel.lowercase()} sources.",
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = AllFun.colors.textSecondary,
             modifier = Modifier.padding(top = 8.dp)
         )
     }
@@ -1130,7 +935,7 @@ private fun ProviderIssueSection(
     onManageExtensions: () -> Unit
 ) {
     Column(Modifier.fillMaxWidth()) {
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        HorizontalDivider(color = AllFun.colors.hairline.copy(alpha = 0.4f))
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1142,20 +947,24 @@ private fun ProviderIssueSection(
                     (if (unmatched.size == 1) "" else "s") +
                     " reported an issue",
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = AllFun.colors.textSecondary,
                 modifier = Modifier.weight(1f)
             )
-            TextButton(onClick = onToggle) {
-                Text(if (expanded) "Hide" else "Details")
-            }
+            AllFunButton(
+                text = if (expanded) "Hide" else "Details",
+                onClick = onToggle,
+                variant = AllFunButtonVariant.TEXT
+            )
         }
         if (expanded) {
             Column {
                 unmatched.forEach { ProviderStatusLine(it, onRetry) }
-                TextButton(
+                AllFunButton(
+                    text = "Manage extensions",
                     onClick = onManageExtensions,
+                    variant = AllFunButtonVariant.TEXT,
                     modifier = Modifier.padding(start = 8.dp)
-                ) { Text("Manage extensions") }
+                )
             }
         }
     }
@@ -1183,9 +992,10 @@ private fun SearchGrid(
             icon = Icons.Outlined.Search,
             title = "No results",
             message = "No installed ${category.shortLabel.lowercase()} source returned " +
-                "\"${state.query}\". Search only shows real responses; nothing is invented.",
+                "\u201C${state.query}\u201D. Search only shows real responses; nothing is invented.",
             actionLabel = "Clear search",
-            onAction = onClear
+            onAction = onClear,
+            illustration = EmptyIllustration.LOUPE
         )
         else -> LazyVerticalGrid(
             // Same minimum as the browse grid, so results keep the category's three
@@ -1240,12 +1050,14 @@ private fun SearchSummary(
                     text = "${failed.size} source" +
                         (if (failed.size == 1) "" else "s") + " could not be searched",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = AllFun.colors.danger,
                     modifier = Modifier.weight(1f)
                 )
-                TextButton(onClick = { showIssues = !showIssues }) {
-                    Text(if (showIssues) "Hide" else "Details")
-                }
+                AllFunButton(
+                    text = if (showIssues) "Hide" else "Details",
+                    onClick = { showIssues = !showIssues },
+                    variant = AllFunButtonVariant.TEXT
+                )
             }
             if (showIssues) {
                 failed.forEach { ProviderStatusLine(it) }
@@ -1273,60 +1085,45 @@ private fun FilterSheet(
             .fillMaxWidth()
             .fillMaxSize(0.9f)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp)
             .padding(bottom = 24.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "Filters & sorting",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.weight(1f)
+            Spacer(Modifier.weight(1f))
+            AllFunButton(
+                text = "Clear all",
+                onClick = onClear,
+                variant = AllFunButtonVariant.TEXT
             )
-            TextButton(onClick = onClear) { Text("Clear all") }
         }
-        Text(
-            text = "Facets come from metadata your sources actually returned. " +
-                "Titles without metadata are not guessed.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
         Spacer(Modifier.height(10.dp))
         if (state.enriching) {
             LinearProgressIndicator(Modifier.fillMaxWidth())
             Text(
                 text = "Reading metadata from your sources…",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = AllFun.colors.textSecondary,
                 modifier = Modifier.padding(vertical = 8.dp)
             )
         }
 
-        FilterGroup("Sort by")
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            CategorySort.entries.forEach { sort ->
-                FilterChip(
-                    selected = state.sort == sort,
-                    onClick = { onSort(sort) },
-                    label = { Text(sort.label) }
-                )
-            }
-        }
+        FilterGroup("Sort")
+        SortSegmentedControl(selected = state.sort, onSelect = onSort)
 
         if (state.formatOptions.isNotEmpty()) {
             FilterGroup("Format")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
+                AllFunChip(
+                    label = "All",
                     selected = state.formatFilter == null,
-                    onClick = { onFormat(null) },
-                    label = { Text("All") }
+                    onClick = { onFormat(null) }
                 )
                 state.formatOptions.forEach { option ->
-                    FilterChip(
+                    AllFunChip(
+                        label = option,
                         selected = state.formatFilter == option,
                         onClick = {
                             onFormat(if (state.formatFilter == option) null else option)
-                        },
-                        label = { Text(option) }
+                        }
                     )
                 }
             }
@@ -1335,18 +1132,18 @@ private fun FilterSheet(
         if (state.feed?.sources.orEmpty().size > 1) {
             FilterGroup("Source")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
+                AllFunChip(
+                    label = "All",
                     selected = state.sourceFilter == null,
-                    onClick = { onSource(null) },
-                    label = { Text("All") }
+                    onClick = { onSource(null) }
                 )
                 state.feed?.sources.orEmpty().forEach { source ->
-                    FilterChip(
+                    AllFunChip(
+                        label = source.name,
                         selected = state.sourceFilter == source.id,
                         onClick = {
                             onSource(if (state.sourceFilter == source.id) null else source.id)
-                        },
-                        label = { Text(source.name) }
+                        }
                     )
                 }
             }
@@ -1356,12 +1153,12 @@ private fun FilterSheet(
             FilterGroup("Genres")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 state.genreOptions.forEach { genre ->
-                    FilterChip(
+                    AllFunChip(
+                        label = genre,
                         selected = state.genreFilter == genre,
                         onClick = {
                             onGenre(if (state.genreFilter == genre) null else genre)
-                        },
-                        label = { Text(genre) }
+                        }
                     )
                 }
             }
@@ -1371,10 +1168,10 @@ private fun FilterSheet(
             FilterGroup("Release year")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 state.yearOptions.forEach { year ->
-                    FilterChip(
+                    AllFunChip(
+                        label = year.toString(),
                         selected = state.yearFilter == year,
-                        onClick = { onYear(if (state.yearFilter == year) null else year) },
-                        label = { Text(year.toString()) }
+                        onClick = { onYear(if (state.yearFilter == year) null else year) }
                     )
                 }
             }
@@ -1384,31 +1181,78 @@ private fun FilterSheet(
             FilterGroup("Authors")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 state.authorOptions.take(60).forEach { author ->
-                    FilterChip(
+                    AllFunChip(
+                        label = author,
                         selected = state.authorFilter == author,
                         onClick = {
                             onAuthor(if (state.authorFilter == author) null else author)
-                        },
-                        label = { Text(author, maxLines = 1) }
+                        }
                     )
                 }
             }
         }
 
         Spacer(Modifier.height(16.dp))
-        Button(onClick = onDone, modifier = Modifier.fillMaxWidth()) {
-            Text("Show results")
+        Text(
+            text = "Filters depend on what your sources provide.",
+            style = MaterialTheme.typography.bodySmall,
+            color = AllFun.colors.textSecondary
+        )
+        Spacer(Modifier.height(12.dp))
+        AllFunButton(
+            text = "Show ${state.filtered(state.allItems).size} results",
+            onClick = onDone,
+            modifier = Modifier.fillMaxWidth(),
+            fullWidth = true
+        )
+    }
+}
+
+@Composable
+private fun SortSegmentedControl(
+    selected: CategorySort,
+    onSelect: (CategorySort) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(AllFun.colors.surface2)
+            .padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        CategorySort.entries.forEach { option ->
+            val active = selected == option
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 36.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .then(
+                        if (active) Modifier.background(AllFun.colors.accentContainer)
+                        else Modifier
+                    )
+                    .clickable(role = Role.Button, onClick = { onSelect(option) })
+                    .padding(horizontal = 4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = option.shortLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (active) AllFun.colors.accent else AllFun.colors.textSecondary,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
         }
     }
 }
 
 @Composable
 private fun FilterGroup(title: String) {
-    Text(
+    Overline(
         text = title,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.secondary,
-        modifier = Modifier.padding(top = 14.dp, bottom = 4.dp)
+        modifier = Modifier.padding(top = 20.dp, bottom = 8.dp)
     )
 }
 

@@ -47,7 +47,7 @@ enum class AppTextSize(val label: String, val scale: Float) {
 
 /** How wide each library poster is; the grid keeps its adaptive column count. */
 enum class LibraryGrid(val label: String, val minWidth: Int) {
-    COMPACT("Compact", 104),
+    COMPACT("Compact", 96),
     COMFORTABLE("Comfortable", 132),
     LARGE("Large", 168)
 }
@@ -91,15 +91,15 @@ data class Settings(
     val novelFontSize: Int = 100,
     val novelLineSpacing: Float = 1.72f,
     val novelTheme: NovelTheme = NovelTheme.DARK,
-    val dynamicColor: Boolean = true,
+    val dynamicColor: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.DARK,
     /** True-black backgrounds and cards for OLED displays. */
     val amoledBlack: Boolean = false,
-    val accent: AccentPalette = AccentPalette.VIOLET,
+    val accent: AccentPalette = AccentPalette.AMBER,
     val cornerStyle: CornerStyle = CornerStyle.ROUNDED,
     val appTextSize: AppTextSize = AppTextSize.SYSTEM,
     val libraryView: LibraryView = LibraryView.GRID,
-    val libraryGrid: LibraryGrid = LibraryGrid.COMFORTABLE,
+    val libraryGrid: LibraryGrid = LibraryGrid.COMPACT,
     val librarySort: LibrarySort = LibrarySort.RECENTLY_UPDATED,
     val mangaFit: MangaFit = MangaFit.WIDTH,
     val readingDirection: ReadingDirection = ReadingDirection.LTR,
@@ -168,14 +168,14 @@ class SettingsStore(private val context: Context) {
                 novelFontSize = prefs[Keys.novelFontSize] ?: 100,
                 novelLineSpacing = (prefs[Keys.novelLineSpacing] ?: 1.72f).coerceIn(1.2f, 2.4f),
                 novelTheme = prefs[Keys.novelTheme].toEnum(NovelTheme.DARK),
-                dynamicColor = prefs[Keys.dynamicColor] ?: true,
+                dynamicColor = prefs[Keys.dynamicColor] ?: false,
                 themeMode = prefs[Keys.themeMode].toEnum(ThemeMode.DARK),
                 amoledBlack = prefs[Keys.amoledBlack] ?: false,
-                accent = prefs[Keys.accent].toEnum(AccentPalette.VIOLET),
+                accent = prefs[Keys.accent].toEnum(AccentPalette.AMBER),
                 cornerStyle = prefs[Keys.cornerStyle].toEnum(CornerStyle.ROUNDED),
                 appTextSize = prefs[Keys.appTextSize].toEnum(AppTextSize.SYSTEM),
                 libraryView = prefs[Keys.libraryView].toEnum(LibraryView.GRID),
-                libraryGrid = prefs[Keys.libraryGrid].toEnum(LibraryGrid.COMFORTABLE),
+                libraryGrid = prefs[Keys.libraryGrid].toEnum(LibraryGrid.COMPACT),
                 librarySort = prefs[Keys.librarySort].toEnum(LibrarySort.RECENTLY_UPDATED),
                 mangaFit = prefs[Keys.mangaFit].toEnum(MangaFit.WIDTH),
                 readingDirection = prefs[Keys.readingDirection].toEnum(ReadingDirection.LTR),

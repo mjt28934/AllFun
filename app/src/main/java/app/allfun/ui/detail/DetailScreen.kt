@@ -14,18 +14,19 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -40,26 +41,19 @@ import androidx.compose.material.icons.outlined.DownloadDone
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -70,15 +64,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.allfun.data.AppContainer
 import app.allfun.data.content.ContentCategory
@@ -90,8 +80,15 @@ import app.allfun.data.db.DownloadEntity
 import app.allfun.data.db.DownloadStatus
 import app.allfun.data.db.MediaEntity
 import app.allfun.data.model.MediaKind
+import app.allfun.ui.components.AllFunButton
+import app.allfun.ui.components.AllFunButtonVariant
+import app.allfun.ui.components.AllFunSheet
+import app.allfun.ui.components.AppTopBar
 import app.allfun.ui.components.CoverImage
+import app.allfun.ui.components.LoadingState
+import app.allfun.ui.components.Overline
 import app.allfun.ui.components.SectionHeader
+import app.allfun.ui.components.TopBarAction
 import app.allfun.ui.components.accent
 import app.allfun.ui.components.accentColor
 import app.allfun.ui.components.rememberViewModel
@@ -100,6 +97,9 @@ import app.allfun.ui.countLabel
 import app.allfun.ui.formatDuration
 import app.allfun.ui.formatBytes
 import app.allfun.ui.formatNumber
+import app.allfun.ui.theme.AllFun
+import app.allfun.ui.theme.AllFunType
+import app.allfun.ui.theme.LocalAllFunRadii
 import app.allfun.ui.theme.LocalReduceMotion
 import app.allfun.ui.theme.Motion
 
@@ -141,31 +141,68 @@ fun DetailScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DetailLoading(onBack: () -> Unit) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {},
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
-                    }
-                }
-            )
-        }
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentAlignment = Alignment.Center
-        ) { CircularProgressIndicator() }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+    ) {
+        AppTopBar(title = "Title", onBack = onBack)
+        LoadingState("Loading this title")
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Header for the detail route. Over the hero it is only the back button and up to three
+ * actions; once the page scrolls, the title fades in at row size.
+ */
+@Composable
+internal fun DetailBar(
+    title: String,
+    collapsed: Boolean,
+    barColor: Color,
+    onBack: () -> Unit,
+    actions: @Composable RowScope.() -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(barColor)
+            .statusBarsPadding()
+            .padding(start = 4.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(
+                Icons.AutoMirrored.Outlined.ArrowBack,
+                contentDescription = "Back",
+                tint = AllFun.colors.textPrimary
+            )
+        }
+        Column(Modifier.weight(1f)) {
+            AnimatedVisibility(
+                visible = collapsed,
+                enter = fadeIn(tween(Motion.FAST)),
+                exit = fadeOut(tween(Motion.FAST))
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = AllFun.colors.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(0.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            content = actions
+        )
+    }
+}
+
 @Composable
 private fun MoviesDetailScreen(
     vm: DetailViewModel,
@@ -203,9 +240,9 @@ private fun MoviesDetailScreen(
     }
     val barColor by animateColorAsState(
         targetValue = if (collapsed) {
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.97f)
+            AllFun.colors.bg.copy(alpha = 0.97f)
         } else {
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.42f)
+            AllFun.colors.bg.copy(alpha = 0.35f)
         },
         animationSpec = if (LocalReduceMotion.current) {
             androidx.compose.animation.core.snap()
@@ -217,85 +254,58 @@ private fun MoviesDetailScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = barColor),
-                title = {
-                    AnimatedVisibility(
-                        visible = collapsed,
-                        enter = fadeIn(tween(Motion.FAST)),
-                        exit = fadeOut(tween(Motion.FAST))
-                    ) {
-                        Text(
-                            text = media?.title.orEmpty(),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    val saved = media?.inLibrary == true
-                    val favorite = media?.favorite == true
-                    val category = media?.kind?.category()
-                    if (canDownload) {
-                        val allDone = downloads.isNotEmpty() &&
-                            downloads.none { it.status.isActive } &&
-                            downloads.count { it.status == DownloadStatus.COMPLETED } == episodes.size
-                        IconButton(
-                            onClick = { vm.download() },
-                            enabled = episodes.isNotEmpty() && !allDone
-                        ) {
-                            Icon(
-                                imageVector = if (allDone) Icons.Outlined.DownloadDone
-                                else Icons.Outlined.Download,
-                                contentDescription = if (allDone) {
-                                    "Everything is downloaded"
-                                } else {
-                                    "Download all ${media?.unitLabel?.lowercase() ?: "items"}"
-                                },
-                                tint = if (downloads.isNotEmpty()) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface
-                                }
-                            )
-                        }
-                    }
-                    IconButton(onClick = { vm.toggleFavorite() }) {
-                        Icon(
-                            imageVector = if (favorite) Icons.Filled.Favorite
-                            else Icons.Outlined.FavoriteBorder,
-                            contentDescription = if (favorite) {
-                                "Remove from favorites"
-                            } else {
-                                "Add to favorites"
-                            },
-                            tint = if (favorite) MaterialTheme.colorScheme.tertiary
-                            else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    IconButton(onClick = { vm.toggleLibrary() }) {
-                        Icon(
-                            imageVector = if (saved) Icons.Filled.Bookmark
-                            else Icons.Outlined.BookmarkBorder,
-                            contentDescription = when {
-                                category == ContentCategory.MOVIES && saved ->
-                                    "Remove from watchlist"
-                                category == ContentCategory.MOVIES -> "Add to watchlist"
-                                saved -> "Remove from library"
-                                else -> "Add to library"
-                            },
-                            tint = if (saved) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
+            DetailBar(
+                title = media?.title.orEmpty(),
+                collapsed = collapsed,
+                barColor = barColor,
+                onBack = onBack
+            ) {
+                val saved = media?.inLibrary == true
+                val favorite = media?.favorite == true
+                val category = media?.kind?.category()
+                if (canDownload) {
+                    val allDone = downloads.isNotEmpty() &&
+                        downloads.none { it.status.isActive } &&
+                        downloads.count { it.status == DownloadStatus.COMPLETED } == episodes.size
+                    TopBarAction(
+                        icon = if (allDone) Icons.Outlined.DownloadDone
+                        else Icons.Outlined.Download,
+                        contentDescription = if (allDone) {
+                            "Everything is downloaded"
+                        } else {
+                            "Download all ${media?.unitLabel?.lowercase() ?: "items"}"
+                        },
+                        onClick = { vm.download() },
+                        tint = if (downloads.isNotEmpty()) AllFun.colors.accent
+                        else AllFun.colors.textPrimary,
+                        enabled = episodes.isNotEmpty() && !allDone
+                    )
                 }
-            )
+                TopBarAction(
+                    icon = if (favorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                    contentDescription = if (favorite) {
+                        "Remove from favorites"
+                    } else {
+                        "Add to favorites"
+                    },
+                    onClick = { vm.toggleFavorite() },
+                    tint = if (favorite) AllFun.colors.accent else AllFun.colors.textPrimary
+                )
+                TopBarAction(
+                    icon = if (saved) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                    contentDescription = when {
+                        category == ContentCategory.MOVIES && saved ->
+                            "Remove from watchlist"
+                        category == ContentCategory.MOVIES -> "Add to watchlist"
+                        saved -> "Remove from library"
+                        else -> "Add to library"
+                    },
+                    onClick = { vm.toggleLibrary() },
+                    tint = if (saved) AllFun.colors.accent else AllFun.colors.textPrimary
+                )
+            }
         }
     ) { padding ->
         val item = media
@@ -305,7 +315,7 @@ private fun MoviesDetailScreen(
                     .fillMaxSize()
                     .padding(padding),
                 contentAlignment = Alignment.Center
-            ) { CircularProgressIndicator() }
+            ) { CircularProgressIndicator(color = AllFun.colors.accent) }
             return@Scaffold
         }
 
@@ -325,53 +335,37 @@ private fun MoviesDetailScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Button(
+                    AllFunButton(
+                        text = when {
+                            isCurrent -> "Continue"
+                            item.kind.isVideo -> "Play"
+                            else -> "Read"
+                        },
                         onClick = { onOpen(mediaId, resume?.id, item.kind) },
                         enabled = resume != null,
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 52.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (item.kind.isVideo) Icons.Filled.PlayArrow
-                            else Icons.AutoMirrored.Outlined.MenuBook,
-                            contentDescription = null
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            when {
-                                isCurrent -> "Continue"
-                                item.kind.isVideo -> "Play"
-                                else -> "Read"
-                            }
-                        )
-                    }
-                    OutlinedButton(
+                        icon = if (item.kind.isVideo) {
+                            Icons.Filled.PlayArrow
+                        } else {
+                            Icons.AutoMirrored.Outlined.MenuBook
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    AllFunButton(
+                        text = when {
+                            category == ContentCategory.MOVIES && item.inLibrary ->
+                                "In watchlist"
+                            category == ContentCategory.MOVIES -> "Watchlist"
+                            item.inLibrary -> "Saved"
+                            else -> "Save"
+                        },
                         onClick = { vm.toggleLibrary() },
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.heightIn(min = 52.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (item.inLibrary) Icons.Filled.Bookmark
-                            else Icons.Outlined.BookmarkBorder,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            when {
-                                category == ContentCategory.MOVIES && item.inLibrary ->
-                                    "In watchlist"
-                                category == ContentCategory.MOVIES -> "Watchlist"
-                                item.inLibrary -> "Saved"
-                                else -> "Save"
-                            }
-                        )
-                    }
+                        variant = AllFunButtonVariant.SECONDARY,
+                        icon = if (item.inLibrary) Icons.Filled.Bookmark
+                        else Icons.Outlined.BookmarkBorder
+                    )
                 }
             }
 
@@ -383,7 +377,7 @@ private fun MoviesDetailScreen(
                     if (description.isBlank()) return@item
                     Column(
                         modifier = Modifier
-                            .padding(horizontal = 16.dp)
+                            .padding(horizontal = 20.dp)
                             .animateContentSize(
                                 animationSpec = if (reduceMotion) {
                                     androidx.compose.animation.core.snap()
@@ -394,29 +388,25 @@ private fun MoviesDetailScreen(
                     ) {
                         Text(
                             text = description,
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = AllFun.colors.textSecondary,
                             maxLines = if (expanded) Int.MAX_VALUE else 5,
                             overflow = TextOverflow.Ellipsis
                         )
                         if (description.length > 260) {
-                            TextButton(
+                            AllFunButton(
+                                text = if (expanded) "Show less" else "Read more",
                                 onClick = { expanded = !expanded },
+                                variant = AllFunButtonVariant.TEXT,
+                                icon = if (expanded) {
+                                    Icons.Outlined.ExpandLess
+                                } else {
+                                    Icons.Outlined.ExpandMore
+                                },
                                 modifier = Modifier.semantics {
                                     stateDescription = if (expanded) "Expanded" else "Collapsed"
                                 }
-                            ) {
-                                Text(if (expanded) "Show less" else "Read more")
-                                Spacer(Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = if (expanded) {
-                                        Icons.Outlined.ExpandLess
-                                    } else {
-                                        Icons.Outlined.ExpandMore
-                                    },
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
+                            )
                         }
                     }
                 }
@@ -433,8 +423,9 @@ private fun MoviesDetailScreen(
 
             item {
                 HorizontalDivider(
-                    modifier = Modifier.padding(top = 8.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    modifier = Modifier.padding(top = 8.dp, start = 20.dp, end = 20.dp),
+                    thickness = 1.dp,
+                    color = AllFun.colors.hairline
                 )
             }
 
@@ -452,15 +443,19 @@ private fun MoviesDetailScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                .padding(horizontal = 20.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = AllFun.colors.accent
+                            )
                             Spacer(Modifier.width(12.dp))
                             Text(
-                                text = "Looking for ${item.unitLabel.lowercase()}s…",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = "Looking for ${item.unitLabel.lowercase()}s\u2026",
+                                style = AllFunType.mono,
+                                color = AllFun.colors.textSecondary
                             )
                         }
                     } else {
@@ -468,8 +463,8 @@ private fun MoviesDetailScreen(
                             text = "No ${item.unitLabel.lowercase()}s yet. The source did not return " +
                                 "a ${item.unitLabel.lowercase()} list for this title.",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                            color = AllFun.colors.textSecondary,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
                         )
                     }
                 }
@@ -477,11 +472,9 @@ private fun MoviesDetailScreen(
                 episodes.groupBy { it.season }.forEach { (season, list) ->
                     if (season > 0) {
                         item("season-$season") {
-                            Text(
+                            Overline(
                                 text = "Season $season",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.secondary,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp)
                             )
                         }
                     }
@@ -524,27 +517,38 @@ private fun MoviesDetailScreen(
     }
 
     pendingRemove?.let { row ->
-        AlertDialog(
-            onDismissRequest = { pendingRemove = null },
-            title = { Text("Remove downloaded file?") },
-            text = {
-                Text(
-                    "\"${row.unitTitle}\" is deleted from this device. You can download it " +
-                        "again while ${media?.title ?: "this title"}'s provider is available."
+        AllFunSheet(
+            title = "Remove downloaded file?",
+            onDismiss = { pendingRemove = null }
+        ) {
+            Text(
+                text = "\"${row.unitTitle}\" is deleted from this device. You can download it " +
+                    "again while ${media?.title ?: "this title"}'s provider is available.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = AllFun.colors.textSecondary
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                AllFunButton(
+                    text = "Cancel",
+                    onClick = { pendingRemove = null },
+                    variant = AllFunButtonVariant.SECONDARY,
+                    modifier = Modifier.weight(1f)
                 )
-            },
-            confirmButton = {
-                TextButton(
+                AllFunButton(
+                    text = "Remove",
                     onClick = {
                         vm.removeDownload(row.key)
                         pendingRemove = null
-                    }
-                ) { Text("Remove", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingRemove = null }) { Text("Cancel") }
+                    },
+                    modifier = Modifier.weight(1f)
+                )
             }
-        )
+        }
     }
 }
 
@@ -552,155 +556,96 @@ private fun MoviesDetailScreen(
 private fun DetailHero(media: MediaEntity, category: ContentCategory) {
     val accent = category.accent()
     val format = formatLabel(media, category)
-    val background = MaterialTheme.colorScheme.background
-    Box(
+    val radii = LocalAllFunRadii.current
+    val coverShape = RoundedCornerShape(radii.cover)
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 300.dp)
-            .background(
-                Brush.verticalGradient(
-                    listOf(accent.copy(alpha = 0.30f), Color.Transparent)
-                )
-            )
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.Top
     ) {
-        if (!media.backdropUrl.isNullOrBlank()) {
+        Box(
+            modifier = Modifier
+                .width(104.dp)
+                .height(156.dp)
+                .clip(coverShape)
+                .background(AllFun.colors.surface2)
+                .border(1.dp, AllFun.colors.hairline, coverShape)
+        ) {
             CoverImage(
-                url = media.backdropUrl,
+                url = media.coverUrl,
                 title = media.title,
                 modifier = Modifier.fillMaxSize()
             )
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            0f to Color.Black.copy(alpha = 0.42f),
-                            0.32f to Color.Black.copy(alpha = 0.16f),
-                            0.68f to background.copy(alpha = 0.78f),
-                            1f to background
-                        )
-                    )
-            )
-        } else {
-            // No backdrop: a soft accent bloom still gives the header depth instead of a
-            // flat band of colour.
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(260.dp)
-                    .background(
-                        Brush.radialGradient(
-                            listOf(accent.copy(alpha = 0.26f), Color.Transparent)
-                        )
-                    )
-            )
         }
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 16.dp, end = 16.dp, top = 96.dp, bottom = 18.dp),
-            verticalAlignment = Alignment.Bottom
-        ) {
-            Box(
-                modifier = Modifier
-                    .width(118.dp)
-                    .height(177.dp)
-                    .shadow(20.dp, RoundedCornerShape(14.dp))
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .border(
-                        width = 1.dp,
-                        color = Color.White.copy(alpha = 0.16f),
-                        shape = RoundedCornerShape(14.dp)
-                    )
-            ) {
-                CoverImage(
-                    url = media.coverUrl,
-                    title = media.title,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = media.title,
+                style = MaterialTheme.typography.headlineMedium,
+                color = AllFun.colors.textPrimary,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = listOf(format, countLabel(media.totalUnits, media.unitLabel))
+                    .joinToString(" \u00B7 "),
+                style = AllFunType.mono,
+                color = accent,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            val meta = listOfNotNull(
+                media.year?.toString(),
+                media.status?.takeIf { it.isNotBlank() }
+            ).joinToString(" \u00B7 ")
+            if (meta.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
                 Text(
-                    text = media.title,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 3,
+                    text = meta,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AllFun.colors.textSecondary,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+            }
+            val creator = when (category) {
+                ContentCategory.BOOKS -> media.author?.let { "By $it" }
+                ContentCategory.MANGA -> listOfNotNull(
+                    media.author?.let { "By $it" },
+                    media.artist?.let { "Art by $it" }
+                ).joinToString(" \u00B7 ").takeIf { it.isNotBlank() }
+                ContentCategory.MOVIES -> media.author?.takeIf { it.isNotBlank() }
+            }
+            if (!creator.isNullOrBlank()) {
+                Text(
+                    text = creator,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AllFun.colors.textSecondary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (media.genreList.isNotEmpty()) {
                 Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(accent.copy(alpha = 0.20f))
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
-                    ) {
-                        Text(
-                            text = format,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = accent
-                        )
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = countLabel(media.totalUnits, media.unitLabel),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                val meta = listOfNotNull(
-                    media.year?.toString(),
-                    media.status?.takeIf { it.isNotBlank() }
-                ).joinToString(" · ")
-                if (meta.isNotBlank()) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = meta,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                val creator = when (category) {
-                    ContentCategory.BOOKS -> media.author?.let { "By $it" }
-                    ContentCategory.MANGA -> listOfNotNull(
-                        media.author?.let { "By $it" },
-                        media.artist?.let { "Art by $it" }
-                    ).joinToString(" · ").takeIf { it.isNotBlank() }
-                    ContentCategory.MOVIES -> media.author?.takeIf { it.isNotBlank() }
-                }
-                if (!creator.isNullOrBlank()) {
-                    Text(
-                        text = creator,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                if (media.genreList.isNotEmpty()) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = media.genreList.joinToString(" · "),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                if (category == ContentCategory.MOVIES && media.castList.isNotEmpty()) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = "Cast: " + media.castList.joinToString(", "),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+                Text(
+                    text = media.genreList.joinToString(" \u00B7 "),
+                    style = AllFunType.mono,
+                    color = AllFun.colors.textTertiary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (category == ContentCategory.MOVIES && media.castList.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "Cast: " + media.castList.joinToString(", "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AllFun.colors.textTertiary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
@@ -732,25 +677,33 @@ private fun SourceSection(
         }
     )
     if (state.loading || state.switching) {
-        LinearProgressIndicator(Modifier.fillMaxWidth())
+        LinearProgressIndicator(
+            Modifier.fillMaxWidth(),
+            color = AllFun.colors.accent,
+            trackColor = AllFun.colors.hairline
+        )
     }
     state.error?.let { error ->
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
+                .padding(horizontal = 20.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = error,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                color = AllFun.colors.danger,
                 modifier = Modifier.weight(1f)
             )
-            TextButton(onClick = onRetry) { Text("Retry") }
+            AllFunButton(
+                text = "Retry",
+                onClick = onRetry,
+                variant = AllFunButtonVariant.TEXT
+            )
         }
     }
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+    Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
         state.options.forEachIndexed { index, option ->
             SourceOptionRow(
                 option = option,
@@ -762,9 +715,11 @@ private fun SourceSection(
             )
         }
         if (state.options.isEmpty() && !state.loading) {
-            OutlinedButton(onClick = onRetry) {
-                Text(if (streamMode) "Find stream addons" else "Find sources")
-            }
+            AllFunButton(
+                text = if (streamMode) "Find stream add-ons" else "Find sources",
+                onClick = onRetry,
+                variant = AllFunButtonVariant.SECONDARY
+            )
         }
     }
 }
@@ -778,82 +733,86 @@ internal fun SourceOptionRow(
     onUse: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val surfaceColor by animateColorAsState(
-        targetValue = if (option.isPrimary || option.isPreferred) {
-            category.accent().copy(alpha = 0.10f)
-        } else {
-            MaterialTheme.colorScheme.surfaceContainer
-        },
+    val radii = LocalAllFunRadii.current
+    val shape = RoundedCornerShape(radii.group)
+    val marked = option.isPrimary || option.isPreferred
+    val markColor by animateColorAsState(
+        targetValue = if (marked) category.accent() else AllFun.colors.hairline,
         animationSpec = tween(Motion.MEDIUM, easing = Motion.EaseOut),
         label = "sourceRowColor"
     )
-    Surface(
-        color = surfaceColor,
-        shape = MaterialTheme.shapes.medium,
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 3.dp)
+            .padding(vertical = 2.dp)
+            .clip(shape)
+            .background(if (marked) AllFun.colors.surface2 else AllFun.colors.bg)
+            .border(1.dp, AllFun.colors.hairline, shape)
             .then(
                 if (option.available && enabled) Modifier.clickable(onClick = onUse)
                 else Modifier
             )
+            .padding(start = 0.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = option.sourceName,
-                        style = MaterialTheme.typography.titleSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (option.isPreferred) {
-                        Spacer(Modifier.width(6.dp))
-                        Icon(
-                            Icons.Outlined.Star,
-                            contentDescription = if (streamProviders) {
-                                "Preferred stream addon"
-                            } else {
-                                "Preferred source"
-                            },
-                            tint = MaterialTheme.colorScheme.tertiary,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                }
-                val detail = option.statusLabel
-                    ?: option.message
-                    ?: if (option.available) "Available" else "Unavailable"
+        // A 2 dp rule marks the primary or preferred source; no tinted card.
+        Box(
+            Modifier
+                .width(2.dp)
+                .height(44.dp)
+                .background(markColor)
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = detail,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (option.available) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    } else {
-                        MaterialTheme.colorScheme.error
-                    },
-                    maxLines = 2,
+                    text = option.sourceName,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = AllFun.colors.textPrimary,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (option.isPreferred) {
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        Icons.Outlined.Star,
+                        contentDescription = if (streamProviders) {
+                            "Preferred stream add-on"
+                        } else {
+                            "Preferred source"
+                        },
+                        tint = AllFun.colors.accent,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
             }
-            TextButton(
-                onClick = onUse,
-                enabled = option.available && enabled
-            ) {
-                Text(
-                    when {
-                        streamProviders && option.isPreferred -> "Selected"
-                        streamProviders -> "Use"
-                        option.isPrimary -> "Current"
-                        option.available -> "Use"
-                        else -> "Unavailable"
-                    }
-                )
-            }
+            val detail = option.statusLabel
+                ?: option.message
+                ?: if (option.available) "Available" else "Unavailable"
+            Text(
+                text = detail,
+                style = AllFunType.mono,
+                color = if (option.available) {
+                    AllFun.colors.textSecondary
+                } else {
+                    AllFun.colors.danger
+                },
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
         }
+        AllFunButton(
+            text = when {
+                streamProviders && option.isPreferred -> "Selected"
+                streamProviders -> "Use"
+                option.isPrimary -> "Current"
+                option.available -> "Use"
+                else -> "Unavailable"
+            },
+            onClick = onUse,
+            variant = AllFunButtonVariant.TEXT,
+            enabled = option.available && enabled
+        )
     }
 }
 
@@ -881,51 +840,31 @@ private fun EpisodeRow(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(start = 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+            .padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            modifier = Modifier.size(40.dp),
-            contentAlignment = Alignment.Center
+            modifier = Modifier.width(32.dp),
+            contentAlignment = Alignment.CenterStart
         ) {
-            if (fraction > 0f) {
-                CircularProgressIndicator(
-                    progress = { fraction },
-                    modifier = Modifier.fillMaxSize(),
-                    color = kind.accentColor(),
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                    strokeWidth = 2.dp
+            if (episode.number <= 0.0) {
+                // Providers that only expose titles leave the numeric index unset. A
+                // topic icon reads better than the placeholder number "-1".
+                Icon(
+                    imageVector = if (kind.isVideo) Icons.Filled.PlayArrow
+                    else Icons.AutoMirrored.Outlined.MenuBook,
+                    contentDescription = null,
+                    tint = if (fraction > 0f) kind.accentColor()
+                    else AllFun.colors.textTertiary,
+                    modifier = Modifier.size(18.dp)
                 )
-            }
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (fraction > 0f) kind.accentColor().copy(alpha = 0.22f)
-                        else MaterialTheme.colorScheme.surfaceVariant
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                if (episode.number <= 0.0) {
-                    // Providers that only expose titles leave the numeric index unset. A
-                    // topic icon reads better than the placeholder number "-1".
-                    Icon(
-                        imageVector = if (kind.isVideo) Icons.Filled.PlayArrow
-                        else Icons.AutoMirrored.Outlined.MenuBook,
-                        contentDescription = null,
-                        tint = if (fraction > 0f) kind.accentColor()
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
-                    )
-                } else {
-                    Text(
-                        text = formatNumber(episode.number),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (fraction > 0f) kind.accentColor()
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+            } else {
+                Text(
+                    text = formatNumber(episode.number),
+                    style = AllFunType.mono,
+                    color = if (fraction > 0f) kind.accentColor()
+                    else AllFun.colors.textTertiary
+                )
             }
         }
         Spacer(Modifier.width(12.dp))
@@ -933,12 +872,13 @@ private fun EpisodeRow(
             Text(
                 text = episode.title,
                 style = MaterialTheme.typography.bodyLarge,
+                color = AllFun.colors.textPrimary,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
             val subtitle = when (status) {
                 DownloadStatus.COMPLETED ->
-                    "Downloaded · ${formatBytes(download?.totalBytes ?: 0L)}"
+                    "Downloaded \u00B7 ${formatBytes(download?.totalBytes ?: 0L)}"
                 DownloadStatus.RUNNING ->
                     if ((download?.progress ?: -1) >= 0) {
                         "Downloading ${download?.progress}%"
@@ -957,25 +897,35 @@ private fun EpisodeRow(
                 }
             }
             if (subtitle.isNotBlank()) {
+                Spacer(Modifier.height(2.dp))
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = AllFunType.mono,
                     color = when (status) {
-                        DownloadStatus.FAILED -> MaterialTheme.colorScheme.error
-                        DownloadStatus.COMPLETED -> MaterialTheme.colorScheme.secondary
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        DownloadStatus.FAILED -> AllFun.colors.danger
+                        DownloadStatus.COMPLETED -> AllFun.colors.success
+                        else -> AllFun.colors.textTertiary
                     },
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-        }
-        if (fraction > 0f) {
-            Icon(
-                imageVector = Icons.Outlined.PlayCircle,
-                contentDescription = "Continue",
-                tint = kind.accentColor()
-            )
+            if (fraction > 0f) {
+                Spacer(Modifier.height(6.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth(0.5f)
+                        .height(2.dp)
+                        .background(AllFun.colors.hairline)
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth(fraction)
+                            .height(2.dp)
+                            .background(kind.accentColor())
+                    )
+                }
+            }
         }
         if (canDownload) {
             when (status) {
@@ -983,7 +933,7 @@ private fun EpisodeRow(
                     Icon(
                         Icons.Outlined.DownloadDone,
                         contentDescription = "Remove downloaded ${episode.title}",
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = AllFun.colors.success
                     )
                 }
                 DownloadStatus.RUNNING, DownloadStatus.QUEUED, DownloadStatus.WAITING ->
@@ -995,13 +945,15 @@ private fun EpisodeRow(
                                         .coerceIn(0f, 1f)
                                 },
                                 modifier = Modifier.size(22.dp),
-                                strokeWidth = 2.dp
+                                strokeWidth = 2.dp,
+                                color = AllFun.colors.accent,
+                                trackColor = AllFun.colors.hairline
                             )
                             Icon(
                                 Icons.Outlined.Close,
                                 contentDescription = "Cancel download of ${episode.title}",
                                 modifier = Modifier.size(11.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = AllFun.colors.textSecondary
                             )
                         }
                     }
@@ -1009,14 +961,14 @@ private fun EpisodeRow(
                     Icon(
                         Icons.Outlined.Download,
                         contentDescription = "Retry download of ${episode.title}",
-                        tint = MaterialTheme.colorScheme.error
+                        tint = AllFun.colors.danger
                     )
                 }
                 DownloadStatus.CANCELED, null -> IconButton(onClick = onDownload) {
                     Icon(
                         Icons.Outlined.Download,
                         contentDescription = "Download ${episode.title}",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = AllFun.colors.textTertiary
                     )
                 }
             }

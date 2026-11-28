@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -71,10 +72,19 @@ import app.allfun.data.AppContainer
 import app.allfun.data.db.DownloadEntity
 import app.allfun.data.db.DownloadStatus
 import app.allfun.data.download.QueueOrder
+import app.allfun.ui.components.AllFunButton
+import app.allfun.ui.components.AllFunButtonVariant
+import app.allfun.ui.components.AllFunSheet
 import app.allfun.ui.components.AnimatedProgress
+import app.allfun.ui.components.AppTopBar
+import app.allfun.ui.components.EmptyIllustration
 import app.allfun.ui.components.EmptyState
+import app.allfun.ui.components.Overline
+import app.allfun.ui.components.TopBarAction
 import app.allfun.ui.components.rememberViewModel
 import app.allfun.ui.components.staggeredReveal
+import app.allfun.ui.theme.AllFun
+import app.allfun.ui.theme.AllFunType
 import app.allfun.ui.formatBytes
 import java.text.DateFormat
 import java.util.Date
@@ -122,54 +132,57 @@ fun DownloadsScreen(
         snackbarHost = { SnackbarHost(snackbar) },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Download queue")
-                        if (state.activeCount > 0) {
-                            Spacer(Modifier.width(8.dp))
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.primary
-                            ) {
-                                Text(
-                                    text = "${state.activeCount}",
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onPrimary
-                                )
-                            }
+            Column(Modifier.statusBarsPadding()) {
+                AppTopBar(
+                    title = "Downloads",
+                    meta = when {
+                        state.activeCount > 0 -> "${state.activeCount} downloading"
+                        state.rows.isEmpty() -> "Nothing queued"
+                        else -> "${state.rows.size} in the queue"
+                    },
+                    onBack = onBack,
+                    actions = {
+                        if (state.canToggleQueue) {
+                            TopBarAction(
+                                icon = if (state.paused) Icons.Outlined.PlayArrow
+                                else Icons.Outlined.Pause,
+                                contentDescription = if (state.paused) {
+                                    "Resume downloads"
+                                } else {
+                                    "Pause downloads"
+                                },
+                                onClick = vm::toggleQueue
+                            )
                         }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    if (state.rows.isNotEmpty()) {
-                        Box {
-                            IconButton(onClick = { sortOpen = true }) {
-                                Icon(Icons.Outlined.Sort, contentDescription = "Order the queue")
-                            }
-                            DropdownMenu(expanded = sortOpen, onDismissRequest = { sortOpen = false }) {
-                                QueueOrder.entries.forEach { option ->
-                                    DropdownMenuItem(
-                                        text = { Text(option.label) },
-                                        onClick = {
-                                            vm.sortQueue(option)
-                                            sortOpen = false
-                                        }
-                                    )
+                        if (state.rows.isNotEmpty()) {
+                            Box {
+                                TopBarAction(
+                                    icon = Icons.Outlined.Sort,
+                                    contentDescription = "Order the queue",
+                                    onClick = { sortOpen = true }
+                                )
+                                DropdownMenu(
+                                    expanded = sortOpen,
+                                    onDismissRequest = { sortOpen = false }
+                                ) {
+                                    QueueOrder.entries.forEach { option ->
+                                        DropdownMenuItem(
+                                            text = { Text(option.label) },
+                                            onClick = {
+                                                vm.sortQueue(option)
+                                                sortOpen = false
+                                            }
+                                        )
+                                    }
                                 }
                             }
-                        }
-                        Box {
-                            IconButton(onClick = { menuOpen = true }) {
-                                Icon(Icons.Outlined.MoreVert, contentDescription = "Queue options")
-                            }
-                            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            Box {
+                                TopBarAction(
+                                    icon = Icons.Outlined.MoreVert,
+                                    contentDescription = "Queue options",
+                                    onClick = { menuOpen = true }
+                                )
+                                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                                 DropdownMenuItem(
                                     text = { Text("Cancel all") },
                                     enabled = state.activeCount > 0,
@@ -216,23 +229,6 @@ fun DownloadsScreen(
                         }
                     }
                 }
-            )
-        },
-        floatingActionButton = {
-            if (state.canToggleQueue) {
-                ExtendedFloatingActionButton(
-                    onClick = vm::toggleQueue,
-                    icon = {
-                        Icon(
-                            imageVector = if (state.paused) {
-                                Icons.Outlined.PlayArrow
-                            } else {
-                                Icons.Outlined.Pause
-                            },
-                            contentDescription = null
-                        )
-                    },
-                    text = { Text(if (state.paused) "Resume" else "Pause") }
                 )
             }
         }
@@ -248,9 +244,9 @@ fun DownloadsScreen(
                     EmptyState(
                         icon = Icons.Outlined.Download,
                         title = "Nothing queued",
-                        message = "Open a manga chapter, a novel chapter or a film and tap " +
-                            "Download. Progress and failures are shown here with what really " +
-                            "happened."
+                        message = "Open a chapter, a book or a film and choose Download. " +
+                            "Progress and failures are shown here with what really happened.",
+                        illustration = EmptyIllustration.CARDS
                     )
                 }
             }
@@ -305,7 +301,7 @@ fun DownloadsScreen(
                     Text(
                         text = "${formatBytes(state.completedBytes)} stored on this device",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = AllFun.colors.textSecondary,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp)
                     )
                 }
@@ -314,153 +310,159 @@ fun DownloadsScreen(
     }
 
     if (showConcurrency) {
-        AlertDialog(
-            onDismissRequest = { showConcurrency = false },
-            title = { Text("Downloads at the same time") },
-            text = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = { vm.setConcurrent(state.concurrent - 1) },
-                        enabled = state.concurrent > 1
-                    ) { Icon(Icons.Outlined.Remove, contentDescription = "Fewer downloads") }
-                    Text(
-                        text = "${state.concurrent}",
-                        style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.padding(horizontal = 20.dp)
-                    )
-                    IconButton(
-                        onClick = { vm.setConcurrent(state.concurrent + 1) },
-                        enabled = state.concurrent < 4
-                    ) { Icon(Icons.Outlined.Add, contentDescription = "More downloads") }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showConcurrency = false }) { Text("Done") }
+        AllFunSheet(
+            title = "Downloads at the same time",
+            onDismiss = { showConcurrency = false }
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { vm.setConcurrent(state.concurrent - 1) },
+                    enabled = state.concurrent > 1
+                ) { Icon(Icons.Outlined.Remove, contentDescription = "Fewer downloads") }
+                Text(
+                    text = "${state.concurrent}",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = AllFun.colors.textPrimary,
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
+                IconButton(
+                    onClick = { vm.setConcurrent(state.concurrent + 1) },
+                    enabled = state.concurrent < 4
+                ) { Icon(Icons.Outlined.Add, contentDescription = "More downloads") }
             }
-        )
+            Text(
+                text = "Between 1 and 4 files download at once.",
+                style = MaterialTheme.typography.bodySmall,
+                color = AllFun.colors.textSecondary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp)
+            )
+            AllFunButton(
+                text = "Done",
+                onClick = { showConcurrency = false },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 20.dp)
+            )
+        }
     }
 
     pendingCancel?.let { row ->
-        AlertDialog(
-            onDismissRequest = { pendingCancel = null },
-            title = { Text("Cancel this download?") },
-            text = {
-                Text(
-                    "\"${row.unitTitle}\" stops downloading and its partial files are deleted."
-                )
+        ConfirmSheet(
+            title = "Cancel this download?",
+            body = "\"${row.unitTitle}\" stops downloading and its partial files are deleted.",
+            confirmLabel = "Cancel download",
+            dismissLabel = "Keep it",
+            onConfirm = {
+                vm.cancel(row.key)
+                pendingCancel = null
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        vm.cancel(row.key)
-                        pendingCancel = null
-                    }
-                ) { Text("Cancel download", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingCancel = null }) { Text("Keep it") }
-            }
+            onDismiss = { pendingCancel = null }
         )
     }
 
     pendingCancelGroup?.let { group ->
-        AlertDialog(
-            onDismissRequest = { pendingCancelGroup = null },
-            title = { Text("Cancel this title's queue?") },
-            text = {
-                Text(
-                    "Every active part of \"${group.title}\" stops and its partial files are " +
-                        "deleted. Completed parts stay on this device."
-                )
+        ConfirmSheet(
+            title = "Cancel this title's queue?",
+            body = "Every active part of \"${group.title}\" stops and its partial files are " +
+                "deleted. Completed parts stay on this device.",
+            confirmLabel = "Cancel ${group.active.size}",
+            dismissLabel = "Keep them",
+            onConfirm = {
+                vm.cancelAll(group.rows)
+                pendingCancelGroup = null
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        vm.cancelAll(group.rows)
-                        pendingCancelGroup = null
-                    }
-                ) { Text("Cancel ${group.active.size}", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingCancelGroup = null }) { Text("Keep them") }
-            }
+            onDismiss = { pendingCancelGroup = null }
         )
     }
 
     pendingRemove?.let { row ->
-        AlertDialog(
-            onDismissRequest = { pendingRemove = null },
-            title = { Text("Delete downloaded files?") },
-            text = {
-                Text(
-                    "\"${row.unitTitle}\" (${formatBytes(row.totalBytes)}) is removed from this " +
-                        "device. The title stays in your library."
-                )
+        ConfirmSheet(
+            title = "Delete downloaded files?",
+            body = "\"${row.unitTitle}\" (${formatBytes(row.totalBytes)}) is removed from this " +
+                "device. The title stays in your library.",
+            confirmLabel = "Delete",
+            dismissLabel = "Keep",
+            onConfirm = {
+                vm.remove(row.key)
+                pendingRemove = null
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        vm.remove(row.key)
-                        pendingRemove = null
-                    }
-                ) { Text("Delete", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingRemove = null }) { Text("Keep") }
-            }
+            onDismiss = { pendingRemove = null }
         )
     }
 
     if (confirmClearQueue) {
-        AlertDialog(
-            onDismissRequest = { confirmClearQueue = false },
-            title = { Text("Cancel the whole queue?") },
-            text = {
-                Text(
-                    "Every unfinished download stops and its partial files are deleted. " +
-                        "Completed downloads stay on this device."
-                )
+        ConfirmSheet(
+            title = "Cancel the whole queue?",
+            body = "Every unfinished download stops and its partial files are deleted. " +
+                "Completed downloads stay on this device.",
+            confirmLabel = "Cancel all",
+            dismissLabel = "Keep them",
+            onConfirm = {
+                vm.clearQueue()
+                confirmClearQueue = false
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        vm.clearQueue()
-                        confirmClearQueue = false
-                    }
-                ) { Text("Cancel all", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmClearQueue = false }) { Text("Keep them") }
-            }
+            onDismiss = { confirmClearQueue = false }
         )
     }
 
     if (confirmClear) {
-        AlertDialog(
-            onDismissRequest = { confirmClear = false },
-            title = { Text("Clear finished downloads?") },
-            text = {
-                Text(
-                    "Completed files are deleted from this device, and failed or cancelled " +
-                        "entries disappear. Titles stay in your library."
-                )
+        ConfirmSheet(
+            title = "Clear finished downloads?",
+            body = "Completed files are deleted from this device, and failed or cancelled " +
+                "entries disappear. Titles stay in your library.",
+            confirmLabel = "Clear",
+            dismissLabel = "Cancel",
+            onConfirm = {
+                vm.clearFinished()
+                confirmClear = false
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        vm.clearFinished()
-                        confirmClear = false
-                    }
-                ) { Text("Clear", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmClear = false }) { Text("Cancel") }
-            }
+            onDismiss = { confirmClear = false }
         )
+    }
+}
+
+/** Destructive confirmations share one sheet shape, so they never look like alerts. */
+@Composable
+private fun ConfirmSheet(
+    title: String,
+    body: String,
+    confirmLabel: String,
+    dismissLabel: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AllFunSheet(title = title, onDismiss = onDismiss) {
+        Text(
+            text = body,
+            style = MaterialTheme.typography.bodyLarge,
+            color = AllFun.colors.textSecondary
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            AllFunButton(
+                text = dismissLabel,
+                onClick = onDismiss,
+                variant = AllFunButtonVariant.SECONDARY,
+                modifier = Modifier.weight(1f)
+            )
+            AllFunButton(
+                text = confirmLabel,
+                onClick = onConfirm,
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }
 
@@ -480,41 +482,29 @@ private fun GroupHeader(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
+            .background(AllFun.colors.bg)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 12.dp, end = 4.dp, top = 10.dp),
+                .padding(start = 20.dp, end = 8.dp, top = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Outlined.DragHandle,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(Modifier.width(10.dp))
             Text(
                 text = group.title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleMedium,
+                color = AllFun.colors.textPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
             Spacer(Modifier.width(8.dp))
-            Surface(
-                shape = RoundedCornerShape(50),
-                color = MaterialTheme.colorScheme.surfaceVariant
-            ) {
-                Text(
-                    text = "${group.rows.size}",
-                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(
+                text = "${group.rows.size}",
+                style = AllFunType.mono,
+                color = AllFun.colors.textTertiary,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
             Box {
                 IconButton(onClick = { menu = true }, modifier = Modifier.size(40.dp)) {
                     Icon(
@@ -583,11 +573,11 @@ private fun GroupHeader(
         }
         Text(
             text = groupSummary(group),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = AllFunType.mono,
+            color = AllFun.colors.textSecondary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 40.dp, end = 16.dp, bottom = 8.dp)
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 8.dp)
         )
         val progress = group.progress
         if (progress != null && group.active.isNotEmpty()) {
@@ -598,7 +588,7 @@ private fun GroupHeader(
             )
             Spacer(Modifier.height(6.dp))
         } else {
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            HorizontalDivider(color = AllFun.colors.hairline.copy(alpha = 0.5f))
         }
     }
 }
@@ -615,68 +605,32 @@ private fun DownloadSummary(
     paused: Boolean,
     concurrent: Int
 ) {
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 8.dp)
     ) {
-        Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "QUEUE",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = when {
-                        paused -> "Paused"
-                        active == 0 -> "Idle"
+        Overline("Queue")
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = buildList {
+                add(
+                    when {
+                        paused -> "paused"
+                        active == 0 -> "idle"
                         active == 1 -> "1 downloading"
                         else -> "$active downloading"
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (paused) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.onSurfaceVariant
+                    }
                 )
-                Text(
-                    text = " · $concurrent at a time",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                SummaryStat("Active", active, MaterialTheme.colorScheme.primary)
-                SummaryStat("Saved", saved, MaterialTheme.colorScheme.secondary)
-                SummaryStat(
-                    "Failed",
-                    failed,
-                    if (failed > 0) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SummaryStat(label: String, value: Int, tint: Color) {
-    Column {
-        Text(
-            text = value.toString(),
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = tint
+                add("$saved saved")
+                if (failed > 0) add("$failed failed")
+                add("$concurrent at a time")
+            }.joinToString(" · "),
+            style = AllFunType.mono,
+            color = if (failed > 0) AllFun.colors.danger else AllFun.colors.textSecondary
         )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider(thickness = 1.dp, color = AllFun.colors.hairline)
     }
 }
 
@@ -707,7 +661,7 @@ private fun DownloadRow(
                 modifier = Modifier
                     .size(32.dp)
                     .clip(RoundedCornerShape(9.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                    .background(AllFun.colors.surface2),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -720,9 +674,9 @@ private fun DownloadRow(
                     },
                     contentDescription = null,
                     tint = when (row.status) {
-                        DownloadStatus.COMPLETED -> MaterialTheme.colorScheme.secondary
-                        DownloadStatus.FAILED -> MaterialTheme.colorScheme.error
-                        else -> MaterialTheme.colorScheme.primary
+                        DownloadStatus.COMPLETED -> AllFun.colors.accent
+                        DownloadStatus.FAILED -> AllFun.colors.danger
+                        else -> AllFun.colors.accent
                     },
                     modifier = Modifier.size(18.dp)
                 )
@@ -740,9 +694,9 @@ private fun DownloadRow(
                     text = statusText(row),
                     style = MaterialTheme.typography.labelSmall,
                     color = if (row.status == DownloadStatus.FAILED) {
-                        MaterialTheme.colorScheme.error
+                        AllFun.colors.danger
                     } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
+                        AllFun.colors.textSecondary
                     },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -752,7 +706,7 @@ private fun DownloadRow(
                 Text(
                     text = "${row.progress}%",
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    color = AllFun.colors.accent
                 )
             }
             Box {
@@ -856,7 +810,7 @@ private fun DownloadRow(
                                     } else {
                                         "Remove from queue"
                                     },
-                                    color = MaterialTheme.colorScheme.error
+                                    color = AllFun.colors.danger
                                 )
                             },
                             onClick = {
@@ -882,8 +836,8 @@ private fun DownloadRow(
                         .fillMaxWidth()
                         .height(2.dp)
                         .padding(start = 44.dp, end = 44.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    color = AllFun.colors.accent,
+                    trackColor = AllFun.colors.surface2
                 )
             }
         }

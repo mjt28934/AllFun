@@ -1,48 +1,36 @@
 package app.allfun.ui.library
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.outlined.CollectionsBookmark
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.outlined.SortByAlpha
 import androidx.compose.material.icons.outlined.Update
 import androidx.compose.material.icons.outlined.ViewAgenda
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -50,23 +38,27 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.allfun.data.AppContainer
 import app.allfun.data.settings.LibrarySort
 import app.allfun.data.settings.LibraryView
+import app.allfun.ui.components.AllFunButton
+import app.allfun.ui.components.AllFunButtonVariant
+import app.allfun.ui.components.AllFunChip
+import app.allfun.ui.components.AllFunSheet
+import app.allfun.ui.components.AppTopBar
+import app.allfun.ui.components.EmptyIllustration
 import app.allfun.ui.components.EmptyState
 import app.allfun.ui.components.MediaCard
 import app.allfun.ui.components.MediaListRow
+import app.allfun.ui.components.SearchField
+import app.allfun.ui.components.TopBarAction
 import app.allfun.ui.components.rememberViewModel
 import app.allfun.ui.components.staggeredReveal
 import app.allfun.ui.formatBytes
+import app.allfun.ui.theme.AllFun
 import app.allfun.ui.theme.LocalReduceMotion
 import java.text.DateFormat
 import java.util.Date
@@ -88,152 +80,101 @@ fun LibraryScreen(
             .fillMaxSize()
             .statusBarsPadding()
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 20.dp, end = 8.dp, top = 16.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(46.dp)
-                    .clip(RoundedCornerShape(15.dp))
-                    .background(
-                        Brush.linearGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.26f),
-                                MaterialTheme.colorScheme.tertiary.copy(alpha = 0.14f)
-                            )
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.CollectionsBookmark,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(23.dp)
-                )
-            }
-            Spacer(Modifier.width(13.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = "Library",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = buildString {
-                        append("${state.all.size} ")
-                        append(if (state.all.size == 1) "title" else "titles")
-                        if (state.items.size != state.all.size) {
-                            append(" · ${state.items.size} shown")
-                        }
-                        append(" · ${state.sort.label}")
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
-                )
-            }
-            IconButton(
-                onClick = {
-                    vm.setView(
-                        if (state.view == LibraryView.GRID) LibraryView.LIST else LibraryView.GRID
-                    )
+        AppTopBar(
+            title = "Library",
+            meta = buildString {
+                append("${state.all.size} ")
+                append(if (state.all.size == 1) "title" else "titles")
+                if (state.items.size != state.all.size) {
+                    append(" · ${state.items.size} shown")
                 }
-            ) {
-                Icon(
-                    imageVector = if (state.view == LibraryView.GRID) Icons.Outlined.ViewAgenda
+                append(" · ${state.sort.label}")
+            },
+            actions = {
+                TopBarAction(
+                    icon = if (state.view == LibraryView.GRID) Icons.Outlined.ViewAgenda
                     else Icons.Outlined.GridView,
                     contentDescription = if (state.view == LibraryView.GRID) {
                         "Switch to list layout"
                     } else {
                         "Switch to grid layout"
-                    }
-                )
-            }
-            Box {
-                IconButton(onClick = { sortMenu = true }) {
-                    Icon(
-                        Icons.AutoMirrored.Outlined.Sort,
-                        contentDescription = "Sort library, ${state.sort.label}"
-                    )
-                }
-                DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
-                    LibrarySort.entries.forEach { option ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = option.label,
-                                    color = if (option == state.sort) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurface
-                                    }
-                                )
-                            },
-                            onClick = {
-                                sortMenu = false
-                                vm.setSort(option)
-                            },
-                            leadingIcon = {
-                                // Each order gets its own glyph so the menu is readable
-                                // without reading the whole list; the selected row is the
-                                // only one tinted with the accent.
-                                Icon(
-                                    imageVector = when (option) {
-                                        LibrarySort.RECENTLY_UPDATED -> Icons.Outlined.Update
-                                        LibrarySort.RECENTLY_ADDED -> Icons.Outlined.NewReleases
-                                        LibrarySort.RECENTLY_OPENED -> Icons.Outlined.History
-                                        LibrarySort.TITLE -> Icons.Outlined.SortByAlpha
-                                        LibrarySort.AUTHOR -> Icons.Outlined.Person
-                                    },
-                                    contentDescription = null,
-                                    tint = if (option == state.sort) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    }
-                                )
-                            }
+                    },
+                    onClick = {
+                        vm.setView(
+                            if (state.view == LibraryView.GRID) LibraryView.LIST
+                            else LibraryView.GRID
                         )
                     }
-                }
-            }
-        }
-
-        OutlinedTextField(
-            value = state.query,
-            onValueChange = vm::setQuery,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            placeholder = { Text("Search title, author or genre") },
-            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-            trailingIcon = {
-                if (state.query.isNotEmpty()) {
-                    IconButton(onClick = { vm.setQuery("") }) {
-                        Icon(Icons.Outlined.Close, contentDescription = "Clear search")
+                )
+                Box {
+                    TopBarAction(
+                        icon = Icons.AutoMirrored.Outlined.Sort,
+                        contentDescription = "Sort library, ${state.sort.label}",
+                        onClick = { sortMenu = true }
+                    )
+                    DropdownMenu(
+                        expanded = sortMenu,
+                        onDismissRequest = { sortMenu = false }
+                    ) {
+                        LibrarySort.entries.forEach { option ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = option.label,
+                                        color = if (option == state.sort) {
+                                            AllFun.colors.accent
+                                        } else {
+                                            AllFun.colors.textPrimary
+                                        }
+                                    )
+                                },
+                                onClick = {
+                                    sortMenu = false
+                                    vm.setSort(option)
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = when (option) {
+                                            LibrarySort.RECENTLY_UPDATED -> Icons.Outlined.Update
+                                            LibrarySort.RECENTLY_ADDED -> Icons.Outlined.NewReleases
+                                            LibrarySort.RECENTLY_OPENED -> Icons.Outlined.History
+                                            LibrarySort.TITLE -> Icons.Outlined.SortByAlpha
+                                            LibrarySort.AUTHOR -> Icons.Outlined.Person
+                                        },
+                                        contentDescription = null,
+                                        tint = if (option == state.sort) {
+                                            AllFun.colors.accent
+                                        } else {
+                                            AllFun.colors.textSecondary
+                                        }
+                                    )
+                                }
+                            )
+                        }
                     }
                 }
-            },
-            singleLine = true,
-            shape = CircleShape
+            }
+        )
+
+        SearchField(
+            value = state.query,
+            onValueChange = vm::setQuery,
+            placeholder = "Search title, author or genre",
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
         )
 
         // Content groups: everything, films/series, books and manga. Extensions, providers
         // and downloads never become their own tab.
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(LibraryFilter.entries) { option ->
                 val count = state.counts[option] ?: 0
-                FilterChip(
+                AllFunChip(
+                    label = if (count > 0) "${option.label} · $count" else option.label,
                     selected = state.filter == option,
-                    onClick = { vm.setFilter(option) },
-                    label = { Text(if (count > 0) "${option.label} · $count" else option.label) }
+                    onClick = { vm.setFilter(option) }
                 )
             }
         }
@@ -243,27 +184,27 @@ fun LibraryScreen(
                 EmptyState(
                     icon = Icons.Outlined.CollectionsBookmark,
                     title = when {
-                        state.all.isEmpty() -> "Nothing here yet"
+                        state.all.isEmpty() -> "Your shelf is empty"
                         state.query.isNotBlank() -> "No matches"
                         else -> "No ${state.filter.label.lowercase()} yet"
                     },
                     message = when {
                         state.all.isEmpty() ->
-                            "Titles you save, read or download land on this shelf. Install an " +
-                                "extension to start browsing."
+                            "Saved and downloaded titles appear here."
                         state.query.isNotBlank() ->
-                            "Nothing matches \"${state.query}\". Try a shorter search."
+                            "Nothing here matches \u201C${state.query}\u201D. Try a shorter word."
                         else -> "Try another category, or add something new."
                     },
-                    actionLabel = "Browse sources",
-                    onAction = onBrowse
+                    actionLabel = "Add a source",
+                    onAction = onBrowse,
+                    illustration = EmptyIllustration.SHELF
                 )
             } else if (state.view == LibraryView.GRID) {
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(state.grid.minWidth.dp),
-                    contentPadding = PaddingValues(16.dp),
+                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 24.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(18.dp)
+                    verticalArrangement = Arrangement.spacedBy(24.dp)
                 ) {
                     itemsIndexed(state.items, key = { _, row -> row.media.id }) { index, row ->
                         MediaCard(
@@ -305,27 +246,38 @@ fun LibraryScreen(
     if (pendingRemove != null) {
         val id = pendingRemove!!
         val title = state.all.firstOrNull { it.media.id == id }?.media?.title.orEmpty()
-        AlertDialog(
-            onDismissRequest = { pendingRemove = null },
-            title = { Text("Remove downloaded files?") },
-            text = {
-                Text(
-                    "The offline files for \"$title\" are deleted. The title stays in your " +
-                        "library and can be opened again while its provider is available."
+        AllFunSheet(
+            title = "Remove downloaded files?",
+            onDismiss = { pendingRemove = null }
+        ) {
+            Text(
+                text = "The offline files for \"$title\" are deleted. The title stays in your " +
+                    "library and can be opened again while its provider is available.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = AllFun.colors.textSecondary
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                AllFunButton(
+                    text = "Cancel",
+                    onClick = { pendingRemove = null },
+                    variant = AllFunButtonVariant.SECONDARY,
+                    modifier = Modifier.weight(1f)
                 )
-            },
-            confirmButton = {
-                TextButton(
+                AllFunButton(
+                    text = "Remove",
                     onClick = {
                         vm.removeDownloads(id)
                         pendingRemove = null
-                    }
-                ) { Text("Remove", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingRemove = null }) { Text("Cancel") }
+                    },
+                    modifier = Modifier.weight(1f)
+                )
             }
-        )
+        }
     }
 }
 

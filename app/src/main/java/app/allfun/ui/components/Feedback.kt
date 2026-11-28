@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import app.allfun.ui.theme.AllFun
 import app.allfun.ui.theme.LocalReduceMotion
 import app.allfun.ui.theme.Motion
 import kotlinx.coroutines.delay
@@ -92,7 +93,7 @@ fun Modifier.focusOutline(shape: Shape = MaterialTheme.shapes.medium): Modifier 
         .onFocusChanged { focused = it.isFocused }
         .then(
             if (focused) {
-                Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape)
+                Modifier.border(2.dp, AllFun.colors.accent, shape)
             } else {
                 Modifier
             }
@@ -129,8 +130,8 @@ fun ContentReveal(
 /** Shared shimmer brush; a flat tone instead of movement when motion is reduced. */
 @Composable
 fun rememberShimmerBrush(): Brush {
-    val base = MaterialTheme.colorScheme.surfaceContainerHigh
-    val highlight = MaterialTheme.colorScheme.surfaceContainerHighest
+    val base = AllFun.colors.surface2
+    val highlight = AllFun.colors.surface3
     if (LocalReduceMotion.current) {
         return Brush.linearGradient(listOf(base, base))
     }
@@ -242,9 +243,9 @@ fun StatusPill(
         maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
         modifier = modifier
-            .clip(RoundedCornerShape(50))
-            .background(tint.copy(alpha = 0.14f))
-            .padding(horizontal = 8.dp, vertical = 3.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .border(1.dp, tint.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+            .padding(horizontal = 6.dp, vertical = 2.dp)
     )
 }
 

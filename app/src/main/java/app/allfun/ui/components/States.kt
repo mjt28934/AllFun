@@ -37,6 +37,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.allfun.data.net.UserError
+import app.allfun.ui.theme.AllFun
 
 /**
  * Friendly failure surface. The sentence is readable; the exception text lives behind
@@ -62,7 +63,7 @@ fun ErrorState(
         Icon(
             imageVector = Icons.Outlined.CloudOff,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.error,
+            tint = AllFun.colors.danger,
             modifier = Modifier
                 .size(40.dp)
                 .padding(bottom = 4.dp)
@@ -76,7 +77,7 @@ fun ErrorState(
         Text(
             text = error.message,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = AllFun.colors.textSecondary,
             textAlign = TextAlign.Center,
             modifier = Modifier.semantics {
                 liveRegion = LiveRegionMode.Polite
@@ -86,30 +87,34 @@ fun ErrorState(
             Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (onRetry != null) {
-                    Button(
+                    AllFunButton(
+                        text = retryLabel,
                         onClick = onRetry,
-                        modifier = Modifier.heightIn(min = 48.dp)
-                    ) { Text(retryLabel) }
+                        variant = AllFunButtonVariant.PRIMARY
+                    )
                 }
                 if (secondary != null) {
-                    OutlinedButton(
+                    AllFunButton(
+                        text = secondary.first,
                         onClick = secondary.second,
-                        modifier = Modifier.heightIn(min = 48.dp)
-                    ) { Text(secondary.first) }
+                        variant = AllFunButtonVariant.SECONDARY
+                    )
                 }
             }
         }
         val technical = error.technical
         if (!technical.isNullOrBlank()) {
             Spacer(Modifier.height(6.dp))
-            TextButton(onClick = { showTechnical = !showTechnical }) {
-                Text(if (showTechnical) "Hide technical details" else "Technical details")
-            }
+            AllFunButton(
+                text = if (showTechnical) "Hide technical details" else "Technical details",
+                onClick = { showTechnical = !showTechnical },
+                variant = AllFunButtonVariant.TEXT
+            )
             if (showTechnical) {
                 Text(
                     text = technical,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = AllFun.colors.textSecondary,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 4.dp),
@@ -133,7 +138,7 @@ fun LoadingState(label: String = "Loading", modifier: Modifier = Modifier) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = AllFun.colors.textSecondary
         )
     }
 }
@@ -145,8 +150,8 @@ fun NoticeCard(
     modifier: Modifier = Modifier,
     critical: Boolean = false
 ) {
-    val tint = if (critical) MaterialTheme.colorScheme.error
-    else MaterialTheme.colorScheme.secondary
+    val tint = if (critical) AllFun.colors.danger
+    else AllFun.colors.accent
     Surface(
         color = tint.copy(alpha = 0.09f),
         shape = MaterialTheme.shapes.medium,
@@ -170,7 +175,7 @@ fun NoticeCard(
             Text(
                 text = text,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = AllFun.colors.textSecondary,
                 modifier = Modifier.weight(1f)
             )
         }

@@ -9,12 +9,15 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -57,6 +60,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -75,10 +79,37 @@ import app.allfun.data.AppContainer
 import app.allfun.data.net.UserError
 import app.allfun.data.settings.NovelTheme
 import app.allfun.data.settings.Settings
+import app.allfun.ui.components.AllFunChip
+import app.allfun.ui.components.AllFunSheet
 import app.allfun.ui.components.ChapterPickerDialog
+import app.allfun.ui.components.Overline
 import app.allfun.ui.components.rememberViewModel
+import app.allfun.ui.theme.AllFun
+import app.allfun.ui.theme.AllFunType
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+
+/** Chrome derived from the reader palette, so the bars belong to the page they frame. */
+private data class NovelChrome(
+    val bg: Color,
+    val text: Color,
+    val secondary: Color,
+    val hairline: Color,
+    val accent: Color
+)
+
+private fun novelChrome(theme: NovelTheme): NovelChrome {
+    val palette = paletteFor(theme)
+    val text = Color(android.graphics.Color.parseColor(palette.text))
+    val background = Color(android.graphics.Color.parseColor(palette.background))
+    return NovelChrome(
+        bg = background.copy(alpha = 0.96f),
+        text = text,
+        secondary = text.copy(alpha = 0.68f),
+        hairline = text.copy(alpha = 0.14f),
+        accent = Color(android.graphics.Color.parseColor(palette.link))
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -209,18 +240,19 @@ fun NovelReaderScreen(
         }
 
         // Thin reading progress bar at the very bottom edge.
+        val chromeColors = novelChrome(state.theme)
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .height(2.dp)
-                .background(Color.White.copy(alpha = 0.12f))
+                .background(chromeColors.hairline)
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
                     .fillMaxWidth(fraction = state.fraction.coerceIn(0f, 1f))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                    .background(chromeColors.accent)
             )
         }
 
@@ -233,6 +265,7 @@ fun NovelReaderScreen(
             NovelTopBar(
                 title = state.title,
                 chapterTitle = state.chapter?.title.orEmpty(),
+                theme = state.theme,
                 onBack = onBack,
                 onOpenSettings = { showSettings = true },
                 onOpenChapters = { showChapters = true }
@@ -245,38 +278,51 @@ fun NovelReaderScreen(
             exit = slideOutVertically { it } + fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
-            Surface(color = Color(0xE60B0B10), contentColor = Color.White) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                ) {
+            Surface(color = chromeColors.bg, contentColor = chromeColors.text) {
+                Column(Modifier.fillMaxWidth()) {
+                    HorizontalDivider(thickness = 1.dp, color = chromeColors.hairline)
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(
                             onClick = vm::previousChapter,
                             enabled = state.index > 0
-                        ) { Icon(Icons.Outlined.ChevronLeft, contentDescription = "Previous chapter") }
+                        ) {
+                            Icon(
+                                Icons.Outlined.ChevronLeft,
+                                contentDescription = "Previous chapter",
+                                tint = if (state.index > 0) chromeColors.text
+                                else chromeColors.secondary
+                            )
+                        }
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 text = "Chapter ${state.index + 1} of ${state.chapters.size}",
                                 style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Medium
+                                color = chromeColors.text
                             )
                             Text(
                                 text = "${(state.fraction.coerceIn(0f, 1f) * 100).roundToInt()}% read",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color.White.copy(alpha = 0.65f)
+                                color = chromeColors.secondary
                             )
                         }
                         IconButton(
                             onClick = vm::nextChapter,
                             enabled = state.index < state.chapters.lastIndex
-                        ) { Icon(Icons.Outlined.ChevronRight, contentDescription = "Next chapter") }
+                        ) {
+                            Icon(
+                                Icons.Outlined.ChevronRight,
+                                contentDescription = "Next chapter",
+                                tint = if (state.index < state.chapters.lastIndex) chromeColors.text
+                                else chromeColors.secondary
+                            )
+                        }
                     }
                 }
             }
@@ -285,14 +331,23 @@ fun NovelReaderScreen(
         // The WebView shows its own "Loading chapter…" page, so no separate spinner.
 
         if (state.error != null) {
+            val errorChrome = novelChrome(state.theme)
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    shape = MaterialTheme.shapes.large,
-                    modifier = Modifier.padding(24.dp)
+                Column(
+                    modifier = Modifier
+                        .padding(24.dp)
+                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                        .background(errorChrome.bg)
+                        .border(
+                            1.dp,
+                            errorChrome.hairline,
+                            androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                        )
+                        .padding(24.dp)
                 ) {
                     ChapterError(
                         error = state.error ?: UserError("Could not load this chapter", null),
+                        chrome = errorChrome,
                         onBack = onBack,
                         onRetry = { vm.openChapter(state.index, state.fraction) }
                     )
@@ -335,53 +390,67 @@ fun NovelReaderScreen(
 private fun NovelTopBar(
     title: String,
     chapterTitle: String,
+    theme: NovelTheme,
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenChapters: () -> Unit
 ) {
-    Surface(color = Color(0xE60B0B10), contentColor = Color.White) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = 4.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (chapterTitle.isNotBlank()) {
+    val chromeColors = novelChrome(theme)
+    Surface(color = chromeColors.bg, contentColor = chromeColors.text) {
+        Column(Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(start = 4.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Outlined.ArrowBack,
+                        contentDescription = "Back",
+                        tint = chromeColors.text
+                    )
+                }
+                Column(Modifier.weight(1f)) {
                     Text(
-                        text = chapterTitle,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.7f),
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = chromeColors.text,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    if (chapterTitle.isNotBlank()) {
+                        Text(
+                            text = chapterTitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = chromeColors.secondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                IconButton(onClick = onOpenSettings) {
+                    Icon(
+                        Icons.Outlined.Settings,
+                        contentDescription = "Reader settings",
+                        tint = chromeColors.text
+                    )
+                }
+                IconButton(onClick = onOpenChapters) {
+                    Icon(
+                        Icons.AutoMirrored.Outlined.FormatListBulleted,
+                        contentDescription = "Choose chapter",
+                        tint = chromeColors.text
+                    )
                 }
             }
-            IconButton(onClick = onOpenSettings) {
-                Icon(Icons.Outlined.Settings, contentDescription = "Reader settings")
-            }
-            IconButton(onClick = onOpenChapters) {
-                Icon(
-                    Icons.AutoMirrored.Outlined.FormatListBulleted,
-                    contentDescription = "Choose chapter"
-                )
-            }
+            HorizontalDivider(thickness = 1.dp, color = chromeColors.hairline)
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun NovelReaderSettingsSheet(
     theme: NovelTheme,
@@ -392,160 +461,170 @@ private fun NovelReaderSettingsSheet(
     onSetLineSpacing: (Float) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var fontValue by remember(theme, fontSize) { mutableStateOf(fontSize.toFloat()) }
     var spacingValue by remember(theme, lineSpacing) { mutableStateOf(lineSpacing) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(Modifier.padding(bottom = 24.dp)) {
-            Row(
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Outlined.Settings, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(10.dp))
-                Text("Reader settings", style = MaterialTheme.typography.titleMedium)
+    AllFunSheet(title = "Reader settings", onDismiss = onDismiss) {
+        Overline("Theme")
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(top = 8.dp, bottom = 20.dp)
+        ) {
+            NovelTheme.entries.forEach { option ->
+                AllFunChip(
+                    label = option.label,
+                    selected = theme == option,
+                    onClick = { onSetTheme(option) }
+                )
             }
-            HorizontalDivider()
-
-            NovelSettingsGroup("Theme") {
-                NovelTheme.entries.forEach { option ->
-                    NovelChoice(
-                        label = option.label,
-                        selected = theme == option,
-                        onClick = { onSetTheme(option) }
-                    )
-                }
-            }
-            HorizontalDivider(Modifier.padding(horizontal = 24.dp))
-
-            NovelSettingsGroup("Text size") {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Slider(
-                        value = fontValue,
-                        onValueChange = {
-                            fontValue = it
-                            onSetFontSize(it.roundToInt())
-                        },
-                        valueRange = 70f..180f,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        text = "${fontValue.roundToInt()}%",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.width(48.dp)
-                    )
-                }
-            }
-            HorizontalDivider(Modifier.padding(horizontal = 24.dp))
-
-            NovelSettingsGroup("Line spacing") {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Slider(
-                        value = spacingValue,
-                        onValueChange = {
-                            spacingValue = it
-                            onSetLineSpacing(it)
-                        },
-                        valueRange = 1.2f..2.4f,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        text = "${(spacingValue * 10).roundToInt() / 10f}×",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.width(48.dp)
-                    )
-                }
-            }
+        }
+        Overline("Text size")
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Slider(
+                value = fontValue,
+                onValueChange = {
+                    fontValue = it
+                    onSetFontSize(it.roundToInt())
+                },
+                valueRange = 70f..180f,
+                colors = androidx.compose.material3.SliderDefaults.colors(
+                    thumbColor = AllFun.colors.accent,
+                    activeTrackColor = AllFun.colors.accent,
+                    inactiveTrackColor = AllFun.colors.hairline
+                ),
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = "${fontValue.roundToInt()}%",
+                style = AllFunType.mono,
+                color = AllFun.colors.textSecondary,
+                modifier = Modifier.width(48.dp)
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        Overline("Line spacing")
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Slider(
+                value = spacingValue,
+                onValueChange = {
+                    spacingValue = it
+                    onSetLineSpacing(it)
+                },
+                valueRange = 1.2f..2.4f,
+                colors = androidx.compose.material3.SliderDefaults.colors(
+                    thumbColor = AllFun.colors.accent,
+                    activeTrackColor = AllFun.colors.accent,
+                    inactiveTrackColor = AllFun.colors.hairline
+                ),
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = "${(spacingValue * 10).roundToInt() / 10f}\u00D7",
+                style = AllFunType.mono,
+                color = AllFun.colors.textSecondary,
+                modifier = Modifier.width(48.dp)
+            )
         }
     }
 }
 
 @Composable
-private fun ColumnScope.NovelSettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.padding(vertical = 6.dp)) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
-        )
-        content()
-    }
-}
-
-@Composable
-private fun NovelChoice(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit
+private fun ChapterError(
+    error: UserError,
+    chrome: NovelChrome,
+    onBack: () -> Unit,
+    onRetry: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 24.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (selected) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
-        )
-    }
-}
-
-@Composable
-private fun ChapterError(error: UserError, onBack: () -> Unit, onRetry: () -> Unit) {
     var showTechnical by remember { mutableStateOf(false) }
     Column(
-        modifier = Modifier.padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
             text = "Could not load this chapter",
-            style = MaterialTheme.typography.titleMedium
+            style = MaterialTheme.typography.headlineSmall,
+            color = chrome.text
         )
         Spacer(Modifier.height(8.dp))
         Text(
             text = error.message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            style = MaterialTheme.typography.bodyLarge,
+            color = chrome.secondary
         )
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = onBack) { Text("Back") }
-            OutlinedButton(onClick = onRetry) { Text("Retry") }
+            NovelReaderButton(text = "Back", chrome = chrome, primary = false, onClick = onBack)
+            NovelReaderButton(text = "Retry", chrome = chrome, primary = true, onClick = onRetry)
         }
         val technical = error.technical
         if (!technical.isNullOrBlank()) {
-            TextButton(onClick = { showTechnical = !showTechnical }) {
-                Text(if (showTechnical) "Hide technical details" else "Technical details")
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .height(44.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                    .clickable(
+                        role = androidx.compose.ui.semantics.Role.Button,
+                        onClick = { showTechnical = !showTechnical }
+                    )
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (showTechnical) "Hide technical details" else "Technical details",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = chrome.secondary
+                )
             }
             if (showTechnical) {
                 Text(
                     text = technical,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = chrome.secondary
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun NovelReaderButton(
+    text: String,
+    chrome: NovelChrome,
+    primary: Boolean,
+    onClick: () -> Unit
+) {
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
+    Box(
+        modifier = Modifier
+            .height(44.dp)
+            .clip(shape)
+            .then(
+                if (primary) Modifier.background(chrome.accent)
+                else Modifier.border(1.dp, chrome.hairline, shape)
+            )
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (primary) chrome.bg else chrome.text,
+            maxLines = 1
+        )
     }
 }
 

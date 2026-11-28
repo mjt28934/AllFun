@@ -1,4 +1,4 @@
-package app.allfun.ui
+﻿package app.allfun.ui
 
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -47,6 +48,7 @@ import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.CollectionsBookmark
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -59,6 +61,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -90,7 +93,9 @@ import app.allfun.ui.reader.MangaReaderScreen
 import app.allfun.ui.reader.NovelReaderScreen
 import app.allfun.ui.search.GlobalSearchScreen
 import app.allfun.ui.settings.SettingsScreen
+import app.allfun.ui.theme.AllFun
 import app.allfun.ui.theme.AllFunTheme
+import app.allfun.ui.theme.AllFunType
 import app.allfun.ui.theme.LocalReduceMotion
 import app.allfun.ui.theme.Motion
 import app.allfun.ui.update.UpdatesScreen
@@ -160,106 +165,48 @@ private val tabs = listOf(
 private val tabRoutes = tabs.map { it.route }.toSet()
 
 /**
- * The app's own bottom bar: a floating, softly bordered surface with one tinted pill that
- * glides to the selected destination. It is built here instead of Material's NavigationBar
- * so the indicator can actually travel, and so the bar reads as a piece of the content
- * rather than a system chrome strip.
+ * The bottom bar is the app's one piece of permanent chrome: a full-width surface1 strip
+ * with a top hairline, five equal items and a 2x24 accent rule over the selected one.
+ * It grows with the text scale instead of clipping the labels.
  */
 @Composable
 private fun AllFunBottomBar(currentRoute: String?, onSelect: (Tab) -> Unit) {
-    val reduceMotion = LocalReduceMotion.current
-    val selectedIndex = tabs.indexOfFirst { it.route == currentRoute }.coerceAtLeast(0)
-    Box(
+    val colors = AllFun.colors
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
-            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .background(colors.surface1)
     ) {
-        Surface(
-            shape = RoundedCornerShape(26.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.97f),
-            border = BorderStroke(
-                1.dp,
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
-            ),
-            shadowElevation = 12.dp
+        HorizontalDivider(thickness = 1.dp, color = colors.hairline)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .heightIn(min = 64.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            BoxWithConstraints(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-            ) {
-                val itemWidth = maxWidth / tabs.size
-                val indicatorWidth = itemWidth - 10.dp
-                val target = itemWidth * selectedIndex + 5.dp
-                val offset by animateDpAsState(
-                    targetValue = target,
-                    animationSpec = if (reduceMotion) snap() else Motion.settle(),
-                    label = "tabPill"
+            tabs.forEach { tab ->
+                BottomBarItem(
+                    tab = tab,
+                    selected = tab.route == currentRoute,
+                    onClick = { onSelect(tab) }
                 )
-                // The indicator covers the icon and label together, so the selected tab
-                // reads as one object instead of a circle floating above text.
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .offset(x = offset)
-                        .width(indicatorWidth)
-                        .height(50.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
-                                    MaterialTheme.colorScheme.tertiary.copy(alpha = 0.10f)
-                                )
-                            )
-                        )
-                )
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    tabs.forEach { tab ->
-                        TabItem(
-                            tab = tab,
-                            selected = tab.route == currentRoute,
-                            onClick = { onSelect(tab) }
-                        )
-                    }
-                }
             }
         }
     }
 }
 
 @Composable
-private fun RowScope.TabItem(
+private fun RowScope.BottomBarItem(
     tab: Tab,
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val reduceMotion = LocalReduceMotion.current
+    val colors = AllFun.colors
     val haptic = LocalHapticFeedback.current
-    val tint by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.primary
-        else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = if (reduceMotion) snap() else tween(Motion.FAST),
-        label = "tabTint"
-    )
-    val scale by animateFloatAsState(
-        targetValue = if (selected && !reduceMotion) 1.08f else 1f,
-        animationSpec = if (reduceMotion) snap() else Motion.bounce(),
-        label = "tabScale"
-    )
-    val labelAlpha by animateFloatAsState(
-        targetValue = if (selected) 1f else 0.74f,
-        animationSpec = if (reduceMotion) snap() else tween(Motion.MEDIUM),
-        label = "tabLabelAlpha"
-    )
-    // Tabs show no ripple/hover rectangle: the moving pill is the only selection
-    // feedback, so no grey box flashes under a finger or the mouse.
+    // No ripple rectangle: the accent rule and the filled icon are the selection state.
     val interaction = remember { MutableInteractionSource() }
-    Column(
+    Box(
         modifier = Modifier
             .weight(1f)
             .fillMaxHeight()
@@ -274,32 +221,37 @@ private fun RowScope.TabItem(
                     }
                     onClick()
                 }
-            ),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            )
+            .padding(horizontal = 4.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = if (selected) tab.selectedIcon else tab.icon,
-            contentDescription = null,
-            tint = tint,
+        Box(
             modifier = Modifier
-                .size(22.dp)
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                }
+                .align(Alignment.TopCenter)
+                .width(24.dp)
+                .height(2.dp)
+                .background(if (selected) colors.accent else Color.Transparent)
         )
-        Spacer(Modifier.height(3.dp))
-        Text(
-            text = tab.label,
-            style = MaterialTheme.typography.labelSmall,
-            fontSize = 10.sp,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-            color = tint,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.graphicsLayer { alpha = labelAlpha }
-        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(vertical = 8.dp)
+        ) {
+            Icon(
+                imageVector = if (selected) tab.selectedIcon else tab.icon,
+                contentDescription = null,
+                tint = if (selected) colors.textPrimary else colors.textSecondary,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = tab.label,
+                style = AllFunType.navLabel,
+                color = if (selected) colors.textPrimary else colors.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 2.dp)
+            )
+        }
     }
 }
 

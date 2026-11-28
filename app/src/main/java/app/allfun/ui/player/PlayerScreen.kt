@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -83,9 +85,14 @@ import app.allfun.data.AppContainer
 import app.allfun.data.model.StreamInfo
 import app.allfun.data.settings.Settings
 import app.allfun.data.torrent.TorrentDataSourceFactory
+import app.allfun.ui.components.AllFunButton
+import app.allfun.ui.components.AllFunButtonVariant
 import app.allfun.ui.components.rememberViewModel
+import app.allfun.ui.theme.AllFun
+import app.allfun.ui.theme.AllFunType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
@@ -272,53 +279,59 @@ fun PlayerScreen(
             exit = fadeOut(tween(180)),
             modifier = Modifier.align(Alignment.TopCenter)
         ) {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color.Black.copy(alpha = 0.85f), Color.Transparent)
-                        )
-                    )
+                    .background(AllFun.colors.bg.copy(alpha = 0.95f))
                     .statusBarsPadding()
-                    .padding(horizontal = 4.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Color.White
-                    )
-                }
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = state.title,
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = state.subtitle,
-                        color = Color.White.copy(alpha = 0.7f),
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                if (state.episodeCount > 1) {
-                    IconButton(
-                        onClick = vm::nextEpisode,
-                        enabled = state.episodeIndex < state.episodeCount - 1
-                    ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 4.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onBack) {
                         Icon(
-                            Icons.Outlined.SkipNext,
-                            contentDescription = "Next episode",
-                            tint = Color.White
+                            Icons.AutoMirrored.Outlined.ArrowBack,
+                            contentDescription = "Back",
+                            tint = AllFun.colors.textPrimary
                         )
                     }
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = state.title,
+                            color = AllFun.colors.textPrimary,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = state.subtitle,
+                            color = AllFun.colors.textSecondary,
+                            style = AllFunType.mono,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    if (state.episodeCount > 1) {
+                        IconButton(
+                            onClick = vm::nextEpisode,
+                            enabled = state.episodeIndex < state.episodeCount - 1
+                        ) {
+                            Icon(
+                                Icons.Outlined.SkipNext,
+                                contentDescription = "Next episode",
+                                tint = if (state.episodeIndex < state.episodeCount - 1) {
+                                    AllFun.colors.textPrimary
+                                } else {
+                                    AllFun.colors.textTertiary
+                                }
+                            )
+                        }
+                    }
                 }
+                HorizontalDivider(thickness = 1.dp, color = AllFun.colors.hairline)
             }
         }
 
@@ -337,25 +350,17 @@ fun PlayerScreen(
                     label = "$seekSeconds s",
                     onClick = { seekBy(-seekSeconds * 1000L) }
                 )
-                FilledIconButton(
+                RoundControl(
+                    icon = if (isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
+                    contentDescription = if (isPlaying) "Pause" else "Play",
+                    filled = true,
+                    size = 64.dp,
                     onClick = {
                         player?.let { exo ->
                             if (exo.isPlaying) exo.pause() else exo.play()
                         }
-                    },
-                    modifier = Modifier.size(66.dp),
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = Color.White,
-                        contentColor = Color.Black
-                    )
-                ) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Outlined.Pause
-                        else Icons.Outlined.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause" else "Play",
-                        modifier = Modifier.size(36.dp)
-                    )
-                }
+                    }
+                )
                 SeekControl(
                     icon = Icons.Outlined.FastForward,
                     label = "$seekSeconds s",
@@ -373,84 +378,67 @@ fun PlayerScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f))
-                        )
-                    )
+                    .background(AllFun.colors.bg.copy(alpha = 0.95f))
                     .navigationBarsPadding()
-                    .padding(horizontal = 18.dp, vertical = 8.dp)
             ) {
-                val shownMs = if (scrubbing) (scrubFraction * durationMs).toLong() else positionMs
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = formatPlaybackTime(shownMs),
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                    Spacer(Modifier.weight(1f))
-                    Text(
-                        text = formatPlaybackTime(durationMs),
-                        color = Color.White.copy(alpha = 0.6f),
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                }
-                Slider(
-                    value = if (durationMs > 0) {
-                        (if (scrubbing) scrubFraction else positionMs.toFloat() / durationMs)
-                            .coerceIn(0f, 1f)
-                    } else {
-                        0f
-                    },
-                    onValueChange = {
-                        scrubbing = true
-                        scrubFraction = it
-                    },
-                    onValueChangeFinished = {
-                        if (durationMs > 0) {
-                            player?.seekTo((scrubFraction * durationMs).toLong())
-                            positionMs = (scrubFraction * durationMs).toLong()
-                        }
-                        scrubbing = false
-                    },
-                    enabled = durationMs > 0,
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color.White,
-                        activeTrackColor = Color.White,
-                        inactiveTrackColor = Color.White.copy(alpha = 0.25f)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Spacer(Modifier.weight(1f))
-                    if (state.streams.size > 1) {
-                        TextButton(onClick = vm::chooseAnotherStream) {
-                            Icon(
-                                Icons.Outlined.FormatListBulleted,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                text = "Sources (${state.streams.size})",
-                                color = Color.White
-                            )
-                        }
+                HorizontalDivider(thickness = 1.dp, color = AllFun.colors.hairline)
+                Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                    val shownMs = if (scrubbing) (scrubFraction * durationMs).toLong() else positionMs
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = formatPlaybackTime(shownMs),
+                            color = AllFun.colors.textPrimary,
+                            style = AllFunType.mono
+                        )
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            text = formatPlaybackTime(durationMs),
+                            color = AllFun.colors.textTertiary,
+                            style = AllFunType.mono
+                        )
                     }
-                    if (state.episodeCount > 1) {
-                        TextButton(
-                            onClick = vm::nextEpisode,
-                            enabled = state.episodeIndex < state.episodeCount - 1
-                        ) {
-                            Icon(
-                                Icons.Outlined.SkipNext,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
+                    Slider(
+                        value = if (durationMs > 0) {
+                            (if (scrubbing) scrubFraction else positionMs.toFloat() / durationMs)
+                                .coerceIn(0f, 1f)
+                        } else {
+                            0f
+                        },
+                        onValueChange = {
+                            scrubbing = true
+                            scrubFraction = it
+                        },
+                        onValueChangeFinished = {
+                            if (durationMs > 0) {
+                                player?.seekTo((scrubFraction * durationMs).toLong())
+                                positionMs = (scrubFraction * durationMs).toLong()
+                            }
+                            scrubbing = false
+                        },
+                        enabled = durationMs > 0,
+                        colors = SliderDefaults.colors(
+                            thumbColor = AllFun.colors.accent,
+                            activeTrackColor = AllFun.colors.accent,
+                            inactiveTrackColor = AllFun.colors.hairline
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Spacer(Modifier.weight(1f))
+                        if (state.streams.size > 1) {
+                            ChromeTextAction(
+                                text = "Sources (${state.streams.size})",
+                                icon = Icons.Outlined.FormatListBulleted,
+                                onClick = vm::chooseAnotherStream
                             )
-                            Spacer(Modifier.width(6.dp))
-                            Text("Next episode", color = Color.White)
+                        }
+                        if (state.episodeCount > 1) {
+                            ChromeTextAction(
+                                text = "Next episode",
+                                icon = Icons.Outlined.SkipNext,
+                                enabled = state.episodeIndex < state.episodeCount - 1,
+                                onClick = vm::nextEpisode
+                            )
                         }
                     }
                 }
@@ -464,20 +452,20 @@ fun PlayerScreen(
                     .padding(horizontal = 40.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                CircularProgressIndicator(color = Color.White)
+                CircularProgressIndicator(color = AllFun.colors.accent)
                 val progress = state.torrentStatus
                 if (progress != null) {
                     Spacer(Modifier.padding(top = 16.dp))
                     Text(
                         text = progress,
-                        color = Color.White.copy(alpha = 0.85f),
-                        style = MaterialTheme.typography.bodyMedium
+                        color = AllFun.colors.textPrimary,
+                        style = AllFunType.mono
                     )
                     Spacer(Modifier.padding(top = 4.dp))
                     Text(
                         text = "Torrent streams start after the first pieces arrive.",
-                        color = Color.White.copy(alpha = 0.5f),
-                        style = MaterialTheme.typography.labelSmall
+                        color = AllFun.colors.textTertiary,
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
             }
@@ -494,55 +482,59 @@ fun PlayerScreen(
             ) {
                 Text(
                     text = "Cannot play this",
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleMedium
+                    color = AllFun.colors.textPrimary,
+                    style = MaterialTheme.typography.headlineSmall
                 )
                 Spacer(Modifier.padding(top = 8.dp))
                 Text(
                     text = sourceError?.message
                         ?: "The stream could not be played. The source may be offline, " +
                             "geo-blocked, or using a format this device cannot decode.",
-                    color = Color.White.copy(alpha = 0.75f),
-                    style = MaterialTheme.typography.bodyMedium
+                    color = AllFun.colors.textSecondary,
+                    style = MaterialTheme.typography.bodyLarge
                 )
                 Spacer(Modifier.padding(top = 20.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = onBack) { Text("Back") }
-                    OutlinedButton(onClick = {
-                        playbackError = null
-                        showDetails = false
-                        showTechnical = false
-                        vm.retry()
-                    }) { Text("Retry") }
+                    ChromeButton(text = "Back", primary = false, onClick = onBack)
+                    ChromeButton(
+                        text = "Retry",
+                        primary = true,
+                        onClick = {
+                            playbackError = null
+                            showDetails = false
+                            showTechnical = false
+                            vm.retry()
+                        }
+                    )
                 }
                 if (state.streams.size > 1) {
-                    TextButton(onClick = {
-                        playbackError = null
-                        showDetails = false
-                        showTechnical = false
-                        vm.chooseAnotherStream()
-                    }) {
-                        Text("Choose another stream", color = Color.White)
-                    }
+                    ChromeTextAction(
+                        text = "Choose another stream",
+                        onClick = {
+                            playbackError = null
+                            showDetails = false
+                            showTechnical = false
+                            vm.chooseAnotherStream()
+                        }
+                    )
                 }
                 val technical = listOfNotNull(sourceError?.technical, playbackError)
                     .joinToString("\n\n")
                     .takeIf { it.isNotBlank() }
                 if (technical != null) {
-                    TextButton(onClick = {
-                        showDetails = !showDetails
-                        showTechnical = showDetails
-                    }) {
-                        Text(
-                            text = if (showDetails) "Hide technical details" else "Technical details",
-                            color = Color.White.copy(alpha = 0.7f)
-                        )
-                    }
+                    ChromeTextAction(
+                        text = if (showDetails) "Hide technical details" else "Technical details",
+                        muted = true,
+                        onClick = {
+                            showDetails = !showDetails
+                            showTechnical = showDetails
+                        }
+                    )
                     if (showDetails) {
                         Text(
                             text = technical,
-                            color = Color.White.copy(alpha = 0.5f),
-                            style = MaterialTheme.typography.labelSmall
+                            color = AllFun.colors.textTertiary,
+                            style = AllFunType.mono
                         )
                     }
                 }
@@ -559,6 +551,100 @@ fun PlayerScreen(
     }
 }
 
+@Composable
+private fun RoundControl(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    filled: Boolean,
+    size: androidx.compose.ui.unit.Dp,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .then(
+                if (filled) Modifier.background(AllFun.colors.accent)
+                else Modifier.background(AllFun.colors.surface2).border(1.dp, AllFun.colors.hairline, CircleShape)
+            )
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = if (filled) AllFun.colors.onAccent else AllFun.colors.textPrimary,
+            modifier = Modifier.size(size * 0.45f)
+        )
+    }
+}
+
+@Composable
+private fun ChromeButton(text: String, primary: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(10.dp)
+    Box(
+        modifier = Modifier
+            .heightIn(min = 44.dp)
+            .clip(shape)
+            .then(
+                if (primary) Modifier.background(AllFun.colors.accent)
+                else Modifier.border(1.dp, AllFun.colors.hairline, shape)
+            )
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (primary) AllFun.colors.onAccent else AllFun.colors.textPrimary,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun ChromeTextAction(
+    text: String,
+    onClick: () -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    enabled: Boolean = true,
+    muted: Boolean = false
+) {
+    Row(
+        modifier = Modifier
+            .heightIn(min = 44.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(
+                enabled = enabled,
+                role = androidx.compose.ui.semantics.Role.Button,
+                onClick = onClick
+            )
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (!enabled) AllFun.colors.textTertiary else if (muted) AllFun.colors.textSecondary else AllFun.colors.accent,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge,
+            color = when {
+                !enabled -> AllFun.colors.textTertiary
+                muted -> AllFun.colors.textSecondary
+                else -> AllFun.colors.accent
+            },
+            maxLines = 1
+        )
+    }
+}
+
 /**
  * A round, translucent seek button with the configured skip amount under it, so the
  * player never claims "10 seconds" when Settings is set to 30.
@@ -570,25 +656,18 @@ private fun SeekControl(
     onClick: () -> Unit
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        IconButton(
-            onClick = onClick,
-            modifier = Modifier
-                .size(54.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.12f))
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = "Skip $label",
-                tint = Color.White,
-                modifier = Modifier.size(30.dp)
-            )
-        }
+        RoundControl(
+            icon = icon,
+            contentDescription = "Skip $label",
+            filled = false,
+            size = 52.dp,
+            onClick = onClick
+        )
         Spacer(Modifier.height(4.dp))
         Text(
             text = label,
-            color = Color.White.copy(alpha = 0.7f),
-            style = MaterialTheme.typography.labelSmall
+            color = AllFun.colors.textTertiary,
+            style = AllFunType.mono
         )
     }
 }
@@ -619,37 +698,40 @@ private fun StreamPicker(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.95f))
+            .background(AllFun.colors.bg.copy(alpha = 0.95f))
             .statusBarsPadding()
             .navigationBarsPadding()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 20.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.padding(top = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             IconButton(onClick = onClose) {
                 Icon(
                     Icons.AutoMirrored.Outlined.ArrowBack,
                     contentDescription = "Back",
-                    tint = Color.White
+                    tint = AllFun.colors.textPrimary
                 )
             }
             Column(Modifier.weight(1f)) {
                 Text(
                     text = "Choose a stream",
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleMedium
+                    color = AllFun.colors.textPrimary,
+                    style = MaterialTheme.typography.headlineSmall
                 )
                 Text(
                     text = "${streams.size} options from your add-ons",
-                    color = Color.White.copy(alpha = 0.6f),
-                    style = MaterialTheme.typography.labelSmall
+                    color = AllFun.colors.textSecondary,
+                    style = AllFunType.mono
                 )
             }
         }
-        Spacer(Modifier.padding(top = 4.dp))
+        Spacer(Modifier.height(8.dp))
         LazyColumn(Modifier.weight(1f)) {
             itemsIndexed(streams, key = { index, stream -> "$index:${stream.url}" }) { index, stream ->
                 StreamRow(stream = stream, onClick = { onChoose(index) })
-                HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                HorizontalDivider(color = AllFun.colors.hairline)
             }
         }
     }
@@ -661,31 +743,29 @@ private fun StreamRow(stream: StreamInfo, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 4.dp, vertical = 12.dp)
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .padding(vertical = 14.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = stream.name ?: if (torrent != null) "Torrent" else "Direct stream",
-                color = Color.White,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
+                color = AllFun.colors.textPrimary,
+                style = MaterialTheme.typography.titleMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
             Text(
                 text = if (torrent != null) "Torrent" else "Direct",
-                color = if (torrent != null) Color(0xFF9CC7FF) else Color(0xFF9BE7B0),
-                style = MaterialTheme.typography.labelSmall
+                color = if (torrent != null) Color(0xFF86A8C4) else Color(0xFF8FB573),
+                style = AllFunType.mono
             )
         }
         stream.detail?.takeIf { it.isNotBlank() }?.let { detail ->
-            Spacer(Modifier.padding(top = 2.dp))
+            Spacer(Modifier.height(2.dp))
             Text(
                 text = detail.replace('\n', ' ').trim(),
-                color = Color.White.copy(alpha = 0.65f),
+                color = AllFun.colors.textSecondary,
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
@@ -694,13 +774,13 @@ private fun StreamRow(stream: StreamInfo, onClick: () -> Unit) {
         val meta = buildList {
             stream.addonName?.takeIf { it.isNotBlank() }?.let(::add)
             torrent?.seeds?.takeIf { it > 0 }?.let { add("$it seeds") }
-        }.joinToString(" · ")
+        }.joinToString(" \u00B7 ")
         if (meta.isNotBlank()) {
-            Spacer(Modifier.padding(top = 2.dp))
+            Spacer(Modifier.height(2.dp))
             Text(
                 text = meta,
-                color = Color.White.copy(alpha = 0.45f),
-                style = MaterialTheme.typography.labelSmall,
+                color = AllFun.colors.textTertiary,
+                style = AllFunType.mono,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )

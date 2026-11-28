@@ -20,10 +20,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -67,7 +69,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -95,6 +96,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -111,12 +113,20 @@ import app.allfun.data.db.ProgressEntity
 import app.allfun.data.content.category
 import app.allfun.data.content.displayDescription
 import app.allfun.data.model.MediaKind
+import app.allfun.ui.components.AllFunButton
+import app.allfun.ui.components.AllFunButtonVariant
+import app.allfun.ui.components.AllFunChip
+import app.allfun.ui.components.AllFunSheet
 import app.allfun.ui.components.CoverImage
-import app.allfun.ui.components.SectionHeader
+import app.allfun.ui.components.Overline
+import app.allfun.ui.components.TopBarAction
 import app.allfun.ui.components.accent
 import app.allfun.ui.components.staggeredReveal
 import app.allfun.ui.formatDuration
 import app.allfun.ui.formatNumber
+import app.allfun.ui.theme.AllFun
+import app.allfun.ui.theme.AllFunType
+import app.allfun.ui.theme.LocalAllFunRadii
 import app.allfun.ui.theme.LocalReduceMotion
 import app.allfun.ui.theme.Motion
 
@@ -192,9 +202,9 @@ internal fun ReadingDetailScreen(
     }
     val barColor by animateColorAsState(
         targetValue = if (collapsed) {
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.97f)
+            AllFun.colors.bg.copy(alpha = 0.97f)
         } else {
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.42f)
+            AllFun.colors.bg.copy(alpha = 0.35f)
         },
         animationSpec = if (LocalReduceMotion.current) {
             androidx.compose.animation.core.snap()
@@ -206,78 +216,70 @@ internal fun ReadingDetailScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
-                    containerColor = barColor
-                ),
-                title = {
-                    AnimatedVisibility(
-                        visible = collapsed,
-                        enter = fadeIn(tween(Motion.FAST)),
-                        exit = fadeOut(tween(Motion.FAST))
+            DetailBar(
+                title = media.title,
+                collapsed = collapsed,
+                barColor = barColor,
+                onBack = onBack
+            ) {
+                Box {
+                    TopBarAction(
+                        icon = Icons.Outlined.MoreVert,
+                        contentDescription = "More actions",
+                        onClick = { showOverflow = true },
+                        tint = AllFun.colors.textPrimary
+                    )
+                    DropdownMenu(
+                        expanded = showOverflow,
+                        onDismissRequest = { showOverflow = false }
                     ) {
-                        Text(
-                            text = media.title,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                        DropdownMenuItem(
+                            text = { Text("Refresh") },
+                            leadingIcon = { Icon(Icons.Outlined.Refresh, contentDescription = null) },
+                            onClick = {
+                                showOverflow = false
+                                vm.refreshNow()
+                            }
                         )
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Outlined.ArrowBack,
-                            contentDescription = "Back"
+                        DropdownMenuItem(
+                            text = { Text("Mark all as read") },
+                            leadingIcon = { Icon(Icons.Outlined.DoneAll, contentDescription = null) },
+                            enabled = episodes.any { !it.read },
+                            onClick = {
+                                showOverflow = false
+                                vm.markAllRead()
+                            }
                         )
-                    }
-                },
-                actions = {
-                    Box {
-                        IconButton(onClick = { showOverflow = true }) {
-                            Icon(Icons.Outlined.MoreVert, contentDescription = "More actions")
-                        }
-                        DropdownMenu(
-                            expanded = showOverflow,
-                            onDismissRequest = { showOverflow = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Refresh") },
-                                leadingIcon = { Icon(Icons.Outlined.Refresh, contentDescription = null) },
-                                onClick = {
-                                    showOverflow = false
-                                    vm.refreshNow()
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Mark all as read") },
-                                leadingIcon = { Icon(Icons.Outlined.DoneAll, contentDescription = null) },
-                                enabled = episodes.any { !it.read },
-                                onClick = {
-                                    showOverflow = false
-                                    vm.markAllRead()
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Available sources") },
-                                leadingIcon = { Icon(Icons.Outlined.Public, contentDescription = null) },
-                                onClick = {
-                                    showOverflow = false
-                                    showSources = true
-                                }
-                            )
-                        }
+                        DropdownMenuItem(
+                            text = { Text("Available sources") },
+                            leadingIcon = { Icon(Icons.Outlined.Public, contentDescription = null) },
+                            onClick = {
+                                showOverflow = false
+                                showSources = true
+                            }
+                        )
                     }
                 }
-            )
+            }
         },
-        floatingActionButton = {
+        bottomBar = {
             if (resumeChapter != null && episodes.any { !it.read }) {
-                ExtendedFloatingActionButton(
-                    text = { Text(if (hasRead) "Resume" else "Start") },
-                    icon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
-                    onClick = { onOpen(mediaId, resumeChapter.id, media.kind) }
-                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(AllFun.colors.bg)
+                        .navigationBarsPadding()
+                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                ) {
+                    AllFunButton(
+                        text = if (hasRead) "Resume reading" else "Start reading",
+                        onClick = { onOpen(mediaId, resumeChapter.id, media.kind) },
+                        icon = Icons.Filled.PlayArrow,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         }
     ) { padding ->
@@ -330,7 +332,7 @@ internal fun ReadingDetailScreen(
                             else -> "No ${media.unitLabel.lowercase()}s match this filter."
                         },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = AllFun.colors.textSecondary,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
                     )
                 }
@@ -419,27 +421,35 @@ internal fun ReadingDetailScreen(
     }
 
     pendingRemove?.let { row ->
-        AlertDialog(
-            onDismissRequest = { pendingRemove = null },
-            title = { Text("Remove downloaded file?") },
-            text = {
-                Text(
-                    "\"${row.unitTitle}\" is deleted from this device. You can download it " +
-                        "again while ${media.title}'s provider is available."
+        AllFunSheet(title = "Remove download?", onDismiss = { pendingRemove = null }) {
+            Text(
+                text = "\"${row.unitTitle}\" is deleted from this device. You can download it " +
+                    "again while ${media.title}'s provider is available.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = AllFun.colors.textSecondary
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                AllFunButton(
+                    text = "Cancel",
+                    onClick = { pendingRemove = null },
+                    variant = AllFunButtonVariant.SECONDARY,
+                    modifier = Modifier.weight(1f)
                 )
-            },
-            confirmButton = {
-                TextButton(
+                AllFunButton(
+                    text = "Remove",
                     onClick = {
                         vm.removeDownload(row.key)
                         pendingRemove = null
-                    }
-                ) { Text("Remove", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingRemove = null }) { Text("Cancel") }
+                    },
+                    modifier = Modifier.weight(1f)
+                )
             }
-        )
+        }
     }
 }
 
@@ -447,127 +457,68 @@ internal fun ReadingDetailScreen(
 private fun ReadingHeader(media: MediaEntity, sourceName: String) {
     val accent = media.kind.category().accent()
     val status = media.status?.takeIf { it.isNotBlank() }
-    Box(
+    val radii = LocalAllFunRadii.current
+    val coverShape = RoundedCornerShape(radii.cover)
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 214.dp)
-            .background(
-                Brush.verticalGradient(
-                    0f to accent.copy(alpha = 0.22f),
-                    1f to Color.Transparent
-                )
-            )
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.Top
     ) {
-        if (!media.backdropUrl.isNullOrBlank()) {
+        Box(
+            modifier = Modifier
+                .width(100.dp)
+                .height(150.dp)
+                .clip(coverShape)
+                .background(AllFun.colors.surface2)
+                .border(1.dp, AllFun.colors.hairline, coverShape)
+        ) {
             CoverImage(
-                url = media.backdropUrl,
+                url = media.coverUrl,
                 title = media.title,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(214.dp)
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(214.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            0f to Color.Black.copy(alpha = 0.10f),
-                            0.55f to MaterialTheme.colorScheme.background.copy(alpha = 0.55f),
-                            1f to MaterialTheme.colorScheme.background
-                        )
-                    )
+                modifier = Modifier.fillMaxSize()
             )
         }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .width(100.dp)
-                    .height(150.dp)
-                    .clip(MaterialTheme.shapes.extraSmall)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                CoverImage(
-                    url = media.coverUrl,
-                    title = media.title,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
+            Text(
+                text = media.title,
+                style = MaterialTheme.typography.headlineMedium,
+                color = AllFun.colors.textPrimary,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = media.author?.takeIf { it.isNotBlank() } ?: "Unknown author",
+                style = MaterialTheme.typography.bodySmall,
+                color = AllFun.colors.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (!media.artist.isNullOrBlank() && media.artist != media.author) {
                 Text(
-                    text = media.title,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 3,
+                    text = "Art by ${media.artist}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AllFun.colors.textSecondary,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(Modifier.height(2.dp))
-                ReadingInfoLine(
-                    icon = Icons.Outlined.Person,
-                    text = media.author?.takeIf { it.isNotBlank() } ?: "Unknown author"
-                )
-                if (!media.artist.isNullOrBlank() && media.artist != media.author) {
-                    ReadingInfoLine(
-                        icon = Icons.Outlined.Brush,
-                        text = media.artist.orEmpty()
-                    )
-                }
-                Spacer(Modifier.height(2.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    statusIcon(status)?.let { icon ->
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                            modifier = Modifier
-                                .padding(end = 4.dp)
-                                .size(16.dp)
-                        )
-                    }
-                    Text(
-                        text = listOfNotNull(
-                            status,
-                            media.year?.toString(),
-                            sourceName.takeIf { it.isNotBlank() }
-                        ).joinToString(" · ").ifBlank { sourceName },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
             }
+            Text(
+                text = listOfNotNull(
+                    status,
+                    media.year?.toString(),
+                    sourceName.takeIf { it.isNotBlank() }
+                ).joinToString(" \u00B7 ").ifBlank { sourceName },
+                style = AllFunType.mono,
+                color = accent,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
         }
-    }
-}
-
-@Composable
-private fun ReadingInfoLine(icon: ImageVector, text: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-            modifier = Modifier
-                .padding(end = 4.dp)
-                .size(16.dp)
-        )
-        Text(
-            text = text,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
 
@@ -582,39 +533,35 @@ private fun ReadingActionRow(
     onDownloadAll: () -> Unit,
     onSources: () -> Unit
 ) {
-    val actionColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f)
+    val colors = AllFun.colors
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 12.dp, vertical = 4.dp)
     ) {
         ReadingActionButton(
-            title = if (media.inLibrary) "In library" else "Add to library",
+            title = if (media.inLibrary) "In library" else "Library",
             icon = if (media.inLibrary) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
-            color = if (media.inLibrary) MaterialTheme.colorScheme.primary else actionColor,
+            active = media.inLibrary,
             onClick = onLibrary
         )
         ReadingActionButton(
             title = if (media.favorite) "Favorited" else "Favorite",
             icon = if (media.favorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-            color = if (media.favorite) MaterialTheme.colorScheme.tertiary else actionColor,
+            active = media.favorite,
             onClick = onFavorite
         )
         ReadingActionButton(
             title = if (allDownloaded) "Downloaded" else "Download",
-            icon = when {
-                allDownloaded -> Icons.Outlined.DownloadDone
-                downloads.isNotEmpty() -> Icons.Outlined.Download
-                else -> Icons.Outlined.Download
-            },
-            color = if (downloads.isNotEmpty()) MaterialTheme.colorScheme.primary else actionColor,
+            icon = if (allDownloaded) Icons.Outlined.DownloadDone else Icons.Outlined.Download,
+            active = downloads.isNotEmpty(),
             enabled = canDownload && !allDownloaded,
             onClick = onDownloadAll
         )
         ReadingActionButton(
             title = "Sources",
             icon = Icons.Outlined.Public,
-            color = actionColor,
+            active = false,
             onClick = onSources
         )
     }
@@ -624,35 +571,39 @@ private fun ReadingActionRow(
 private fun RowScope.ReadingActionButton(
     title: String,
     icon: ImageVector,
-    color: Color,
+    active: Boolean,
     onClick: () -> Unit,
     enabled: Boolean = true
 ) {
-    TextButton(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier.weight(1f)
+    val colors = AllFun.colors
+    val tint = when {
+        !enabled -> colors.textTertiary.copy(alpha = 0.45f)
+        active -> colors.accent
+        else -> colors.textSecondary
+    }
+    Column(
+        modifier = Modifier
+            .weight(1f)
+            .heightIn(min = 56.dp)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (enabled) color else color.copy(alpha = 0.38f),
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = title,
-                color = if (enabled) color else color.copy(alpha = 0.38f),
-                fontSize = 12.sp,
-                lineHeight = 14.sp,
-                textAlign = TextAlign.Center,
-                // Two lines so "Add to library" is not clipped to "Add to libr…" in a
-                // quarter-width column, and so it still fits at large font sizes.
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelSmall,
+            color = tint,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -670,7 +621,7 @@ private fun ReadingDescription(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp, start = 16.dp, end = 16.dp)
+            .padding(top = 8.dp, start = 20.dp, end = 20.dp)
             .animateContentSize(
                 animationSpec = if (reduceMotion) {
                     androidx.compose.animation.core.snap()
@@ -682,49 +633,32 @@ private fun ReadingDescription(
         if (text != null) {
             Text(
                 text = text,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyLarge,
+                color = AllFun.colors.textPrimary,
                 maxLines = if (expanded) Int.MAX_VALUE else 6,
                 overflow = TextOverflow.Ellipsis
             )
             if (text.length > 280) {
-                TextButton(
+                AllFunButton(
+                    text = if (expanded) "Show less" else "Read more",
                     onClick = onToggle,
-                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
+                    variant = AllFunButtonVariant.TEXT,
+                    icon = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
                     modifier = Modifier.semantics {
                         stateDescription = if (expanded) "Expanded" else "Collapsed"
                     }
-                ) {
-                    Text(if (expanded) "Show less" else "Read more")
-                    Spacer(Modifier.width(4.dp))
-                    Icon(
-                        imageVector = if (expanded) Icons.Outlined.ExpandLess
-                        else Icons.Outlined.ExpandMore,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+                )
             }
         }
         if (genres.isNotEmpty()) {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+            Text(
+                text = genres.joinToString(" \u00B7 "),
+                style = AllFunType.mono,
+                color = AllFun.colors.textTertiary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 4.dp)
-            ) {
-                genres.forEach { genre ->
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh
-                    ) {
-                        Text(
-                            text = genre,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-                }
-            }
+            )
         }
     }
 }
@@ -734,22 +668,21 @@ private fun ChapterListHeader(count: Int, filtered: Boolean, onClick: () -> Unit
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = "$count ${if (count == 1) "chapter" else "chapters"}",
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onBackground
+            color = AllFun.colors.textPrimary
         )
         Icon(
             imageVector = Icons.Outlined.Tune,
             contentDescription = if (filtered) "Chapter list options, filter active"
             else "Chapter list options",
-            tint = if (filtered) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = if (filtered) AllFun.colors.accent else AllFun.colors.textSecondary,
             modifier = Modifier.size(20.dp)
         )
     }
@@ -781,12 +714,12 @@ private fun ReadingChapterRow(
         modifier = modifier
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(start = 16.dp, top = 12.dp, end = 8.dp, bottom = 12.dp),
+            .padding(start = 20.dp, top = 12.dp, end = 8.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -796,38 +729,33 @@ private fun ReadingChapterRow(
                     Icon(
                         imageVector = Icons.Filled.Circle,
                         contentDescription = "Unread",
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = AllFun.colors.accent,
                         modifier = Modifier
-                            .padding(end = 4.dp)
-                            .size(8.dp)
+                            .padding(end = 6.dp)
+                            .size(6.dp)
                     )
                 }
                 Text(
                     text = chapterLabel(chapter, kind),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(
-                        alpha = if (read) 0.5f else 1f
-                    ),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (read) AllFun.colors.textSecondary else AllFun.colors.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
             Row {
-                val subtitleColor = MaterialTheme.colorScheme.onSurface.copy(
-                    alpha = if (read) 0.4f else 0.62f
-                )
                 Text(
                     text = chapterSubtitle(chapter, status),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = subtitleColor,
+                    style = AllFunType.mono,
+                    color = if (read) AllFun.colors.textTertiary else AllFun.colors.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 if (readPercent != null) {
                     Text(
-                        text = " · $readPercent%",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        text = " \u00B7 $readPercent%",
+                        style = AllFunType.mono,
+                        color = AllFun.colors.textTertiary,
                         maxLines = 1
                     )
                 }
@@ -860,7 +788,7 @@ private fun ChapterDownloadIndicator(
             Icon(
                 Icons.Outlined.DownloadDone,
                 contentDescription = "Remove downloaded ${chapter.title}",
-                tint = MaterialTheme.colorScheme.primary
+                tint = AllFun.colors.success
             )
         }
         DownloadStatus.RUNNING, DownloadStatus.QUEUED, DownloadStatus.WAITING ->
@@ -872,13 +800,15 @@ private fun ChapterDownloadIndicator(
                                 .coerceIn(0f, 1f)
                         },
                         modifier = Modifier.size(22.dp),
-                        strokeWidth = 2.dp
+                        strokeWidth = 2.dp,
+                        color = AllFun.colors.accent,
+                        trackColor = AllFun.colors.hairline
                     )
                     Icon(
                         Icons.Outlined.Close,
                         contentDescription = "Cancel download of ${chapter.title}",
                         modifier = Modifier.size(11.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = AllFun.colors.textSecondary
                     )
                 }
             }
@@ -886,14 +816,14 @@ private fun ChapterDownloadIndicator(
             Icon(
                 Icons.Outlined.Download,
                 contentDescription = "Retry download of ${chapter.title}",
-                tint = MaterialTheme.colorScheme.error
+                tint = AllFun.colors.danger
             )
         }
         DownloadStatus.CANCELED, null -> IconButton(onClick = onDownload) {
             Icon(
                 Icons.Outlined.Download,
                 contentDescription = "Download ${chapter.title}",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = AllFun.colors.textSecondary
             )
         }
     }
@@ -927,7 +857,6 @@ private fun chapterLabel(chapter: EpisodeEntity, kind: MediaKind): String =
         if (chapter.number > 0) "${kind.unit} ${formatNumber(chapter.number)}" else kind.unit
     }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ReadingSourceSheet(
     state: DetailViewModel.SourceState,
@@ -936,58 +865,66 @@ private fun ReadingSourceSheet(
     onRetry: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(Modifier.padding(bottom = 24.dp)) {
-            SectionHeader(
-                title = "Available sources",
-                subtitle = when {
-                    state.loading -> "Checking your other installed sources…"
-                    state.options.count { it.available } > 1 ->
-                        "${state.options.count { it.available }} sources confirmed this title"
-                    state.error != null -> "Source check failed"
-                    else -> "No other provider confirmed this title right now"
-                }
+    AllFunSheet(title = "Sources", onDismiss = onDismiss) {
+        Text(
+            text = when {
+                state.loading -> "Checking your other installed sources\u2026"
+                state.options.count { it.available } > 1 ->
+                    "${state.options.count { it.available }} sources confirmed this title"
+                state.error != null -> "Source check failed"
+                else -> "No other provider confirmed this title right now"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = AllFun.colors.textSecondary
+        )
+        if (state.loading || state.switching) {
+            androidx.compose.material3.LinearProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+                color = AllFun.colors.accent,
+                trackColor = AllFun.colors.hairline
             )
-            if (state.loading || state.switching) {
-                androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth())
+        }
+        state.error?.let { error ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AllFun.colors.danger,
+                    modifier = Modifier.weight(1f)
+                )
+                AllFunButton(
+                    text = "Retry",
+                    onClick = onRetry,
+                    variant = AllFunButtonVariant.TEXT
+                )
             }
-            state.error?.let { error ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = error,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.weight(1f)
-                    )
-                    TextButton(onClick = onRetry) { Text("Retry") }
-                }
+        }
+        Column(Modifier.padding(top = 8.dp)) {
+            state.options.forEach { option ->
+                SourceOptionRow(
+                    option = option,
+                    category = category,
+                    enabled = !state.switching,
+                    onUse = { onUse(option) }
+                )
             }
-            Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                state.options.forEach { option ->
-                    SourceOptionRow(
-                        option = option,
-                        category = category,
-                        enabled = !state.switching,
-                        onUse = { onUse(option) }
-                    )
-                }
-                if (state.options.isEmpty() && !state.loading) {
-                    OutlinedButtonRow(onRetry)
-                }
+            if (state.options.isEmpty() && !state.loading) {
+                AllFunButton(
+                    text = "Find sources",
+                    onClick = onRetry,
+                    variant = AllFunButtonVariant.SECONDARY,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
             }
         }
     }
-}
-
-@Composable
-private fun OutlinedButtonRow(onClick: () -> Unit) {
-    TextButton(onClick = onClick) { Text("Find sources") }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -1002,61 +939,55 @@ private fun ChapterListDialog(
     onFilter: (ChapterFilter) -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Chapter list") },
-        text = {
-            Column {
-                Text(
-                    text = "Sort",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary
+    AllFunSheet(title = "Chapter list", onDismiss = onDismiss) {
+        Overline("Sort")
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(top = 8.dp, bottom = 20.dp)
+        ) {
+            ChapterSort.entries.forEach { option ->
+                AllFunChip(
+                    label = option.label,
+                    selected = sort == option,
+                    onClick = { onSort(option) }
                 )
-                ChapterSort.entries.forEach { option ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSort(option) }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(selected = sort == option, onClick = { onSort(option) })
-                        Text(option.label, style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = "Filter",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.height(4.dp))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    ChapterFilter.entries.forEach { option ->
-                        val count = when (option) {
-                            ChapterFilter.ALL -> total
-                            ChapterFilter.UNREAD -> unread
-                            ChapterFilter.DOWNLOADED -> downloaded
-                        }
-                        FilterChip(
-                            selected = filter == option,
-                            onClick = { onFilter(option) },
-                            label = { Text("${option.label} ($count)") }
-                        )
-                    }
-                }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Done") }
         }
-    )
+        Overline("Filter")
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(top = 8.dp)
+        ) {
+            ChapterFilter.entries.forEach { option ->
+                val count = when (option) {
+                    ChapterFilter.ALL -> total
+                    ChapterFilter.UNREAD -> unread
+                    ChapterFilter.DOWNLOADED -> downloaded
+                }
+                AllFunChip(
+                    label = "${option.label} ($count)",
+                    selected = filter == option,
+                    onClick = { onFilter(option) }
+                )
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 20.dp),
+            horizontalArrangement = Arrangement.End
+        ) {
+            AllFunButton(
+                text = "Done",
+                onClick = onDismiss,
+                variant = AllFunButtonVariant.PRIMARY
+            )
+        }
+    }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ChapterActionSheet(
     chapter: EpisodeEntity,
@@ -1072,73 +1003,62 @@ private fun ChapterActionSheet(
     onRemoveDownload: (DownloadEntity) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(Modifier.padding(bottom = 24.dp)) {
-            Column(Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
-                Text(
-                    text = chapterLabel(chapter, kind),
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+    AllFunSheet(title = chapterLabel(chapter, kind), onDismiss = onDismiss) {
+        val detail = listOfNotNull(
+            chapter.pageCount?.let { "$it pages" },
+            progress?.fraction?.takeIf { it > 0f }?.let { "${(it * 100).toInt()}% read" },
+            download?.status?.let { downloadStatusLabel(it) }
+        ).joinToString(" \u00B7 ")
+        if (detail.isNotBlank()) {
+            Text(
+                text = detail,
+                style = AllFunType.mono,
+                color = AllFun.colors.textSecondary,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
+        ChapterActionItem(
+            icon = Icons.AutoMirrored.Outlined.MenuBook,
+            label = "Read now",
+            onClick = onRead
+        )
+        ChapterActionItem(
+            icon = if (chapter.read) Icons.Outlined.RemoveDone else Icons.Outlined.Done,
+            label = if (chapter.read) "Mark as unread" else "Mark as read",
+            onClick = onToggleRead
+        )
+        if (canDownload) {
+            when (download?.status) {
+                DownloadStatus.COMPLETED -> ChapterActionItem(
+                    icon = Icons.Outlined.Delete,
+                    label = "Delete downloaded file",
+                    tint = AllFun.colors.danger,
+                    onClick = { onRemoveDownload(download) }
                 )
-                val detail = listOfNotNull(
-                    chapter.pageCount?.let { "$it pages" },
-                    progress?.fraction?.takeIf { it > 0f }?.let { "${(it * 100).toInt()}% read" },
-                    download?.status?.let { downloadStatusLabel(it) }
-                ).joinToString(" · ")
-                if (detail.isNotBlank()) {
-                    Text(
-                        text = detail,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                DownloadStatus.RUNNING, DownloadStatus.QUEUED, DownloadStatus.WAITING ->
+                    ChapterActionItem(
+                        icon = Icons.Outlined.Close,
+                        label = "Cancel download",
+                        onClick = { onCancelDownload(download.key) }
                     )
-                }
-            }
-            HorizontalDivider(Modifier.padding(vertical = 4.dp))
-            ChapterActionItem(
-                icon = Icons.AutoMirrored.Outlined.MenuBook,
-                label = "Read now",
-                onClick = onRead
-            )
-            ChapterActionItem(
-                icon = if (chapter.read) Icons.Outlined.RemoveDone else Icons.Outlined.Done,
-                label = if (chapter.read) "Mark as unread" else "Mark as read",
-                onClick = onToggleRead
-            )
-            if (canDownload) {
-                when (download?.status) {
-                    DownloadStatus.COMPLETED -> ChapterActionItem(
+                DownloadStatus.FAILED -> {
+                    ChapterActionItem(
+                        icon = Icons.Outlined.Download,
+                        label = "Retry download",
+                        onClick = { onRetryDownload(download.key) }
+                    )
+                    ChapterActionItem(
                         icon = Icons.Outlined.Delete,
-                        label = "Delete downloaded file",
-                        tint = MaterialTheme.colorScheme.error,
+                        label = "Remove failed download",
+                        tint = AllFun.colors.danger,
                         onClick = { onRemoveDownload(download) }
                     )
-                    DownloadStatus.RUNNING, DownloadStatus.QUEUED, DownloadStatus.WAITING ->
-                        ChapterActionItem(
-                            icon = Icons.Outlined.Close,
-                            label = "Cancel download",
-                            onClick = { onCancelDownload(download.key) }
-                        )
-                    DownloadStatus.FAILED -> {
-                        ChapterActionItem(
-                            icon = Icons.Outlined.Download,
-                            label = "Retry download",
-                            onClick = { onRetryDownload(download.key) }
-                        )
-                        ChapterActionItem(
-                            icon = Icons.Outlined.Delete,
-                            label = "Remove failed download",
-                            tint = MaterialTheme.colorScheme.error,
-                            onClick = { onRemoveDownload(download) }
-                        )
-                    }
-                    DownloadStatus.CANCELED, null -> ChapterActionItem(
-                        icon = Icons.Outlined.Download,
-                        label = "Download",
-                        onClick = onDownload
-                    )
                 }
+                DownloadStatus.CANCELED, null -> ChapterActionItem(
+                    icon = Icons.Outlined.Download,
+                    label = "Download",
+                    onClick = onDownload
+                )
             }
         }
     }
@@ -1149,16 +1069,17 @@ private fun ChapterActionItem(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
-    tint: Color = MaterialTheme.colorScheme.onSurface
+    tint: Color = AllFun.colors.textPrimary
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 24.dp, vertical = 14.dp),
+            .clickable(role = Role.Button, onClick = onClick)
+            .heightIn(min = 48.dp)
+            .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(16.dp))
         Text(label, style = MaterialTheme.typography.bodyLarge, color = tint)
     }

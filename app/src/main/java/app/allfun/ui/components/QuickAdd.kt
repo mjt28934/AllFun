@@ -3,26 +3,29 @@ package app.allfun.ui.components
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -32,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.KeyboardType
@@ -41,6 +45,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.allfun.data.AppContainer
 import app.allfun.data.net.userMessage
+import app.allfun.ui.theme.AllFun
+import app.allfun.ui.theme.AllFunType
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -75,15 +81,19 @@ fun QuickAddButton(
         vm.messages.collect { snackbar.showSnackbar(it) }
     }
 
-    Box {
-        IconButton(onClick = { expanded = true }, modifier = modifier) {
-            Icon(Icons.Outlined.Add, contentDescription = "Add a source")
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+    TopBarAction(
+        icon = Icons.Outlined.Add,
+        contentDescription = "Add a source",
+        onClick = { expanded = true }
+    )
+
+    if (expanded) {
+        AllFunSheet(title = "Add a source", onDismiss = { expanded = false }) {
             QuickAddItem(
                 icon = Icons.Outlined.Link,
                 title = "Stremio addon",
-                subtitle = "Play films and episodes from a manifest URL"
+                subtitle = "Films and series from a manifest URL",
+                hint = "URL"
             ) {
                 expanded = false
                 dialog = QuickAddDialog.STREMIO
@@ -91,23 +101,26 @@ fun QuickAddButton(
             QuickAddItem(
                 icon = Icons.Outlined.Dns,
                 title = "Jellyfin server",
-                subtitle = "Stream movies and shows from your own server"
+                subtitle = "Stream from your own server",
+                hint = "URL"
             ) {
                 expanded = false
                 dialog = QuickAddDialog.JELLYFIN
             }
             QuickAddItem(
                 icon = Icons.Outlined.Extension,
-                title = "Manga extension (.apk)",
-                subtitle = "Install a Tachiyomi/Komikku file from this device"
+                title = "Manga extension",
+                subtitle = "Install a .apk from this device",
+                hint = ".apk"
             ) {
                 expanded = false
                 extensionPicker.launch(arrayOf("*/*"))
             }
             QuickAddItem(
                 icon = Icons.Outlined.Code,
-                title = "Novel plugin (.js)",
-                subtitle = "Install an LNReader plugin file"
+                title = "Novel plugin",
+                subtitle = "Install a .js plugin file",
+                hint = ".js"
             ) {
                 expanded = false
                 novelPicker.launch(
@@ -144,24 +157,53 @@ private fun QuickAddItem(
     icon: ImageVector,
     title: String,
     subtitle: String,
+    hint: String,
     onClick: () -> Unit
 ) {
-    DropdownMenuItem(
-        onClick = onClick,
-        leadingIcon = {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-        },
-        text = {
-            Column {
-                Text(title, style = MaterialTheme.typography.titleSmall)
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+    val colors = AllFun.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .heightIn(min = 64.dp)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = colors.textSecondary,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = colors.textPrimary
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textSecondary,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
         }
-    )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = hint,
+            style = AllFunType.mono,
+            color = colors.textSecondary,
+            maxLines = 1
+        )
+        Icon(
+            imageVector = Icons.Outlined.ChevronRight,
+            contentDescription = null,
+            tint = colors.textTertiary,
+            modifier = Modifier.size(16.dp)
+        )
+    }
 }
 
 @Composable
@@ -174,27 +216,33 @@ private fun TextPromptDialog(
     onDismiss: () -> Unit
 ) {
     var value by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            OutlinedTextField(
-                value = value,
-                onValueChange = { value = it },
-                label = { Text(label) },
-                placeholder = { Text(placeholder) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+    AllFunSheet(title = title, onDismiss = onDismiss) {
+        AllFunTextField(
+            value = value,
+            onValueChange = { value = it },
+            label = label,
+            placeholder = placeholder
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            AllFunButton(
+                text = "Cancel",
+                onClick = onDismiss,
+                variant = AllFunButtonVariant.SECONDARY,
+                modifier = Modifier.weight(1f)
             )
-        },
-        confirmButton = {
-            TextButton(
+            AllFunButton(
+                text = confirmLabel,
                 onClick = { onConfirm(value.trim()) },
-                enabled = value.isNotBlank()
-            ) { Text(confirmLabel) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
+                enabled = value.isNotBlank(),
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
 }
 
 @Composable
@@ -205,47 +253,47 @@ private fun JellyfinDialog(
     var url by remember { mutableStateOf("") }
     var user by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Connect Jellyfin") },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    label = { Text("Server URL") },
-                    placeholder = { Text("http://192.168.1.10:8096") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = user,
-                    onValueChange = { user = it },
-                    label = { Text("Username") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = pass,
-                    onValueChange = { pass = it },
-                    label = { Text("Password") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            Button(
+    AllFunSheet(title = "Connect Jellyfin", onDismiss = onDismiss) {
+        AllFunTextField(
+            value = url,
+            onValueChange = { url = it },
+            label = "Server URL",
+            placeholder = "http://192.168.1.10:8096",
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
+        )
+        Spacer(Modifier.height(12.dp))
+        AllFunTextField(
+            value = user,
+            onValueChange = { user = it },
+            label = "Username"
+        )
+        Spacer(Modifier.height(12.dp))
+        AllFunTextField(
+            value = pass,
+            onValueChange = { pass = it },
+            label = "Password",
+            visualTransformation = PasswordVisualTransformation()
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            AllFunButton(
+                text = "Cancel",
+                onClick = onDismiss,
+                variant = AllFunButtonVariant.SECONDARY,
+                modifier = Modifier.weight(1f)
+            )
+            AllFunButton(
+                text = "Connect",
                 onClick = { onConfirm(url.trim(), user.trim(), pass) },
-                enabled = url.isNotBlank() && user.isNotBlank()
-            ) { Text("Connect") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
+                enabled = url.isNotBlank() && user.isNotBlank(),
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
 }
 
 /**

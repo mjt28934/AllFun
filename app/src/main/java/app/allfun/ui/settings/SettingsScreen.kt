@@ -48,14 +48,12 @@ import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
@@ -73,6 +71,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -95,9 +94,19 @@ import app.allfun.data.settings.ReadingDirection
 import app.allfun.data.settings.SeekStep
 import app.allfun.data.settings.Settings
 import app.allfun.data.settings.ThemeMode
-import app.allfun.ui.components.pressScale
+import app.allfun.ui.components.AllFunButton
+import app.allfun.ui.components.AllFunButtonVariant
+import app.allfun.ui.components.AllFunChip
+import app.allfun.ui.components.AllFunSheet
+import app.allfun.ui.components.AppTopBar
+import app.allfun.ui.components.Overline
+import app.allfun.ui.components.SearchField
+import app.allfun.ui.components.SettingsGroup
+import app.allfun.ui.components.SettingsRow
 import app.allfun.ui.components.rememberViewModel
 import app.allfun.ui.components.staggeredReveal
+import app.allfun.ui.theme.AllFun
+import app.allfun.ui.theme.AllFunType
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -125,6 +134,7 @@ private data class SettingsEntry(
     val title: String,
     val subtitle: String,
     val icon: ImageVector,
+    val value: String? = null,
     val page: SettingsPage? = null,
     val action: (() -> Unit)? = null,
     val keywords: String = ""
@@ -166,7 +176,7 @@ fun SettingsScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = AllFun.colors.bg,
         // The root already pads for the bottom bar; insets are applied once, on the list.
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0)
     ) { innerPadding ->
@@ -205,26 +215,36 @@ fun SettingsScreen(
     }
 
     pendingImport?.let { uri ->
-        AlertDialog(
-            onDismissRequest = { pendingImport = null },
-            title = { Text("Restore this backup?") },
-            text = {
-                Text(
-                    "Titles in the file are added, or replaced when they have the same id. " +
-                        "Nothing currently in your library is deleted. Settings and repository " +
-                        "URLs are overwritten by the file's values."
+        AllFunSheet(title = "Restore this backup?", onDismiss = { pendingImport = null }) {
+            Text(
+                text = "Titles in the file are added, or replaced when they have the same id. " +
+                    "Nothing currently in your library is deleted. Settings and repository " +
+                    "URLs are overwritten by the file's values.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = AllFun.colors.textSecondary
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                AllFunButton(
+                    text = "Cancel",
+                    onClick = { pendingImport = null },
+                    variant = AllFunButtonVariant.SECONDARY,
+                    modifier = Modifier.weight(1f)
                 )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingImport = null
-                    vm.importBackup(uri)
-                }) { Text("Restore") }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingImport = null }) { Text("Cancel") }
+                AllFunButton(
+                    text = "Restore",
+                    onClick = {
+                        pendingImport = null
+                        vm.importBackup(uri)
+                    },
+                    modifier = Modifier.weight(1f)
+                )
             }
-        )
+        }
     }
 }
 
@@ -254,71 +274,15 @@ private fun SettingsHub(
         contentPadding = PaddingValues(bottom = 32.dp)
     ) {
         item {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 6.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(
-                        Brush.linearGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.24f),
-                                MaterialTheme.colorScheme.tertiary.copy(alpha = 0.12f),
-                                MaterialTheme.colorScheme.surfaceContainer
-                            )
-                        )
-                    )
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 18.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Settings,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                    Spacer(Modifier.width(14.dp))
-                    Column {
-                        Text(
-                            text = "Settings",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "AllFun ${BuildConfig.VERSION_NAME} · saved as you change them",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-            OutlinedTextField(
+            AppTopBar(
+                title = "Settings",
+                meta = "AllFun ${BuildConfig.VERSION_NAME} · saved as you change them"
+            )
+            SearchField(
                 value = query,
                 onValueChange = { query = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                placeholder = { Text("Search settings") },
-                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (query.isNotEmpty()) {
-                        IconButton(onClick = { query = "" }) {
-                            Icon(Icons.Outlined.Close, contentDescription = "Clear search")
-                        }
-                    }
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp)
+                placeholder = "Search settings",
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
             )
         }
 
@@ -334,31 +298,30 @@ private fun SettingsHub(
                     Text(
                         text = "Try a shorter word, such as theme, reader, storage or backup.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = AllFun.colors.textSecondary
                     )
                 }
             }
         } else {
-            item {
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                    shape = MaterialTheme.shapes.large,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Column {
-                        visible.forEachIndexed { index, entry ->
-                            if (index > 0) {
-                                HorizontalDivider(Modifier.padding(start = 68.dp))
+            val groups = visible.groupBy(::settingsSection)
+            listOf("EXPERIENCE", "CONTENT", "SYSTEM").forEach { section ->
+                val entriesInSection = groups[section].orEmpty()
+                if (entriesInSection.isNotEmpty()) {
+                    item(key = "settings-$section") {
+                        SettingsGroup(
+                            title = section,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        ) {
+                            entriesInSection.forEachIndexed { index, entry ->
+                                SettingsEntryRow(
+                                    entry = entry,
+                                    showDivider = index < entriesInSection.lastIndex,
+                                    onClick = {
+                                        entry.page?.let(onOpenPage) ?: entry.action?.invoke()
+                                    },
+                                    modifier = Modifier.staggeredReveal(index)
+                                )
                             }
-                            SettingsEntryRow(
-                                entry = entry,
-                                onClick = {
-                                    entry.page?.let(onOpenPage) ?: entry.action?.invoke()
-                                },
-                                modifier = Modifier.staggeredReveal(index)
-                            )
                         }
                     }
                 }
@@ -367,55 +330,27 @@ private fun SettingsHub(
     }
 }
 
+private fun settingsSection(entry: SettingsEntry): String = when (entry.title) {
+    "Appearance", "Library", "Reading", "Playback" -> "EXPERIENCE"
+    "Downloads", "Extensions", "Storage" -> "CONTENT"
+    else -> "SYSTEM"
+}
+
 @Composable
 private fun SettingsEntryRow(
     entry: SettingsEntry,
+    showDivider: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-    Row(
+    SettingsRow(
+        title = entry.title,
+        subtitle = entry.subtitle,
+        value = entry.value,
+        divider = showDivider,
+        onClick = onClick,
         modifier = modifier
-            .fillMaxWidth()
-            .pressScale(interaction)
-            .clickable(
-                interactionSource = interaction,
-                indication = androidx.compose.foundation.LocalIndication.current,
-                onClick = onClick
-            )
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = entry.icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(entry.title, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                text = entry.subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Spacer(Modifier.width(8.dp))
-        Icon(
-            imageVector = Icons.Outlined.ChevronRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
+    )
 }
 
 private fun settingsEntries(
@@ -429,6 +364,7 @@ private fun settingsEntries(
             (if (settings.dynamicColor) "Material You" else settings.accent.label) +
             " · ${settings.cornerStyle.label}",
         icon = Icons.Outlined.Palette,
+        value = settings.themeMode.label(),
         page = SettingsPage.APPEARANCE,
         keywords = "theme dark light system colours color accent wallpaper motion animation " +
             "corners shape text size"
@@ -438,6 +374,7 @@ private fun settingsEntries(
         subtitle = "${settings.libraryView.label()} · ${settings.librarySort.label} · " +
             settings.libraryGrid.label,
         icon = Icons.Outlined.CollectionsBookmark,
+        value = settings.libraryView.label(),
         page = SettingsPage.LIBRARY,
         keywords = "shelf grid list sort order titles poster size"
     ),
@@ -445,6 +382,7 @@ private fun settingsEntries(
         title = "Reading",
         subtitle = "${settings.readerMode.label()} · ${settings.mangaFit.label}",
         icon = Icons.AutoMirrored.Outlined.MenuBook,
+        value = settings.readerMode.label(),
         page = SettingsPage.READING,
         keywords = "manga novel reader pages fit direction font line spacing theme"
     ),
@@ -453,6 +391,7 @@ private fun settingsEntries(
         subtitle = "Resume ${settings.resumePlayback.onOff()} · " +
             "Subtitles ${settings.subtitlesEnabled.onOff()}",
         icon = Icons.Outlined.PlayCircle,
+        value = if (settings.resumePlayback) "Resume on" else "Resume off",
         page = SettingsPage.PLAYBACK,
         keywords = "video film episode player subtitles resume"
     ),
@@ -461,6 +400,7 @@ private fun settingsEntries(
         subtitle = "Wi-Fi only ${settings.downloadWifiOnly.onOff()} · " +
             "${settings.concurrentDownloads} at a time",
         icon = Icons.Outlined.Download,
+        value = if (settings.downloadWifiOnly) "Wi-Fi only" else "Any network",
         page = SettingsPage.DOWNLOADS,
         keywords = "offline download queue wifi storage chapters parallel"
     ),
@@ -468,6 +408,7 @@ private fun settingsEntries(
         title = "Extensions",
         subtitle = "Sources, add-ons and plugins",
         icon = Icons.Outlined.Extension,
+        value = "Manage",
         action = onManageExtensions,
         keywords = "repositories stremio jellyfin source addon plugin install update"
     ),
@@ -475,6 +416,7 @@ private fun settingsEntries(
         title = "Storage",
         subtitle = "Cache, extensions and database use",
         icon = Icons.Outlined.Storage,
+        value = "Open",
         page = SettingsPage.STORAGE,
         keywords = "cache clear space bytes database temporary"
     ),
@@ -482,6 +424,7 @@ private fun settingsEntries(
         title = "Network",
         subtitle = "Connection test and request timeouts",
         icon = Icons.Outlined.Wifi,
+        value = "Open",
         page = SettingsPage.NETWORK,
         keywords = "connection repository timeout internet proxy"
     ),
@@ -489,6 +432,7 @@ private fun settingsEntries(
         title = "Backup",
         subtitle = "Export or restore a JSON backup",
         icon = Icons.Outlined.Save,
+        value = "Open",
         page = SettingsPage.BACKUP,
         keywords = "export import restore json library progress"
     ),
@@ -496,6 +440,7 @@ private fun settingsEntries(
         title = "App updates",
         subtitle = "Check GitHub releases for a newer AllFun",
         icon = Icons.Outlined.SystemUpdate,
+        value = BuildConfig.VERSION_NAME,
         action = onOpenUpdates,
         keywords = "update version release apk github"
     ),
@@ -503,6 +448,7 @@ private fun settingsEntries(
         title = "About",
         subtitle = "AllFun ${BuildConfig.VERSION_NAME}",
         icon = Icons.Outlined.Info,
+        value = BuildConfig.VERSION_NAME,
         page = SettingsPage.ABOUT,
         keywords = "version credits licenses repositories source code"
     )
@@ -521,12 +467,21 @@ private fun SettingsPageContent(
     onImport: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val uriHandler = LocalUriHandler.current
+    var builtWithExpanded by rememberSaveable { mutableStateOf(false) }
     LazyColumn(
         modifier = modifier,
         contentPadding = PaddingValues(bottom = 32.dp)
     ) {
         item {
-            SettingsPageHeader(title = page.label, onBack = onBack)
+            SettingsPageHeader(
+                title = if (page == SettingsPage.ABOUT) {
+                    "AllFun ${BuildConfig.VERSION_NAME}"
+                } else {
+                    page.label
+                },
+                onBack = onBack
+            )
         }
         if (busy != null) {
             item { BusyBar(busy) }
@@ -573,7 +528,7 @@ private fun SettingsPageContent(
                                 "Tints buttons, highlights and the navigation indicator."
                             },
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = AllFun.colors.textSecondary
                         )
                         Spacer(Modifier.height(14.dp))
                         SettingLabel("Corner style")
@@ -596,7 +551,7 @@ private fun SettingsPageContent(
                             text = "Scales the app's text on top of Android's own font size. " +
                                 "System keeps whatever you set in display settings.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = AllFun.colors.textSecondary
                         )
                     }
                     SettingsSection("Accessibility") {
@@ -614,7 +569,7 @@ private fun SettingsPageContent(
                                 "way status is shown. Change text size in Android's display " +
                                 "settings.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = AllFun.colors.textSecondary
                         )
                     }
                 }
@@ -650,7 +605,7 @@ private fun SettingsPageContent(
                         text = "Titles you started show their progress on the card itself, so " +
                             "the shelf has no separate Continue row.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = AllFun.colors.textSecondary
                     )
                 }
             }
@@ -757,7 +712,7 @@ private fun SettingsPageContent(
                             text = "The player's rewind and forward buttons jump this far, and " +
                                 "double-tapping the left or right half of the video does the same.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = AllFun.colors.textSecondary
                         )
                     }
                 }
@@ -787,14 +742,14 @@ private fun SettingsPageContent(
                                 "the queue. Completed files stay on this device and can be " +
                                 "played without a connection.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = AllFun.colors.textSecondary
                         )
                         Spacer(Modifier.height(10.dp))
-                        Button(onClick = onOpenDownloads) {
-                            Icon(Icons.Outlined.Download, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Open download queue")
-                        }
+                        AllFunButton(
+                            text = "Open download queue",
+                            onClick = onOpenDownloads,
+                            icon = Icons.Outlined.Download
+                        )
                     }
                 }
             }
@@ -806,7 +761,7 @@ private fun SettingsPageContent(
                         Text(
                             text = "Calculating storage use…",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = AllFun.colors.textSecondary
                         )
                     } else {
                         StatRow("Temporary files", SettingsViewModel.formatBytes(stats.cacheBytes))
@@ -817,14 +772,18 @@ private fun SettingsPageContent(
                     }
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
+                        AllFunButton(
+                            text = "Clear cached files",
                             onClick = vm::clearCache,
+                            variant = AllFunButtonVariant.SECONDARY,
                             enabled = busy == null
-                        ) { Text("Clear cached files") }
-                        TextButton(
+                        )
+                        AllFunButton(
+                            text = "Refresh",
                             onClick = vm::refreshStorage,
+                            variant = AllFunButtonVariant.TEXT,
                             enabled = busy == null
-                        ) { Text("Refresh") }
+                        )
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(
@@ -832,7 +791,7 @@ private fun SettingsPageContent(
                             "scratch files. Installed extensions, books and your library are " +
                             "kept.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = AllFun.colors.textSecondary
                     )
                 }
             }
@@ -844,19 +803,21 @@ private fun SettingsPageContent(
                             "account or proxy server in between. Requests time out after 20 " +
                             "seconds to connect and 30 seconds to read.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = AllFun.colors.textSecondary
                     )
                     Spacer(Modifier.height(10.dp))
-                    OutlinedButton(
+                    AllFunButton(
+                        text = "Test repository connection",
                         onClick = vm::testConnection,
+                        variant = AllFunButtonVariant.SECONDARY,
                         enabled = busy == null
-                    ) { Text("Test repository connection") }
+                    )
                     Spacer(Modifier.height(6.dp))
                     Text(
                         text = "The test downloads the public Keiyoushi manga index and reports " +
                             "how many extensions it lists.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = AllFun.colors.textSecondary
                     )
                 }
             }
@@ -867,7 +828,7 @@ private fun SettingsPageContent(
                         text = "A backup is a JSON file with your settings, repository URLs, " +
                             "library, chapters or episodes, and reading/watching progress.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = AllFun.colors.textSecondary
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
@@ -875,20 +836,23 @@ private fun SettingsPageContent(
                             "included. Reinstall extensions and sign in again after restoring " +
                             "on another device.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = AllFun.colors.textSecondary
                     )
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = onExport, enabled = busy == null) {
-                            Icon(Icons.Outlined.Save, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Export")
-                        }
-                        OutlinedButton(onClick = onImport, enabled = busy == null) {
-                            Icon(Icons.Outlined.Restore, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Restore")
-                        }
+                        AllFunButton(
+                            text = "Export",
+                            onClick = onExport,
+                            icon = Icons.Outlined.Save,
+                            enabled = busy == null
+                        )
+                        AllFunButton(
+                            text = "Restore",
+                            onClick = onImport,
+                            variant = AllFunButtonVariant.SECONDARY,
+                            icon = Icons.Outlined.Restore,
+                            enabled = busy == null
+                        )
                     }
                 }
             }
@@ -896,32 +860,52 @@ private fun SettingsPageContent(
             SettingsPage.ABOUT -> item {
                 SettingsSection("About") {
                     Text(
-                        text = "AllFun ${BuildConfig.VERSION_NAME}",
-                        style = MaterialTheme.typography.titleSmall
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = "One library for manga, light novels and video. Kotlin and " +
-                            "Jetpack Compose, Room for the shelf, Media3 for playback, a WebView " +
-                            "novel reader, and a source layer that runs Jellyfin, Stremio addons, " +
-                            "Tachiyomi/Komikku extensions and LNReader plugins.",
+                        text = "One library for manga, light novels and video.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = AllFun.colors.textSecondary
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        AllFunButton(
+                            text = "GitHub",
+                            onClick = { uriHandler.openUri("https://github.com/mjt28934/AllFun") },
+                            variant = AllFunButtonVariant.TEXT
+                        )
+                        AllFunButton(
+                            text = "Licences",
+                            onClick = {
+                                uriHandler.openUri("https://github.com/mjt28934/AllFun/tree/main/docs/licenses")
+                            },
+                            variant = AllFunButtonVariant.TEXT
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Overline("Built with", modifier = Modifier.weight(1f))
+                        AllFunButton(
+                            text = if (builtWithExpanded) "Hide" else "Show",
+                            onClick = { builtWithExpanded = !builtWithExpanded },
+                            variant = AllFunButtonVariant.TEXT
+                        )
+                    }
+                    if (builtWithExpanded) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = "Kotlin · Jetpack Compose · Room · Media3 · WebView reader · " +
+                                "Jellyfin · Stremio addons · Tachiyomi/Komikku extensions · " +
+                                "LNReader plugins",
+                            style = AllFunType.mono,
+                            color = AllFun.colors.textSecondary
+                        )
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Overline("Notes")
+                    Spacer(Modifier.height(6.dp))
                     Text(
-                        text = "Built-in repositories: Keiyoushi (manga extensions) and " +
-                            "LNReader (novel plugins). Both are public indexes downloaded on " +
-                            "request.",
+                        text = "Built-in indexes: Keiyoushi and LNReader. Tracker sync and " +
+                            "remote JSON sources are not implemented.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = "Not implemented: tracker sync (MAL, AniList) and declarative " +
-                            "remote JSON sources.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = AllFun.colors.textSecondary
                     )
                 }
             }
@@ -931,23 +915,11 @@ private fun SettingsPageContent(
 
 @Composable
 private fun SettingsPageHeader(title: String, onBack: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 4.dp, end = 20.dp, top = 8.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back to settings")
-        }
-        Spacer(Modifier.width(4.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.weight(1f)
-        )
-    }
+    AppTopBar(
+        title = title,
+        onBack = onBack,
+        modifier = Modifier.padding(bottom = 4.dp)
+    )
 }
 
 @Composable
@@ -956,7 +928,7 @@ private fun BusyBar(label: String) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.secondary
+            color = AllFun.colors.accent
         )
         Spacer(Modifier.height(6.dp))
         LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -965,27 +937,19 @@ private fun BusyBar(label: String) {
 
 @Composable
 private fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.secondary,
-            modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
-        )
-        Surface(
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            shape = MaterialTheme.shapes.large,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(Modifier.padding(16.dp), content = content)
-        }
+    SettingsGroup(title = title) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 16.dp), content = content)
     }
 }
 
 @Composable
 private fun SettingLabel(text: String) {
-    Text(text = text, style = MaterialTheme.typography.bodyLarge)
-    Spacer(Modifier.height(6.dp))
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleMedium,
+        color = AllFun.colors.textPrimary
+    )
+    Spacer(Modifier.height(8.dp))
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -996,12 +960,15 @@ private fun <T> ChoiceChips(
     label: (T) -> String,
     onSelect: (T) -> Unit
 ) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
         options.forEach { option ->
-            FilterChip(
+            AllFunChip(
+                label = label(option),
                 selected = option == selected,
-                onClick = { onSelect(option) },
-                label = { Text(label(option)) }
+                onClick = { onSelect(option) }
             )
         }
     }
@@ -1026,11 +993,15 @@ private fun SwitchRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = AllFun.colors.textPrimary
+            )
             Text(
                 subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = AllFun.colors.textSecondary
             )
         }
         Spacer(Modifier.width(12.dp))
@@ -1060,12 +1031,13 @@ private fun SliderRow(
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,
+                color = AllFun.colors.textPrimary,
                 modifier = Modifier.weight(1f)
             )
             Text(
                 text = valueLabel(shown),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.secondary
+                style = AllFunType.mono,
+                color = AllFun.colors.textSecondary
             )
         }
         Slider(
@@ -1090,12 +1062,13 @@ private fun StatRow(label: String, value: String) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
+            color = AllFun.colors.textPrimary,
             modifier = Modifier.weight(1f)
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            style = AllFunType.mono,
+            color = AllFun.colors.textSecondary
         )
     }
 }

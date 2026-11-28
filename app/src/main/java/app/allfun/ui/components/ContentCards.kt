@@ -37,7 +37,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -49,9 +48,7 @@ import app.allfun.data.content.ProviderState
 import app.allfun.data.content.ProviderStatus
 import app.allfun.data.content.format
 import app.allfun.data.model.MediaDetails
-import app.allfun.ui.theme.Cyan
-import app.allfun.ui.theme.Rose
-import app.allfun.ui.theme.Violet
+import app.allfun.ui.theme.AllFun
 
 fun ContentCategory.icon(): ImageVector = when (this) {
     ContentCategory.MOVIES -> Icons.Outlined.Movie
@@ -59,10 +56,14 @@ fun ContentCategory.icon(): ImageVector = when (this) {
     ContentCategory.MANGA -> Icons.Outlined.AutoStories
 }
 
-fun ContentCategory.accent(): Color = when (this) {
-    ContentCategory.MOVIES -> Rose
-    ContentCategory.BOOKS -> Cyan
-    ContentCategory.MANGA -> Violet
+@Composable
+fun ContentCategory.accent(): Color = AllFun.colors.accent
+
+@Composable
+private fun ContentCategory.markColor(): Color = when (this) {
+    ContentCategory.MOVIES -> AllFun.colors.markMovies
+    ContentCategory.BOOKS -> AllFun.colors.markBooks
+    ContentCategory.MANGA -> AllFun.colors.markManga
 }
 
 /**
@@ -100,12 +101,13 @@ fun ContentCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
-                .clip(MaterialTheme.shapes.medium)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clip(RoundedCornerShape(4.dp))
+                .background(AllFun.colors.surface2)
                 .border(
                     width = 1.dp,
-                    color = Color.White.copy(alpha = 0.08f),
-                    shape = MaterialTheme.shapes.medium
+                    color = if (AllFun.colors.isDark) Color.White.copy(alpha = 0.08f)
+                    else AllFun.colors.hairline,
+                    shape = RoundedCornerShape(4.dp)
                 )
         ) {
             CoverImage(
@@ -113,50 +115,27 @@ fun ContentCard(
                 title = item.title,
                 modifier = Modifier.fillMaxSize()
             )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            0f to Color.Black.copy(alpha = 0.40f),
-                            1f to Color.Transparent
-                        )
-                    )
-            )
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(64.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            0f to Color.Transparent,
-                            1f to Color.Black.copy(alpha = 0.55f)
-                        )
-                    )
-            )
             if (!format.isNullOrBlank()) {
                 Row(
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .padding(8.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(Color.Black.copy(alpha = 0.46f))
-                        .padding(horizontal = 7.dp, vertical = 3.dp),
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(AllFun.colors.surface1.copy(alpha = 0.96f))
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = item.category.icon(),
                         contentDescription = null,
-                        tint = item.category.accent(),
+                        tint = AllFun.colors.accent,
                         modifier = Modifier.size(11.dp)
                     )
                     Spacer(Modifier.width(4.dp))
                     Text(
                         text = format,
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
+                        color = AllFun.colors.textPrimary,
                         maxLines = 1
                     )
                 }
@@ -165,36 +144,36 @@ fun ContentCard(
                 Text(
                     text = "+${item.alternateCount}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.White,
+                    color = AllFun.colors.textPrimary,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(Color.Black.copy(alpha = 0.46f))
-                        .padding(horizontal = 7.dp, vertical = 3.dp)
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(AllFun.colors.surface1.copy(alpha = 0.96f))
+                        .padding(horizontal = 6.dp, vertical = 4.dp)
                 )
             }
             if (downloadLabel != null) {
                 Row(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(start = 8.dp, end = 8.dp, bottom = 11.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(Color.Black.copy(alpha = 0.66f))
-                        .padding(horizontal = 7.dp, vertical = 3.dp),
+                        .padding(start = 6.dp, end = 6.dp, bottom = 6.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(AllFun.colors.surface1.copy(alpha = 0.96f))
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         Icons.Outlined.Download,
                         contentDescription = null,
-                        tint = Color.White,
+                        tint = AllFun.colors.textSecondary,
                         modifier = Modifier.size(11.dp)
                     )
                     Spacer(Modifier.width(4.dp))
                     Text(
                         text = downloadLabel,
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
+                        color = AllFun.colors.textPrimary,
                         maxLines = 1
                     )
                 }
@@ -204,9 +183,10 @@ fun ContentCard(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.32f))
+                        .height(2.dp)
+                        .background(AllFun.colors.hairline)
                 ) {
-                    AnimatedProgress(progress = progress, height = 4)
+                    AnimatedProgress(progress = progress, height = 2)
                 }
             }
         }
@@ -215,7 +195,7 @@ fun ContentCard(
             text = item.title,
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = AllFun.colors.textPrimary,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
@@ -225,13 +205,13 @@ fun ContentCard(
                 modifier = Modifier
                     .size(5.dp)
                     .clip(CircleShape)
-                    .background(item.category.accent())
+                    .background(item.category.markColor())
             )
             Spacer(Modifier.width(5.dp))
             Text(
                 text = item.sourceLabel,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = AllFun.colors.textSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false)
@@ -240,7 +220,7 @@ fun ContentCard(
                 Text(
                     text = " · +${item.alternateCount}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = AllFun.colors.textSecondary,
                     maxLines = 1
                 )
             }
@@ -265,9 +245,9 @@ fun ProviderStatusLine(status: ProviderStatus, onRetry: (() -> Unit)? = null) {
                     .clip(CircleShape)
                     .background(
                         when (status.state) {
-                            ProviderState.WORKING -> MaterialTheme.colorScheme.secondary
-                            ProviderState.NO_CONTENT -> MaterialTheme.colorScheme.outline
-                            else -> MaterialTheme.colorScheme.error
+                            ProviderState.WORKING -> AllFun.colors.accent
+                            ProviderState.NO_CONTENT -> AllFun.colors.outlineStrong
+                            else -> AllFun.colors.danger
                         }
                     )
             )
@@ -285,9 +265,9 @@ fun ProviderStatusLine(status: ProviderStatus, onRetry: (() -> Unit)? = null) {
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = if (status.available) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
+                        AllFun.colors.textSecondary
                     } else {
-                        MaterialTheme.colorScheme.error
+                        AllFun.colors.danger
                     },
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis
@@ -296,7 +276,7 @@ fun ProviderStatusLine(status: ProviderStatus, onRetry: (() -> Unit)? = null) {
                     Text(
                         text = status.diagnostics,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = AllFun.colors.textSecondary,
                         maxLines = 6,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 2.dp)
@@ -304,12 +284,18 @@ fun ProviderStatusLine(status: ProviderStatus, onRetry: (() -> Unit)? = null) {
                 }
             }
             if (status.diagnostics != null) {
-                TextButton(onClick = { showDetails = !showDetails }) {
-                    Text(if (showDetails) "Hide" else "Details")
-                }
+                AllFunButton(
+                    text = if (showDetails) "Hide details" else "Details",
+                    onClick = { showDetails = !showDetails },
+                    variant = AllFunButtonVariant.TEXT
+                )
             }
             if (!status.available && onRetry != null) {
-                TextButton(onClick = onRetry) { Text("Retry") }
+                AllFunButton(
+                    text = "Retry",
+                    onClick = onRetry,
+                    variant = AllFunButtonVariant.TEXT
+                )
             }
         }
     }
