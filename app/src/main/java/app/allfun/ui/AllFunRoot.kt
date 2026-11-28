@@ -29,7 +29,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -182,7 +181,9 @@ private fun AllFunBottomBar(currentRoute: String?, onSelect: (Tab) -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .heightIn(min = 64.dp),
+                // A fixed row height keeps fillMaxHeight() on the individual tabs from
+                // expanding this bottom-bar slot to the full Scaffold height.
+                .height(64.dp),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             tabs.forEach { tab ->

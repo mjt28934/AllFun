@@ -43,8 +43,8 @@ Verify the checksum, then open the APK. Releases are signed with one fixed certi
 each version installs over the previous one and keeps the library:
 
 ```powershell
-(Get-FileHash .\AllFun-0.12.1-release.apk -Algorithm SHA256).Hash.ToLower()
-Get-Content .\AllFun-0.12.1-release.apk.sha256
+(Get-FileHash .\AllFun-0.12.2-release.apk -Algorithm SHA256).Hash.ToLower()
+Get-Content .\AllFun-0.12.2-release.apk.sha256
 ```
 
 From inside the app, **Settings → About → App Updates** does the same work without a
@@ -59,12 +59,13 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | `:app:assembleDebug` | **BUILD SUCCESSFUL** |
 | `:app:assembleRelease` | **BUILD SUCCESSFUL** — signed, R8 + resource shrinking |
 | `:app:testDebugUnitTest` | **66 tests pass** — serialization compatibility (generic, polymorphic, defaults, unknown fields), semantic version comparison, release JSON parsing, checksum-file parsing, category/dedupe/format mapping, category sorting, provider-description Markdown flattening, Tachiyomi page conversion, magnet/infohash identity, torrent quality ranking and tracker fallback, Stremio resource support, download queue order/pause/grouping, chapter sort/filter |
-| APK metadata | `app.allfun`, `versionCode 1201`, `versionName 0.12.1`, v2 signature, `CN=AllFun` |
+| APK metadata | `app.allfun`, `versionCode 1202`, `versionName 0.12.2`, v2 signature, `CN=AllFun` |
 | Runtime, Android 15 / API 35 (emulator) | 0.9.2 baseline: signed builds installed over the previous release on the same signer with the library, extensions and settings kept → five destinations, the Library without a scope row, Settings as a hub with working sub-screens and search, three-column search results; empty and error states; no crash |
 | 0.10.0 verification | `:app:compileDebugKotlin`, `:app:testDebugUnitTest` (65 tests), `:app:lintDebug` and `:app:assembleRelease` pass locally; the release workflow repeated the unit tests, built and verified the signed APK before publishing |
 | 0.11.0 verification | `:app:compileDebugKotlin`, `:app:testDebugUnitTest` (66 tests), `:app:lintDebug` and `:app:assembleRelease` pass locally; the release workflow repeats the unit tests and verifies the signed APK before publishing |
 | 0.12.0 verification | `:app:compileDebugKotlin`, `:app:testDebugUnitTest` (66 tests), `:app:lintDebug`, `:app:assembleDebug` and `:app:assembleRelease` pass locally; the release workflow repeats the unit tests and verifies the signed APK before publishing |
 | 0.12.1 verification | `:app:testDebugUnitTest` (66 tests), `:app:lintDebug` and signed `:app:assembleRelease` pass locally; APK metadata and v2 signer verified |
+| 0.12.2 verification | `:app:testDebugUnitTest` (66 tests), `:app:lintDebug`, signed `:app:assembleRelease`, APK metadata and v2 signer verification pass locally |
 | Interface | Quiet Reading Room: warm dark/light palettes, bundled Newsreader/Hanken Grotesk/IBM Plex Mono, custom navigation and controls, grouped settings, distinct empty states, compact cover grid, restrained motion |
 | Movie playback fallback | A Cinemeta catalogue card with no `meta` answer still opens with one playable unit built from the card's own id, so stream addons are usable; series and books never receive a synthetic unit |
 | Download queue | More than `concurrentDownloads` queued chapters keep starting as earlier workers finish, without cancelling and re-tapping; a completed worker re-pumps the queue itself |
@@ -92,7 +93,7 @@ Built and verified locally with JDK 17 + Android SDK 35:
 | In-app updates | GitHub Releases API → cached release → download with progress → SHA-256 + package + signer verification → `PackageInstaller` confirmation |
 | Previous release | [v0.12.0](https://github.com/mjt28934/AllFun/releases/tag/v0.12.0) — `AllFun-0.12.0-release.apk`, SHA-256 `925f13f3c34ad46490b32abe81b2b118433256eba2d97d9c99b86cb711b341a3` |
 | Current release | [v0.12.1](https://github.com/mjt28934/AllFun/releases/tag/v0.12.1) — `AllFun-0.12.1-release.apk`, 61,997,109 bytes, SHA-256 `0cf78eb62b6a271b55ff5c55fbe007b2a620a2f194f15e83823a92f28089c632` |
-| Version | `0.12.1` (versionCode 1201) |
+| Version | `0.12.2` (versionCode 1202) |
 | Min SDK | 26 (Android 8.0) |
 | Target SDK | 35 |
 
@@ -458,10 +459,11 @@ Versions are semantic, and the tag is the single source of truth:
 | `v1.0.0` | `1.0.0` | `10000` |
 | `v0.12.0` | `0.12.0` | `1200` |
 | `v0.12.1` | `0.12.1` | `1201` |
+| `v0.12.2` | `0.12.2` | `1202` |
 
 `versionCode = major * 10000 + minor * 100 + patch`. The release workflow computes both
 from the tag and passes `-PappVersionName` / `-PappVersionCode` to Gradle, so the APK can
-never disagree with its release. Local builds fall back to `0.12.1` / `1201`.
+never disagree with its release. Local builds fall back to `0.12.2` / `1202`.
 
 The first published build was numbered 1.0.0; it has been renumbered and re-published as
 0.4.0, the three-category redesign is 0.5.0, the UI/motion redesign is 0.6.0, and the
